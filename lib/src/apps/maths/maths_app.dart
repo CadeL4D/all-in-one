@@ -37,6 +37,21 @@ extension on _MathsOperation {
   }
 }
 
+enum _MathsDifficulty { easy, medium, hard }
+
+extension on _MathsDifficulty {
+  String get label {
+    switch (this) {
+      case _MathsDifficulty.easy:
+        return 'Easy';
+      case _MathsDifficulty.medium:
+        return 'Medium';
+      case _MathsDifficulty.hard:
+        return 'Hard';
+    }
+  }
+}
+
 enum _MathsMode { count, timed }
 
 extension on _MathsMode {
@@ -53,6 +68,7 @@ extension on _MathsMode {
 class _MathsPreferences {
   const _MathsPreferences({
     required this.enabledOperations,
+    required this.enabledDifficulties,
     required this.targetCount,
     required this.timedSeconds,
     required this.bestTimes,
@@ -60,6 +76,7 @@ class _MathsPreferences {
   });
 
   final Set<_MathsOperation> enabledOperations;
+  final Set<_MathsDifficulty> enabledDifficulties;
   final int targetCount;
   final int timedSeconds;
   final Map<String, int> bestTimes;
@@ -75,11 +92,24 @@ class _MathsPreferences {
           (_MathsOperation operation) => rawOperations.contains(operation.name),
         )
         .toSet();
+    final List<String> rawDifficulties =
+        (json['enabledDifficulties'] as List<dynamic>? ?? const <dynamic>[])
+            .whereType<String>()
+            .toList();
+    final Set<_MathsDifficulty> difficulties = _MathsDifficulty.values
+        .where(
+          (_MathsDifficulty difficulty) =>
+              rawDifficulties.contains(difficulty.name),
+        )
+        .toSet();
 
     return _MathsPreferences(
       enabledOperations: operations.isEmpty
           ? _MathsOperation.values.toSet()
           : operations,
+      enabledDifficulties: difficulties.isEmpty
+          ? _MathsDifficulty.values.toSet()
+          : difficulties,
       targetCount: (json['targetCount'] as num?)?.toInt() ?? 10,
       timedSeconds: (json['timedSeconds'] as num?)?.toInt() ?? 60,
       bestTimes: _readIntMap(json['bestTimes']),
@@ -101,6 +131,7 @@ class _MathsPreferences {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'enabledOperations': enabledOperations.map((e) => e.name).toList(),
+      'enabledDifficulties': enabledDifficulties.map((e) => e.name).toList(),
       'targetCount': targetCount,
       'timedSeconds': timedSeconds,
       'bestTimes': bestTimes,
@@ -139,6 +170,11 @@ class _MathsAppState extends State<MathsApp> {
       _MathsOperation.multiplication,
       _MathsOperation.division,
     },
+    enabledDifficulties: <_MathsDifficulty>{
+      _MathsDifficulty.easy,
+      _MathsDifficulty.medium,
+      _MathsDifficulty.hard,
+    },
     targetCount: 10,
     timedSeconds: 60,
     bestTimes: <String, int>{},
@@ -152,6 +188,8 @@ class _MathsAppState extends State<MathsApp> {
   int _correctCount = 0;
   int _elapsedSeconds = 0;
   int _remainingSeconds = 0;
+  String? _lastResultMessage;
+  bool _lastResultIsNewBest = false;
 
   @override
   void initState() {
@@ -172,9 +210,17 @@ class _MathsAppState extends State<MathsApp> {
     return operations.join('-');
   }
 
-  String get _countKey => 'count:$_operationsKey:${_preferences.targetCount}';
+  String get _difficultiesKey {
+    final List<String> difficulties =
+        _preferences.enabledDifficulties.map((e) => e.name).toList()..sort();
+    return difficulties.join('-');
+  }
 
-  String get _timedKey => 'timed:$_operationsKey:${_preferences.timedSeconds}';
+  String get _countKey =>
+      'count:$_operationsKey:$_difficultiesKey:${_preferences.targetCount}';
+
+  String get _timedKey =>
+      'timed:$_operationsKey:$_difficultiesKey:${_preferences.timedSeconds}';
 
   Future<void> _loadPreferences() async {
     final SharedPreferences sharedPreferences =
@@ -212,6 +258,7 @@ class _MathsAppState extends State<MathsApp> {
             ..._preferences.enabledOperations,
             operation,
           },
+          enabledDifficulties: _preferences.enabledDifficulties,
           targetCount: _preferences.targetCount,
           timedSeconds: _preferences.timedSeconds,
           bestTimes: _preferences.bestTimes,
@@ -222,6 +269,37 @@ class _MathsAppState extends State<MathsApp> {
           enabledOperations: <_MathsOperation>{
             ..._preferences.enabledOperations,
           }..remove(operation),
+          enabledDifficulties: _preferences.enabledDifficulties,
+          targetCount: _preferences.targetCount,
+          timedSeconds: _preferences.timedSeconds,
+          bestTimes: _preferences.bestTimes,
+          bestScores: _preferences.bestScores,
+        );
+      }
+    });
+    _savePreferences();
+  }
+
+  void _setDifficulty(_MathsDifficulty difficulty, bool enabled) {
+    setState(() {
+      if (enabled) {
+        _preferences = _MathsPreferences(
+          enabledOperations: _preferences.enabledOperations,
+          enabledDifficulties: <_MathsDifficulty>{
+            ..._preferences.enabledDifficulties,
+            difficulty,
+          },
+          targetCount: _preferences.targetCount,
+          timedSeconds: _preferences.timedSeconds,
+          bestTimes: _preferences.bestTimes,
+          bestScores: _preferences.bestScores,
+        );
+      } else {
+        _preferences = _MathsPreferences(
+          enabledOperations: _preferences.enabledOperations,
+          enabledDifficulties: <_MathsDifficulty>{
+            ..._preferences.enabledDifficulties,
+          }..remove(difficulty),
           targetCount: _preferences.targetCount,
           timedSeconds: _preferences.timedSeconds,
           bestTimes: _preferences.bestTimes,
@@ -236,6 +314,7 @@ class _MathsAppState extends State<MathsApp> {
     setState(() {
       _preferences = _MathsPreferences(
         enabledOperations: _preferences.enabledOperations,
+        enabledDifficulties: _preferences.enabledDifficulties,
         targetCount: value,
         timedSeconds: _preferences.timedSeconds,
         bestTimes: _preferences.bestTimes,
@@ -249,6 +328,7 @@ class _MathsAppState extends State<MathsApp> {
     setState(() {
       _preferences = _MathsPreferences(
         enabledOperations: _preferences.enabledOperations,
+        enabledDifficulties: _preferences.enabledDifficulties,
         targetCount: _preferences.targetCount,
         timedSeconds: value,
         bestTimes: _preferences.bestTimes,
@@ -262,6 +342,30 @@ class _MathsAppState extends State<MathsApp> {
     setState(() => _mode = mode);
   }
 
+  IconData _operationIcon(_MathsOperation operation) {
+    switch (operation) {
+      case _MathsOperation.addition:
+        return Icons.add_rounded;
+      case _MathsOperation.subtraction:
+        return Icons.remove_rounded;
+      case _MathsOperation.multiplication:
+        return Icons.close_rounded;
+      case _MathsOperation.division:
+        return Icons.horizontal_rule_rounded;
+    }
+  }
+
+  IconData _difficultyIcon(_MathsDifficulty difficulty) {
+    switch (difficulty) {
+      case _MathsDifficulty.easy:
+        return Icons.eco_rounded;
+      case _MathsDifficulty.medium:
+        return Icons.speed_rounded;
+      case _MathsDifficulty.hard:
+        return Icons.local_fire_department_rounded;
+    }
+  }
+
   void _startChallenge() {
     if (_preferences.enabledOperations.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -273,6 +377,8 @@ class _MathsAppState extends State<MathsApp> {
     _answerController.clear();
     setState(() {
       _playing = true;
+      _lastResultMessage = null;
+      _lastResultIsNewBest = false;
       _correctCount = 0;
       _elapsedSeconds = 0;
       _remainingSeconds = _mode == _MathsMode.timed
@@ -306,30 +412,75 @@ class _MathsAppState extends State<MathsApp> {
   _MathsProblem _generateProblem() {
     final List<_MathsOperation> operations = _preferences.enabledOperations
         .toList();
+    final List<_MathsDifficulty> difficulties = _preferences.enabledDifficulties
+        .toList();
     final _MathsOperation operation =
         operations[_random.nextInt(operations.length)];
+    final _MathsDifficulty difficulty =
+        difficulties[_random.nextInt(difficulties.length)];
 
     int left;
     int right;
     int answer;
 
-    switch (operation) {
-      case _MathsOperation.addition:
-        left = _random.nextInt(89) + 11;
-        right = _random.nextInt(89) + 11;
-        answer = left + right;
-      case _MathsOperation.subtraction:
-        left = _random.nextInt(89) + 11;
-        right = _random.nextInt(left - 1) + 2;
-        answer = left - right;
-      case _MathsOperation.multiplication:
-        left = _random.nextInt(11) + 2;
-        right = _random.nextInt(11) + 2;
-        answer = left * right;
-      case _MathsOperation.division:
-        right = _random.nextInt(11) + 2;
-        answer = _random.nextInt(11) + 2;
-        left = right * answer;
+    switch (difficulty) {
+      case _MathsDifficulty.easy:
+        switch (operation) {
+          case _MathsOperation.addition:
+            left = _random.nextInt(20) + 1;
+            right = _random.nextInt(20) + 1;
+            answer = left + right;
+          case _MathsOperation.subtraction:
+            left = _random.nextInt(19) + 2;
+            right = _random.nextInt(left - 1) + 1;
+            answer = left - right;
+          case _MathsOperation.multiplication:
+            left = _random.nextInt(4) + 2;
+            right = _random.nextInt(4) + 2;
+            answer = left * right;
+          case _MathsOperation.division:
+            right = _random.nextInt(4) + 2;
+            answer = _random.nextInt(4) + 2;
+            left = right * answer;
+        }
+      case _MathsDifficulty.medium:
+        switch (operation) {
+          case _MathsOperation.addition:
+            left = _random.nextInt(89) + 11;
+            right = _random.nextInt(89) + 11;
+            answer = left + right;
+          case _MathsOperation.subtraction:
+            left = _random.nextInt(89) + 11;
+            right = _random.nextInt(left - 1) + 2;
+            answer = left - right;
+          case _MathsOperation.multiplication:
+            left = _random.nextInt(11) + 2;
+            right = _random.nextInt(11) + 2;
+            answer = left * right;
+          case _MathsOperation.division:
+            right = _random.nextInt(11) + 2;
+            answer = _random.nextInt(11) + 2;
+            left = right * answer;
+        }
+      case _MathsDifficulty.hard:
+        switch (operation) {
+          case _MathsOperation.addition:
+            left = _random.nextInt(899) + 101;
+            right = _random.nextInt(899) + 101;
+            answer = left + right;
+          case _MathsOperation.subtraction:
+            left = _random.nextInt(899) + 101;
+            right = _random.nextInt(left - 100) + 101;
+            answer = left - right;
+          case _MathsOperation.multiplication:
+            left = _random.nextInt(10) + 11;
+            right = _random.nextInt(10) + 11;
+            answer = left * right;
+          case _MathsOperation.division:
+            right = _random.nextInt(10) + 11;
+            answer = _random.nextInt(10) + 11;
+            left = right * answer;
+        }
     }
 
     return _MathsProblem(
@@ -387,6 +538,7 @@ class _MathsAppState extends State<MathsApp> {
 
     _preferences = _MathsPreferences(
       enabledOperations: _preferences.enabledOperations,
+      enabledDifficulties: _preferences.enabledDifficulties,
       targetCount: _preferences.targetCount,
       timedSeconds: _preferences.timedSeconds,
       bestTimes: mode == _MathsMode.count
@@ -403,15 +555,27 @@ class _MathsAppState extends State<MathsApp> {
           : _preferences.bestScores,
     );
 
+    final String resultMessage = mode == _MathsMode.count
+        ? 'You completed ${_preferences.targetCount} questions in '
+              '${_formatSeconds(result)}.'
+        : 'You answered $result correctly in '
+              '${_formatSeconds(_preferences.timedSeconds)}.';
+
     setState(() {
       _playing = false;
+      _lastResultMessage = resultMessage;
+      _lastResultIsNewBest = isNewBest;
     });
     _savePreferences();
   }
 
   void _quitChallenge() {
     _timer?.cancel();
-    setState(() => _playing = false);
+    setState(() {
+      _playing = false;
+      _lastResultMessage = null;
+      _lastResultIsNewBest = false;
+    });
   }
 
   @override
@@ -431,6 +595,13 @@ class _MathsAppState extends State<MathsApp> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: <Widget>[
+        if (_lastResultMessage != null) ...<Widget>[
+          _ResultBanner(
+            message: _lastResultMessage!,
+            isNewBest: _lastResultIsNewBest,
+          ),
+          const SizedBox(height: 14),
+        ],
         _SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,14 +624,59 @@ class _MathsAppState extends State<MathsApp> {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 8),
-              for (final _MathsOperation operation in _MathsOperation.values)
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(operation.label),
-                  secondary: _OperationIcon(operation: operation),
-                  value: _preferences.enabledOperations.contains(operation),
-                  onChanged: (bool value) => _setOperation(operation, value),
-                ),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final _MathsOperation operation
+                      in _MathsOperation.values)
+                    _AccentToggleButton(
+                      label: operation.label,
+                      icon: _operationIcon(operation),
+                      selected: _preferences.enabledOperations.contains(
+                        operation,
+                      ),
+                      onTap: () => _setOperation(
+                        operation,
+                        !_preferences.enabledOperations.contains(operation),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _SectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('Difficulty', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 6),
+              Text(
+                'Enable the difficulty levels you want included in the pool.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final _MathsDifficulty difficulty
+                      in _MathsDifficulty.values)
+                    _AccentToggleButton(
+                      label: difficulty.label,
+                      icon: _difficultyIcon(difficulty),
+                      selected: _preferences.enabledDifficulties.contains(
+                        difficulty,
+                      ),
+                      onTap: () => _setDifficulty(
+                        difficulty,
+                        !_preferences.enabledDifficulties.contains(difficulty),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -484,16 +700,14 @@ class _MathsAppState extends State<MathsApp> {
                       in _mode == _MathsMode.count
                           ? _countOptions
                           : _timeOptions)
-                    ChoiceChip(
-                      label: Text(
-                        _mode == _MathsMode.count
-                            ? '$option'
-                            : _formatSeconds(option),
-                      ),
+                    _AccentToggleButton(
+                      label: _mode == _MathsMode.count
+                          ? '$option'
+                          : _formatSeconds(option),
                       selected: _mode == _MathsMode.count
                           ? _preferences.targetCount == option
                           : _preferences.timedSeconds == option,
-                      onSelected: (_) => _mode == _MathsMode.count
+                      onTap: () => _mode == _MathsMode.count
                           ? _setTargetCount(option)
                           : _setTimedSeconds(option),
                     ),
@@ -661,6 +875,112 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _AccentToggleButton extends StatelessWidget {
+  const _AccentToggleButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+
+  final String label;
+  final IconData? icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final Color background = selected
+        ? scheme.primary
+        : scheme.surfaceContainerHighest;
+    final Color foreground = selected
+        ? scheme.onPrimary
+        : scheme.onSurfaceVariant;
+
+    return Material(
+      color: background,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (icon != null) ...<Widget>[
+                Icon(icon, size: 18, color: foreground),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  color: foreground,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResultBanner extends StatelessWidget {
+  const _ResultBanner({required this.message, required this.isNewBest});
+
+  final String message;
+  final bool isNewBest;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            isNewBest ? Icons.emoji_events_rounded : Icons.done_all_rounded,
+            color: scheme.onPrimaryContainer,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isNewBest ? 'New personal best!' : 'Personal best stands.',
+                  style: TextStyle(
+                    color: scheme.onPrimaryContainer.withValues(alpha: 0.78),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ModeSelector extends StatelessWidget {
   const _ModeSelector({required this.mode, required this.onChanged});
 
@@ -681,7 +1001,7 @@ class _ModeSelector extends StatelessWidget {
           for (final _MathsMode option in _MathsMode.values) ...<Widget>[
             Expanded(
               child: Material(
-                color: mode == option ? scheme.onSurface : Colors.transparent,
+                color: mode == option ? scheme.primary : Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
@@ -693,7 +1013,7 @@ class _ModeSelector extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: mode == option
-                            ? scheme.surface
+                            ? scheme.onPrimary
                             : scheme.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
                       ),
@@ -710,34 +1030,6 @@ class _ModeSelector extends StatelessWidget {
   }
 }
 
-class _OperationIcon extends StatelessWidget {
-  const _OperationIcon({required this.operation});
-
-  final _MathsOperation operation;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 38,
-      height: 38,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        operation.symbol,
-        style: TextStyle(
-          color: scheme.onPrimaryContainer,
-          fontSize: 18,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
 class _BestScoreCard extends StatelessWidget {
   const _BestScoreCard({required this.preferences, required this.mode});
 
@@ -746,9 +1038,15 @@ class _BestScoreCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final List<String> operationsKey =
+        preferences.enabledOperations.map((e) => e.name).toList()..sort();
+    final List<String> difficultiesKey =
+        preferences.enabledDifficulties.map((e) => e.name).toList()..sort();
     final String key = mode == _MathsMode.count
-        ? 'count:${preferences.enabledOperations.map((e) => e.name).toList()..sort()}:${preferences.targetCount}'
-        : 'timed:${preferences.enabledOperations.map((e) => e.name).toList()..sort()}:${preferences.timedSeconds}';
+        ? 'count:${operationsKey.join('-')}:${difficultiesKey.join('-')}:'
+              '${preferences.targetCount}'
+        : 'timed:${operationsKey.join('-')}:${difficultiesKey.join('-')}:'
+              '${preferences.timedSeconds}';
     final int? best = mode == _MathsMode.count
         ? preferences.bestTimes[key]
         : preferences.bestScores[key];
