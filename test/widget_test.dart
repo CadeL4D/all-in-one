@@ -20,6 +20,7 @@ void main() {
     expect(find.text('Tasks'), findsOneWidget);
     expect(find.text('Calculator'), findsOneWidget);
     expect(find.text('Maths'), findsOneWidget);
+    expect(find.text('Routines'), findsOneWidget);
     expect(find.text('Focus'), findsOneWidget);
 
     await tester.tap(find.text('Notes'));
@@ -35,6 +36,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Maths'), findsOneWidget);
+    expect(find.text('Routines'), findsNothing);
     expect(find.text('Notes'), findsNothing);
     expect(find.text('Tasks'), findsNothing);
   });

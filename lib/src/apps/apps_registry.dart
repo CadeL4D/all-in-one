@@ -5,6 +5,7 @@ import 'calculator/calculator_app.dart';
 import 'focus/focus_app.dart';
 import 'maths/maths_app.dart';
 import 'notes/notes_app.dart';
+import 'routines/routines_app.dart';
 import 'tasks/tasks_app.dart';
 
 abstract final class AppRegistry {
@@ -42,6 +43,16 @@ abstract final class AppRegistry {
       builder: _calculatorBuilder,
     ),
     AppManifest(
+      id: 'routines',
+      name: 'Routines',
+      tagline: 'Build consistent habits',
+      description: 'Create repeatable routines and track each step every day.',
+      icon: Icons.event_repeat_rounded,
+      gradient: <Color>[Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+      category: AppCategory.wellness,
+      builder: _routinesBuilder,
+    ),
+    AppManifest(
       id: 'maths',
       name: 'Maths',
       tagline: 'Practice with a purpose',
@@ -77,4 +88,6 @@ abstract final class AppRegistry {
   static Widget _focusBuilder(BuildContext context) => const FocusApp();
 
   static Widget _mathsBuilder(BuildContext context) => const MathsApp();
+
+  static Widget _routinesBuilder(BuildContext context) => const RoutinesApp();
 }
