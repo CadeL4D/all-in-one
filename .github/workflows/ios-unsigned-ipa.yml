@@ -1,0 +1,68 @@
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and release unsigned IPA
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build iOS app without signing
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/unsigned-ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/unsigned-ipa/Payload/
+          cd build/unsigned-ipa
+          zip -r -y ../Runner-unsigned.ipa Payload
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Runner-unsigned-ipa
+          path: build/Runner-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Publish to tag release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Runner-unsigned.ipa
+          generate_release_notes: true
+
+      - name: Publish manual release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ipa-${{ github.run_number }}-${{ github.run_attempt }}
+          name: Unsigned iOS build ${{ github.run_number }}
+          files: build/Runner-unsigned.ipa
+          generate_release_notes: true

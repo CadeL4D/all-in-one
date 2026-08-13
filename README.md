@@ -60,3 +60,17 @@ flutter run -d chrome
 flutter test
 flutter analyze
 ```
+
+## Unsigned iOS IPA releases
+
+The `Build unsigned iOS IPA` workflow builds `Runner-unsigned.ipa` without code
+signing and attaches it to a GitHub Release.
+
+- Push a `v*` tag to build from that tag.
+- Or run the workflow manually from the **Actions** tab; it creates a new
+  release named `Unsigned iOS build <run-number>`.
+- The IPA is also available as a workflow artifact.
+
+An unsigned IPA is useful for distribution and inspection, but it cannot be
+installed on a device until it is signed with an Apple development or
+distribution identity.
