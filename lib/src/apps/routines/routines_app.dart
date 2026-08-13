@@ -203,6 +203,39 @@ class _RoutinesAppState extends State<RoutinesApp> {
     await _persistRoutines();
   }
 
+  Future<void> _editRoutine(_Routine routine) async {
+    final _RoutineDraft? draft = await Navigator.of(context)
+        .push<_RoutineDraft>(
+          MaterialPageRoute<_RoutineDraft>(
+            builder: (BuildContext context) =>
+                _RoutineEditorScreen(routine: routine),
+          ),
+        );
+
+    if (draft == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      final Map<String, bool> completedByTitle = <String, bool>{
+        for (final _RoutineStep step in routine.steps) step.title: step.done,
+      };
+      routine
+        ..name = draft.name
+        ..description = draft.description
+        ..steps = draft.steps
+            .map(
+              (String title) => _RoutineStep(
+                id: _nextStepId++,
+                title: title,
+                done: completedByTitle[title] ?? false,
+              ),
+            )
+            .toList();
+    });
+    await _persistRoutines();
+  }
+
   Future<void> _openRoutine(_Routine routine) async {
     routine.resetForNewDay();
     await _persistRoutines();
@@ -217,6 +250,7 @@ class _RoutinesAppState extends State<RoutinesApp> {
             setState(() {});
             _persistRoutines();
           },
+          onEdit: () => _editRoutine(routine),
         ),
       ),
     );
@@ -433,10 +467,15 @@ class _EmptyRoutines extends StatelessWidget {
 }
 
 class _RoutineDetailScreen extends StatefulWidget {
-  const _RoutineDetailScreen({required this.routine, required this.onChanged});
+  const _RoutineDetailScreen({
+    required this.routine,
+    required this.onChanged,
+    this.onEdit,
+  });
 
   final _Routine routine;
   final VoidCallback onChanged;
+  final Future<void> Function()? onEdit;
 
   @override
   State<_RoutineDetailScreen> createState() => _RoutineDetailScreenState();
@@ -466,7 +505,22 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(routine.name)),
+      appBar: AppBar(
+        title: Text(routine.name),
+        actions: <Widget>[
+          if (widget.onEdit != null)
+            IconButton(
+              tooltip: 'Edit routine',
+              onPressed: () async {
+                await widget.onEdit?.call();
+                if (mounted) {
+                  setState(() {});
+                }
+              },
+              icon: const Icon(Icons.edit_rounded),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -569,17 +623,32 @@ class _RoutineProgress extends StatelessWidget {
 }
 
 class _RoutineEditorScreen extends StatefulWidget {
-  const _RoutineEditorScreen();
+  const _RoutineEditorScreen({this.routine});
+
+  final _Routine? routine;
 
   @override
   State<_RoutineEditorScreen> createState() => _RoutineEditorScreenState();
 }
 
 class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
+  late final TextEditingController _nameController;
+  late final TextEditingController _descriptionController;
   final TextEditingController _stepController = TextEditingController();
-  final List<String> _steps = <String>[];
+  late final List<String> _steps;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.routine?.name ?? '');
+    _descriptionController = TextEditingController(
+      text: widget.routine?.description ?? '',
+    );
+    _steps = List<String>.from(
+      widget.routine?.steps.map((_RoutineStep step) => step.title) ??
+          const <String>[],
+    );
+  }
 
   @override
   void dispose() {
@@ -589,14 +658,59 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
     super.dispose();
   }
 
-  void _addStep() {
-    final String step = _stepController.text.trim();
-    if (step.isEmpty) {
+  Future<String?> _promptForStep() async {
+    final TextEditingController controller = TextEditingController();
+    final String? title = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Add step'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          onSubmitted: (String value) => Navigator.of(context).pop(value),
+          decoration: const InputDecoration(hintText: 'Step title'),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return title == null || title.trim().isEmpty ? null : title.trim();
+  }
+
+  Future<void> _addStepToEnd() async {
+    final String? title = await _promptForStep();
+    if (title == null || !mounted) {
       return;
     }
+    setState(() => _steps.add(title));
+  }
+
+  Future<void> _insertStepAt(int index) async {
+    final String? title = await _promptForStep();
+    if (title == null || !mounted) {
+      return;
+    }
+    setState(() => _steps.insert(index, title));
+  }
+
+  void _removeStepAt(int index) {
+    setState(() => _steps.removeAt(index));
+  }
+
+  void _reorderStep(int oldIndex, int newIndex) {
     setState(() {
-      _steps.add(step);
-      _stepController.clear();
+      final String step = _steps.removeAt(oldIndex);
+      _steps.insert(newIndex, step);
     });
   }
 
@@ -622,84 +736,158 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New routine'),
+        title: Text(widget.routine == null ? 'New routine' : 'Edit routine'),
         actions: <Widget>[
           TextButton(onPressed: _save, child: const Text('Save')),
           const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
           children: <Widget>[
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Routine name',
-                hintText: 'Morning routine',
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _descriptionController,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                hintText: 'What is this routine for?',
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text('Steps', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            if (_steps.isEmpty)
-              Text(
-                'Add the individual steps that make up this routine.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            for (int index = 0; index < _steps.length; index++) ...<Widget>[
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        _steps[index],
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Remove step',
-                      onPressed: () => setState(() => _steps.removeAt(index)),
-                      icon: Icon(
-                        Icons.remove_circle_outline_rounded,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 18),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: TextField(
-                    controller: _stepController,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  TextField(
+                    controller: _nameController,
+                    autofocus: widget.routine == null,
                     textCapitalization: TextCapitalization.sentences,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _addStep(),
-                    decoration: const InputDecoration(hintText: 'Add a step'),
+                    decoration: const InputDecoration(
+                      labelText: 'Routine name',
+                      hintText: 'Morning routine',
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                IconButton.filled(
-                  tooltip: 'Add step',
-                  onPressed: _addStep,
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _descriptionController,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Description (optional)',
+                      hintText: 'What is this routine for?',
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          'Steps',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _addStepToEnd,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Add'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _steps.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Add steps to build the sequence. You can drag them '
+                          'into order or insert a step below any existing one.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    )
+                  : ReorderableListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      itemCount: _steps.length,
+                      onReorderItem: _reorderStep,
+                      itemBuilder: (BuildContext context, int index) {
+                        return Padding(
+                          key: ValueKey<String>('step-$index-${_steps[index]}'),
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Material(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(16),
+                            child: ListTile(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              leading: ReorderableDragStartListener(
+                                index: index,
+                                child: Icon(
+                                  Icons.drag_handle_rounded,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                              title: Text(_steps[index]),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  IconButton(
+                                    tooltip: 'Insert step below',
+                                    onPressed: () => _insertStepAt(index + 1),
+                                    icon: const Icon(Icons.add_rounded),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Remove step',
+                                    onPressed: () => _removeStepAt(index),
+                                    icon: Icon(
+                                      Icons.remove_circle_outline_rounded,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .error,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextField(
+                      controller: _stepController,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) async {
+                        final String title = _stepController.text.trim();
+                        if (title.isEmpty) {
+                          return;
+                        }
+                        setState(() => _steps.add(title));
+                        _stepController.clear();
+                      },
+                      decoration: const InputDecoration(
+                        hintText: 'Add a step to the end',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  IconButton.filled(
+                    tooltip: 'Add step',
+                    onPressed: () {
+                      final String title = _stepController.text.trim();
+                      if (title.isEmpty) {
+                        return;
+                      }
+                      setState(() => _steps.add(title));
+                      _stepController.clear();
+                    },
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

@@ -7,11 +7,12 @@ Flutter's single codebase.
 ## Current apps
 
 - **Tasks** — a lightweight to-do list with completion progress.
+- **Prompts** — reusable titles and notes with one-tap copy without the title.
 - **Maths** — configurable arithmetic challenges with count and timed modes.
 - **Routines** — repeatable routines with step-by-step daily progress.
 - **Focus** — a work/break timer for short focus sessions.
 
-Tasks, routines, Maths settings/high scores, and recently opened hub cards
+Tasks, prompts, routines, Maths settings/high scores, and recently opened hub cards
 are saved locally with `shared_preferences`.
 
 ## Project structure
@@ -31,6 +32,7 @@ lib/
     └── apps/
         ├── apps_registry.dart # Registry powering the hub
         ├── tasks/             # Tasks module
+        ├── prompts/           # Reusable prompts module
         ├── maths/             # Maths practice module
         ├── routines/          # Routines tracker module
         └── focus/             # Focus timer module

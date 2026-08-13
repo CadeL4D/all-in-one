@@ -19,6 +19,7 @@ void main() {
     expect(find.text('Notes'), findsNothing);
     expect(find.text('Calculator'), findsNothing);
     expect(find.text('Tasks'), findsOneWidget);
+    expect(find.text('Prompts'), findsOneWidget);
     expect(find.text('Maths'), findsOneWidget);
     expect(find.text('Routines'), findsOneWidget);
     expect(find.text('Focus'), findsOneWidget);

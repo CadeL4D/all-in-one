@@ -3,11 +3,22 @@ import 'package:flutter/material.dart';
 import '../core/app_manifest.dart';
 import 'focus/focus_app.dart';
 import 'maths/maths_app.dart';
+import 'prompts/prompts_app.dart';
 import 'routines/routines_app.dart';
 import 'tasks/tasks_app.dart';
 
 abstract final class AppRegistry {
   static const List<AppManifest> apps = <AppManifest>[
+    AppManifest(
+      id: 'prompts',
+      name: 'Prompts',
+      tagline: 'Titles and reusable notes',
+      description: 'Keep reusable notes together and copy the note text without the title.',
+      icon: Icons.lightbulb_rounded,
+      gradient: <Color>[Color(0xFFF7971E), Color(0xFFFFD200)],
+      category: AppCategory.productivity,
+      builder: _promptsBuilder,
+    ),
     AppManifest(
       id: 'tasks',
       name: 'Tasks',
@@ -55,6 +66,8 @@ abstract final class AppRegistry {
   }
 
   static Widget _tasksBuilder(BuildContext context) => const TasksApp();
+
+  static Widget _promptsBuilder(BuildContext context) => const PromptsApp();
 
   static Widget _focusBuilder(BuildContext context) => const FocusApp();
 

@@ -188,6 +188,7 @@ class _MathsAppState extends State<MathsApp> {
   int _correctCount = 0;
   int _elapsedSeconds = 0;
   int _remainingSeconds = 0;
+  int _problemSeconds = 0;
   String? _lastResultMessage;
   bool _lastResultIsNewBest = false;
 
@@ -390,6 +391,7 @@ class _MathsAppState extends State<MathsApp> {
       _remainingSeconds = _mode == _MathsMode.timed
           ? _preferences.timedSeconds
           : 0;
+      _problemSeconds = 0;
       _problem = _generateProblem();
     });
 
@@ -404,12 +406,14 @@ class _MathsAppState extends State<MathsApp> {
         if (_mode == _MathsMode.timed) {
           if (_remainingSeconds > 1) {
             _remainingSeconds--;
+            _problemSeconds++;
           } else {
             _remainingSeconds = 0;
             _finishChallenge();
           }
         } else {
           _elapsedSeconds++;
+          _problemSeconds++;
         }
       });
     });
@@ -495,29 +499,49 @@ class _MathsAppState extends State<MathsApp> {
     );
   }
 
-  void _submitAnswer() {
-    final int? answer = int.tryParse(_answerController.text.trim());
+  void _handleAnswer(String value) {
+    final int? answer = int.tryParse(value.trim());
     final _MathsProblem? problem = _problem;
     if (answer == null || problem == null) {
       return;
     }
 
-    setState(() {
-      if (answer == problem.answer) {
-        _correctCount++;
-        _answerController.clear();
+    if (answer != problem.answer) {
+      return;
+    }
 
-        if (_mode == _MathsMode.timed) {
-          if (_remainingSeconds <= 0) {
-            _finishChallenge();
-          } else {
-            _problem = _generateProblem();
-          }
-        } else if (_correctCount >= _preferences.targetCount) {
+    setState(() {
+      _correctCount++;
+      if (_mode == _MathsMode.timed) {
+        if (_remainingSeconds <= 0) {
           _finishChallenge();
         } else {
-          _problem = _generateProblem();
+          _advanceToNextProblem();
         }
+      } else if (_correctCount >= _preferences.targetCount) {
+        _finishChallenge();
+      } else {
+        _advanceToNextProblem();
+      }
+    });
+  }
+
+  void _advanceToNextProblem() {
+    _problem = _generateProblem();
+    _problemSeconds = 0;
+    _answerController.clear();
+  }
+
+  void _skipProblem() {
+    if (_problem == null) {
+      return;
+    }
+
+    setState(() {
+      if (_mode == _MathsMode.timed && _remainingSeconds <= 0) {
+        _finishChallenge();
+      } else {
+        _advanceToNextProblem();
       }
     });
   }
@@ -818,7 +842,7 @@ class _MathsAppState extends State<MathsApp> {
                       keyboardType: TextInputType.number,
                       textInputAction: TextInputAction.done,
                       textAlign: TextAlign.center,
-                      onSubmitted: (_) => _submitAnswer(),
+                      onChanged: _handleAnswer,
                       style: const TextStyle(
                         fontSize: 34,
                         fontWeight: FontWeight.w700,
@@ -840,11 +864,23 @@ class _MathsAppState extends State<MathsApp> {
           ),
           const SizedBox(height: 16),
           SizedBox(
-            width: double.infinity,
             height: 56,
-            child: FilledButton(
-              onPressed: _submitAnswer,
-              child: const Text('Check'),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _problemSeconds >= 10
+                  ? SizedBox(
+                      key: const ValueKey<String>('give-up'),
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _skipProblem,
+                        icon: const Icon(Icons.flag_rounded),
+                        label: const Text('Give up'),
+                      ),
+                    )
+                  : const SizedBox(
+                      key: ValueKey<String>('no-give-up'),
+                      height: 56,
+                    ),
             ),
           ),
         ],

@@ -107,6 +107,12 @@ class _TasksAppState extends State<TasksApp> {
 
   @override
   Widget build(BuildContext context) {
+    final List<_Todo> active = _todos
+        .where((_Todo todo) => !todo.completed)
+        .toList(growable: false);
+    final List<_Todo> completed = _todos
+        .where((_Todo todo) => todo.completed)
+        .toList(growable: false);
     final double progress = _todos.isEmpty
         ? 0
         : _completedCount / _todos.length;
@@ -123,29 +129,55 @@ class _TasksAppState extends State<TasksApp> {
           ? const Center(child: CircularProgressIndicator())
           : _todos.isEmpty
           ? _EmptyTasks(onAdd: _addTodo)
-          : Column(
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 96),
               children: <Widget>[
                 _TaskProgress(
                   completed: _completedCount,
                   total: _todos.length,
                   progress: progress,
                 ),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 96),
-                    itemCount: _todos.length,
-                    separatorBuilder: (BuildContext context, int index) =>
+                const SizedBox(height: 6),
+                if (active.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Column(
+                      children: <Widget>[
+                        Icon(
+                          Icons.task_alt_rounded,
+                          size: 48,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                         const SizedBox(height: 10),
-                    itemBuilder: (BuildContext context, int index) {
-                      final _Todo todo = _todos[index];
-                      return _TaskTile(
-                        todo: todo,
-                        onToggle: () => _toggleTodo(todo),
-                        onDelete: () => _deleteTodo(todo),
-                      );
-                    },
+                        Text(
+                          'No active tasks',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Everything is checked off.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  for (final _Todo todo in active) ...<Widget>[
+                    _TaskTile(
+                      todo: todo,
+                      onToggle: () => _toggleTodo(todo),
+                      onDelete: () => _deleteTodo(todo),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                if (completed.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 8),
+                  _CompletedTasksSection(
+                    tasks: completed,
+                    onToggle: _toggleTodo,
+                    onDelete: _deleteTodo,
                   ),
-                ),
+                ],
               ],
             ),
     );
@@ -291,6 +323,81 @@ class _TaskTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CompletedTasksSection extends StatefulWidget {
+  const _CompletedTasksSection({
+    required this.tasks,
+    required this.onToggle,
+    required this.onDelete,
+  });
+
+  final List<_Todo> tasks;
+  final ValueChanged<_Todo> onToggle;
+  final ValueChanged<_Todo> onDelete;
+
+  @override
+  State<_CompletedTasksSection> createState() => _CompletedTasksSectionState();
+}
+
+class _CompletedTasksSectionState extends State<_CompletedTasksSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        children: <Widget>[
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Icon(
+                      _expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Completed (${widget.tasks.length})',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_expanded)
+            for (final _Todo todo in widget.tasks) ...<Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                child: _TaskTile(
+                  todo: todo,
+                  onToggle: () => widget.onToggle(todo),
+                  onDelete: () => widget.onDelete(todo),
+                ),
+              ),
+            ],
+        ],
       ),
     );
   }

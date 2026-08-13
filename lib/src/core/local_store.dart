@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 abstract final class LocalStore {
   static const String tasksKey = 'tasks_v1';
   static const String routinesKey = 'routines_v1';
+  static const String promptsKey = 'prompts_v1';
   static const String recentAppsKey = 'recent_apps_v1';
 
   static Future<String?> readString(String key) async {
