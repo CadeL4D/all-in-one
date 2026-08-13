@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import '../../core/local_store.dart';
 import '../../screens/app_scaffold.dart';
 
+String _localDateKey() {
+  final DateTime now = DateTime.now();
+  final String month = now.month.toString().padLeft(2, '0');
+  final String day = now.day.toString().padLeft(2, '0');
+  return '${now.year}-$month-$day';
+}
+
 class _RoutineStep {
   _RoutineStep({required this.id, required this.title, this.done = false});
 
@@ -29,6 +36,7 @@ class _Routine {
     required this.name,
     required this.description,
     required this.steps,
+    required this.lastResetDate,
   });
 
   factory _Routine.fromJson(Map<String, dynamic> json) {
@@ -43,6 +51,7 @@ class _Routine {
       name: json['name'] as String? ?? 'Untitled routine',
       description: json['description'] as String? ?? '',
       steps: rawSteps.map(_RoutineStep.fromJson).toList(),
+      lastResetDate: json['lastResetDate'] as String? ?? _localDateKey(),
     );
   }
 
@@ -50,6 +59,18 @@ class _Routine {
   String name;
   String description;
   List<_RoutineStep> steps;
+  String lastResetDate;
+
+  void resetForNewDay() {
+    final String today = _localDateKey();
+    if (lastResetDate == today) {
+      return;
+    }
+    for (final _RoutineStep step in steps) {
+      step.done = false;
+    }
+    lastResetDate = today;
+  }
 
   int get completedSteps =>
       steps.where((_RoutineStep step) => step.done).length;
@@ -62,6 +83,7 @@ class _Routine {
       'name': name,
       'description': description,
       'steps': steps.map((_RoutineStep step) => step.toJson()).toList(),
+      'lastResetDate': lastResetDate,
     };
   }
 }
@@ -114,6 +136,7 @@ class _RoutinesAppState extends State<RoutinesApp> {
             description:
                 'A simple start-of-day routine to build consistency before the '
                 'rest of the day begins.',
+            lastResetDate: _localDateKey(),
             steps: <_RoutineStep>[
               _RoutineStep(id: 1, title: 'Drink a glass of water'),
               _RoutineStep(id: 2, title: 'Make the bed'),
@@ -133,6 +156,9 @@ class _RoutinesAppState extends State<RoutinesApp> {
             }
           }
         }
+      }
+      for (final _Routine routine in _routines) {
+        routine.resetForNewDay();
       }
       _loaded = true;
     });
@@ -165,6 +191,7 @@ class _RoutinesAppState extends State<RoutinesApp> {
           id: _nextRoutineId++,
           name: draft.name,
           description: draft.description,
+          lastResetDate: _localDateKey(),
           steps: draft.steps
               .map(
                 (String title) => _RoutineStep(id: _nextStepId++, title: title),
@@ -177,6 +204,11 @@ class _RoutinesAppState extends State<RoutinesApp> {
   }
 
   Future<void> _openRoutine(_Routine routine) async {
+    routine.resetForNewDay();
+    await _persistRoutines();
+    if (!mounted) {
+      return;
+    }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (BuildContext context) => _RoutineDetailScreen(
@@ -400,11 +432,36 @@ class _EmptyRoutines extends StatelessWidget {
   }
 }
 
-class _RoutineDetailScreen extends StatelessWidget {
+class _RoutineDetailScreen extends StatefulWidget {
   const _RoutineDetailScreen({required this.routine, required this.onChanged});
 
   final _Routine routine;
   final VoidCallback onChanged;
+
+  @override
+  State<_RoutineDetailScreen> createState() => _RoutineDetailScreenState();
+}
+
+class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
+  _Routine get routine => widget.routine;
+
+  void _toggleStep(_RoutineStep step) {
+    setState(() {
+      routine.resetForNewDay();
+      step.done = !step.done;
+      widget.onChanged();
+    });
+  }
+
+  void _resetRoutine() {
+    setState(() {
+      for (final _RoutineStep step in routine.steps) {
+        step.done = false;
+      }
+      routine.lastResetDate = _localDateKey();
+      widget.onChanged();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -442,10 +499,7 @@ class _RoutineDetailScreen extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 10),
                   child: CheckboxListTile(
                     value: step.done,
-                    onChanged: (_) {
-                      step.done = !step.done;
-                      onChanged();
-                    },
+                    onChanged: (_) => _toggleStep(step),
                     controlAffinity: ListTileControlAffinity.leading,
                     title: Text(
                       step.title,
@@ -462,12 +516,7 @@ class _RoutineDetailScreen extends StatelessWidget {
                 ),
             const SizedBox(height: 18),
             OutlinedButton.icon(
-              onPressed: () {
-                for (final _RoutineStep step in routine.steps) {
-                  step.done = false;
-                }
-                onChanged();
-              },
+              onPressed: _resetRoutine,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Reset routine'),
             ),
