@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../apps/apps_registry.dart';
+import '../core/backup_service.dart';
 import '../core/local_store.dart';
 import '../core/app_manifest.dart';
 import '../theme/app_theme.dart';
@@ -22,6 +23,48 @@ class _HubScreenState extends State<HubScreen> {
   void initState() {
     super.initState();
     _loadRecentApps();
+  }
+
+  Future<void> _exportBackup() async {
+    try {
+      await BackupService.exportAndShare();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not export the backup file.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final bool restored = await BackupService.importFromPicker();
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          restored
+              ? 'Backup imported. Data has been restored.'
+              : 'No valid One Hub backup was imported.',
+        ),
+      ),
+    );
+
+    if (restored) {
+      await _loadRecentApps();
+    }
+  }
+
+  Future<void> _handleBackupAction(String value) async {
+    switch (value) {
+      case 'export':
+        await _exportBackup();
+      case 'import':
+        await _importBackup();
+    }
   }
 
   Future<void> _loadRecentApps() async {
@@ -208,6 +251,29 @@ class _HubScreenState extends State<HubScreen> {
                         Icons.apps_rounded,
                         color: Colors.white,
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    PopupMenuButton<String>(
+                      tooltip: 'Backup options',
+                      icon: const Icon(Icons.backup_rounded),
+                      onSelected: _handleBackupAction,
+                      itemBuilder: (BuildContext context) =>
+                          const <PopupMenuEntry<String>>[
+                            PopupMenuItem<String>(
+                              value: 'export',
+                              child: ListTile(
+                                leading: Icon(Icons.upload_file_rounded),
+                                title: Text('Export backup'),
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'import',
+                              child: ListTile(
+                                leading: Icon(Icons.download_rounded),
+                                title: Text('Import backup'),
+                              ),
+                            ),
+                          ],
                     ),
                   ],
                 ),
