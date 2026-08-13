@@ -9,24 +9,24 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('hub renders app tiles and opens Notes', (
+  testWidgets('hub renders app tiles and opens Tasks', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const HubApp());
     await tester.pumpAndSettle();
 
     expect(find.text('One Hub'), findsOneWidget);
-    expect(find.text('Notes'), findsOneWidget);
+    expect(find.text('Notes'), findsNothing);
+    expect(find.text('Calculator'), findsNothing);
     expect(find.text('Tasks'), findsOneWidget);
-    expect(find.text('Calculator'), findsOneWidget);
     expect(find.text('Maths'), findsOneWidget);
     expect(find.text('Routines'), findsOneWidget);
     expect(find.text('Focus'), findsOneWidget);
 
-    await tester.tap(find.text('Notes'));
+    await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Welcome to Notes'), findsOneWidget);
+    expect(find.text('Set up your first project'), findsOneWidget);
   });
 
   testWidgets('hub search filters the app grid', (WidgetTester tester) async {
