@@ -373,6 +373,12 @@ class _MathsAppState extends State<MathsApp> {
       );
       return;
     }
+    if (_preferences.enabledDifficulties.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enable at least one difficulty first.')),
+      );
+      return;
+    }
 
     _answerController.clear();
     setState(() {
