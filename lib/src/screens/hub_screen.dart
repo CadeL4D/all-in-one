@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../apps/apps_registry.dart';
+import '../core/local_store.dart';
 import '../core/app_manifest.dart';
 import '../theme/app_theme.dart';
 
@@ -16,6 +17,27 @@ class _HubScreenState extends State<HubScreen> {
   final List<String> _recentIds = <String>[];
   String _query = '';
   AppCategory? _category;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentApps();
+  }
+
+  Future<void> _loadRecentApps() async {
+    final List<String> stored = await LocalStore.readStringList(
+      LocalStore.recentAppsKey,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _recentIds
+        ..clear()
+        ..addAll(stored.where(AppRegistry.apps.map((app) => app.id).contains));
+    });
+  }
 
   @override
   void dispose() {
@@ -48,6 +70,7 @@ class _HubScreenState extends State<HubScreen> {
         _recentIds.removeRange(3, _recentIds.length);
       }
     });
+    LocalStore.writeStringList(LocalStore.recentAppsKey, _recentIds);
 
     Navigator.of(context).push<void>(
       PageRouteBuilder<void>(

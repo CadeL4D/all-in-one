@@ -9,7 +9,11 @@ Flutter's single codebase.
 - **Notes** — create, edit, and swipe-to-delete quick notes.
 - **Tasks** — a lightweight to-do list with completion progress.
 - **Calculator** — a distraction-free basic calculator.
+- **Maths** — configurable arithmetic challenges with count and timed modes.
 - **Focus** — a work/break timer for short focus sessions.
+
+Notes, tasks, Maths settings/high scores, and recently opened hub cards are saved
+locally with `shared_preferences`.
 
 ## Project structure
 
@@ -30,6 +34,7 @@ lib/
         ├── notes/             # Notes module
         ├── tasks/             # Tasks module
         ├── calculator/        # Calculator module
+        ├── maths/             # Maths practice module
         └── focus/             # Focus timer module
 ```
 

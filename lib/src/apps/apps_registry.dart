@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_manifest.dart';
 import 'calculator/calculator_app.dart';
 import 'focus/focus_app.dart';
+import 'maths/maths_app.dart';
 import 'notes/notes_app.dart';
 import 'tasks/tasks_app.dart';
 
@@ -41,6 +42,16 @@ abstract final class AppRegistry {
       builder: _calculatorBuilder,
     ),
     AppManifest(
+      id: 'maths',
+      name: 'Maths',
+      tagline: 'Practice with a purpose',
+      description: 'Timed maths challenges with saved personal bests.',
+      icon: Icons.functions_rounded,
+      gradient: <Color>[Color(0xFF11998E), Color(0xFF38EF7D)],
+      category: AppCategory.learning,
+      builder: _mathsBuilder,
+    ),
+    AppManifest(
       id: 'focus',
       name: 'Focus',
       tagline: 'Timers that keep you on track',
@@ -64,4 +75,6 @@ abstract final class AppRegistry {
       const CalculatorApp();
 
   static Widget _focusBuilder(BuildContext context) => const FocusApp();
+
+  static Widget _mathsBuilder(BuildContext context) => const MathsApp();
 }

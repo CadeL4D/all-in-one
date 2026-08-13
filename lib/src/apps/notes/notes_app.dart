@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/local_store.dart';
 import '../../screens/app_scaffold.dart';
 
 class _Note {
@@ -10,10 +11,30 @@ class _Note {
     required this.updatedAt,
   });
 
+  factory _Note.fromJson(Map<String, dynamic> json) {
+    return _Note(
+      id: (json['id'] as num).toInt(),
+      title: json['title'] as String? ?? 'Untitled note',
+      body: json['body'] as String? ?? '',
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+          DateTime.now(),
+    );
+  }
+
   final int id;
   String title;
   String body;
   DateTime updatedAt;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'title': title,
+      'body': body,
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
 }
 
 class _NoteDraft {
@@ -31,17 +52,55 @@ class NotesApp extends StatefulWidget {
 }
 
 class _NotesAppState extends State<NotesApp> {
-  final List<_Note> _notes = <_Note>[
-    _Note(
-      id: 1,
-      title: 'Welcome to Notes',
-      body:
-          'This is your first note. Tap the + button to create another one, '
-          'or tap this card to edit it. Swipe a note to delete it.',
-      updatedAt: DateTime.now(),
-    ),
-  ];
+  final List<_Note> _notes = <_Note>[];
   int _nextId = 2;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotes();
+  }
+
+  Future<void> _loadNotes() async {
+    final List<Map<String, dynamic>>? stored = await LocalStore.readJsonList(
+      LocalStore.notesKey,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (stored == null || stored.isEmpty) {
+        _notes.add(
+          _Note(
+            id: 1,
+            title: 'Welcome to Notes',
+            body:
+                'This is your first note. Tap the + button to create another '
+                'one, or tap this card to edit it. Swipe a note to delete it.',
+            updatedAt: DateTime.now(),
+          ),
+        );
+      } else {
+        _notes.addAll(stored.map(_Note.fromJson));
+        for (final _Note note in _notes) {
+          if (note.id >= _nextId) {
+            _nextId = note.id + 1;
+          }
+        }
+      }
+      _loaded = true;
+    });
+    await _persistNotes();
+  }
+
+  Future<void> _persistNotes() async {
+    await LocalStore.writeJsonList(
+      LocalStore.notesKey,
+      _notes.map((_Note note) => note.toJson()).toList(),
+    );
+  }
 
   void _openEditor({_Note? note}) async {
     final _NoteDraft? draft = await Navigator.of(context).push<_NoteDraft>(
@@ -74,10 +133,12 @@ class _NotesAppState extends State<NotesApp> {
         _notes.insert(0, note);
       }
     });
+    await _persistNotes();
   }
 
-  void _deleteNote(_Note note) {
+  Future<void> _deleteNote(_Note note) async {
     setState(() => _notes.remove(note));
+    await _persistNotes();
   }
 
   @override
@@ -90,7 +151,9 @@ class _NotesAppState extends State<NotesApp> {
         onPressed: () => _openEditor(),
         child: const Icon(Icons.add_rounded),
       ),
-      body: _notes.isEmpty
+      body: !_loaded
+          ? const Center(child: CircularProgressIndicator())
+          : _notes.isEmpty
           ? _EmptyNotes(onCreate: () => _openEditor())
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 96),

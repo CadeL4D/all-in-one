@@ -1,13 +1,26 @@
 import 'package:flutter/material.dart';
 
+import '../../core/local_store.dart';
 import '../../screens/app_scaffold.dart';
 
 class _Todo {
-  _Todo({required this.id, required this.title});
+  _Todo({required this.id, required this.title, this.completed = false});
+
+  factory _Todo.fromJson(Map<String, dynamic> json) {
+    return _Todo(
+      id: (json['id'] as num).toInt(),
+      title: json['title'] as String? ?? 'Untitled task',
+      completed: json['completed'] as bool? ?? false,
+    );
+  }
 
   final int id;
   String title;
-  bool completed = false;
+  bool completed;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{'id': id, 'title': title, 'completed': completed};
+  }
 }
 
 class TasksApp extends StatefulWidget {
@@ -18,12 +31,50 @@ class TasksApp extends StatefulWidget {
 }
 
 class _TasksAppState extends State<TasksApp> {
-  final List<_Todo> _todos = <_Todo>[
-    _Todo(id: 1, title: 'Set up your first project'),
-    _Todo(id: 2, title: 'Review today’s priorities'),
-    _Todo(id: 3, title: 'Plan tomorrow'),
-  ];
+  final List<_Todo> _todos = <_Todo>[];
   int _nextId = 4;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTasks();
+  }
+
+  Future<void> _loadTasks() async {
+    final List<Map<String, dynamic>>? stored = await LocalStore.readJsonList(
+      LocalStore.tasksKey,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (stored == null) {
+        _todos.addAll(<_Todo>[
+          _Todo(id: 1, title: 'Set up your first project'),
+          _Todo(id: 2, title: 'Review today’s priorities'),
+          _Todo(id: 3, title: 'Plan tomorrow'),
+        ]);
+      } else {
+        _todos.addAll(stored.map(_Todo.fromJson));
+        for (final _Todo todo in _todos) {
+          if (todo.id >= _nextId) {
+            _nextId = todo.id + 1;
+          }
+        }
+      }
+      _loaded = true;
+    });
+    await _persistTasks();
+  }
+
+  Future<void> _persistTasks() async {
+    await LocalStore.writeJsonList(
+      LocalStore.tasksKey,
+      _todos.map((_Todo todo) => todo.toJson()).toList(),
+    );
+  }
 
   int get _completedCount =>
       _todos.where((_Todo todo) => todo.completed).length;
@@ -41,14 +92,17 @@ class _TasksAppState extends State<TasksApp> {
     setState(() {
       _todos.insert(0, _Todo(id: _nextId++, title: title.trim()));
     });
+    await _persistTasks();
   }
 
-  void _toggleTodo(_Todo todo) {
+  Future<void> _toggleTodo(_Todo todo) async {
     setState(() => todo.completed = !todo.completed);
+    await _persistTasks();
   }
 
-  void _deleteTodo(_Todo todo) {
+  Future<void> _deleteTodo(_Todo todo) async {
     setState(() => _todos.remove(todo));
+    await _persistTasks();
   }
 
   @override
@@ -65,7 +119,9 @@ class _TasksAppState extends State<TasksApp> {
         onPressed: _addTodo,
         child: const Icon(Icons.add_rounded),
       ),
-      body: _todos.isEmpty
+      body: !_loaded
+          ? const Center(child: CircularProgressIndicator())
+          : _todos.isEmpty
           ? _EmptyTasks(onAdd: _addTodo)
           : Column(
               children: <Widget>[
