@@ -38,3 +38,18 @@ class AppManifest {
   final AppCategory category;
   final WidgetBuilder builder;
 }
+
+class AppIdentity extends InheritedWidget {
+  const AppIdentity({super.key, required this.app, required super.child});
+
+  final AppManifest app;
+
+  static AppIdentity? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<AppIdentity>();
+  }
+
+  @override
+  bool updateShouldNotify(AppIdentity oldWidget) {
+    return oldWidget.app != app;
+  }
+}

@@ -11,6 +11,7 @@ Flutter's single codebase.
 - **Maths** — configurable arithmetic challenges with count and timed modes.
 - **Routines** — repeatable routines with step-by-step daily progress.
 - **Focus** — a work/break timer for short focus sessions.
+- **Noises** — colored-noise soundscapes with optional Creative Commons nature mixing.
 
 Tasks, prompts, routines, Maths settings/high scores, and recently opened hub cards
 are saved locally with `shared_preferences`.
@@ -35,8 +36,22 @@ lib/
         ├── prompts/           # Reusable prompts module
         ├── maths/             # Maths practice module
         ├── routines/          # Routines tracker module
-        └── focus/             # Focus timer module
+        ├── focus/             # Focus timer module
+        └── noises/            # Colored noise and nature mix module
 ```
+
+## Audio credits
+
+The Noises app bundles two nature ambience loops from Wikimedia Commons:
+
+- `woodland_birdsong_rain.mp3` — "Bourne woods Birdsong and rain" by Robert EA
+  Harvey, licensed under CC BY-SA 4.0.
+- `forest_rain.mp3` — "Bourne woods rain" by Robert EA Harvey, licensed under
+  CC BY-SA 4.0.
+
+License links:
+
+- <https://creativecommons.org/licenses/by-sa/4.0/>
 
 ## Adding an app
 

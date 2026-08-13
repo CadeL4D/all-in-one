@@ -16,6 +16,7 @@ dependencies:
   share_plus: ^13.3.0
   path_provider: ^2.1.6
   file_picker: ^3.0.4
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -25,3 +26,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/audio/nature/

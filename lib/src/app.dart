@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'apps/apps_registry.dart';
+import 'core/app_manifest.dart';
 import 'screens/hub_screen.dart';
 import 'theme/app_theme.dart';
 
@@ -16,7 +17,11 @@ class HubApp extends StatelessWidget {
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       home: const HubScreen(),
-      routes: {for (final app in AppRegistry.apps) '/${app.id}': app.builder},
+      routes: {
+        for (final app in AppRegistry.apps)
+          '/${app.id}': (BuildContext context) =>
+              AppIdentity(app: app, child: app.builder(context)),
+      },
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_manifest.dart';
 import 'focus/focus_app.dart';
 import 'maths/maths_app.dart';
+import 'noises/noises_app.dart';
 import 'prompts/prompts_app.dart';
 import 'routines/routines_app.dart';
 import 'tasks/tasks_app.dart';
@@ -59,6 +60,17 @@ abstract final class AppRegistry {
       category: AppCategory.wellness,
       builder: _focusBuilder,
     ),
+    AppManifest(
+      id: 'noises',
+      name: 'Noises',
+      tagline: 'Ambient soundscapes',
+      description:
+          'Play colored noise and mix in Creative Commons nature audio.',
+      icon: Icons.graphic_eq_rounded,
+      gradient: <Color>[Color(0xFF36D1DC), Color(0xFF5B86E5)],
+      category: AppCategory.wellness,
+      builder: _noisesBuilder,
+    ),
   ];
 
   static AppManifest byId(String id) {
@@ -74,4 +86,6 @@ abstract final class AppRegistry {
   static Widget _mathsBuilder(BuildContext context) => const MathsApp();
 
   static Widget _routinesBuilder(BuildContext context) => const RoutinesApp();
+
+  static Widget _noisesBuilder(BuildContext context) => const NoisesApp();
 }

@@ -122,7 +122,7 @@ class _HubScreenState extends State<HubScreen> {
           BuildContext context,
           Animation<double> animation,
           Animation<double> secondaryAnimation,
-        ) => app.builder(context),
+        ) => AppIdentity(app: app, child: app.builder(context)),
         transitionsBuilder:
             (
               BuildContext context,
