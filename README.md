@@ -9,9 +9,10 @@ Flutter's single codebase.
 - **Tasks** — a lightweight to-do list with completion progress.
 - **Prompts** — reusable titles and notes with one-tap copy without the title.
 - **Maths** — configurable arithmetic challenges with count and timed modes.
-- **Routines** — repeatable routines with step-by-step daily progress.
-- **Focus** — a work/break timer for short focus sessions.
+- **Routines** — repeatable routines with step-by-step daily progress and optional per-step timing.
+- **Focus** — named focus/break timers with adjustable durations, optional scheduled starts, and background completion alerts.
 - **Noises** — colored-noise soundscapes with optional Creative Commons nature mixing.
+- **Signal** — a fast arcade cognitive-training game with adaptive attention, memory, inhibition and flexibility challenges.
 
 Tasks, prompts, routines, Maths settings/high scores, and recently opened hub cards
 are saved locally with `shared_preferences`.
@@ -37,21 +38,33 @@ lib/
         ├── maths/             # Maths practice module
         ├── routines/          # Routines tracker module
         ├── focus/             # Focus timer module
-        └── noises/            # Colored noise and nature mix module
+        ├── noises/            # Colored noise and nature mix module
+        └── signal/            # Signal arcade cognitive-training game
 ```
 
 ## Audio credits
 
-The Noises app bundles two nature ambience loops from Wikimedia Commons:
+The Noises app bundles four nature ambience loops from Wikimedia Commons:
 
 - `woodland_birdsong_rain.mp3` — "Bourne woods Birdsong and rain" by Robert EA
   Harvey, licensed under CC BY-SA 4.0.
 - `forest_rain.mp3` — "Bourne woods rain" by Robert EA Harvey, licensed under
   CC BY-SA 4.0.
+- `stream_sesmylspruit.mp3` — "Sound of the Sesmyl Spruit" by JMK, licensed
+  under CC BY-SA 4.0.
+- `river_palala.mp3` — "Sound of the Palala River" by JMK, licensed under
+  CC BY-SA 4.0.
 
 License links:
 
 - <https://creativecommons.org/licenses/by-sa/4.0/>
+
+Source pages:
+
+- <https://commons.wikimedia.org/wiki/File:Bourne_woods_Birdsong_and_rain_2020-06-17_0742.mp3>
+- <https://commons.wikimedia.org/wiki/File:Bourne_woods_rain_2020-05-10_0800.mp3>
+- <https://commons.wikimedia.org/wiki/File:Sesmylspruit,_klank_van_stroom_by_bruggie,_a.mp3>
+- <https://commons.wikimedia.org/wiki/File:Palalarivier,_klank_van_sterk_stroom,_a.mp3>
 
 ## Adding an app
 

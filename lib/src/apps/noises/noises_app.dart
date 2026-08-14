@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -10,18 +11,44 @@ import '../../screens/app_scaffold.dart';
 import 'noise_engine.dart';
 
 class _NatureClip {
-  const _NatureClip(this.path, this.label);
+  const _NatureClip({
+    required this.id,
+    required this.path,
+    required this.label,
+    required this.icon,
+  });
 
+  final String id;
   final String path;
   final String label;
+  final IconData icon;
 }
 
 const List<_NatureClip> _natureClips = <_NatureClip>[
   _NatureClip(
-    'audio/nature/woodland_birdsong_rain.mp3',
-    'Woodland birdsong and rain',
+    id: 'woodland_rain',
+    path: 'audio/nature/woodland_birdsong_rain.mp3',
+    label: 'Woodland birdsong and rain',
+    icon: Icons.forest_rounded,
   ),
-  _NatureClip('audio/nature/forest_rain.mp3', 'Forest rain'),
+  _NatureClip(
+    id: 'forest_rain',
+    path: 'audio/nature/forest_rain.mp3',
+    label: 'Forest rain',
+    icon: Icons.water_drop_rounded,
+  ),
+  _NatureClip(
+    id: 'stream',
+    path: 'audio/nature/stream_sesmylspruit.mp3',
+    label: 'Flowing stream',
+    icon: Icons.water_rounded,
+  ),
+  _NatureClip(
+    id: 'river_birds',
+    path: 'audio/nature/river_palala.mp3',
+    label: 'River and birds',
+    icon: Icons.air_rounded,
+  ),
 ];
 
 class NoisesApp extends StatefulWidget {
@@ -33,29 +60,44 @@ class NoisesApp extends StatefulWidget {
 
 class _NoisesAppState extends State<NoisesApp> {
   static const String _preferencesKey = 'noises_v1';
+  static const double _natureTargetLevel = 0.42;
 
   final AudioPlayer _noisePlayer = AudioPlayer();
-  final AudioPlayer _naturePlayer = AudioPlayer();
+  final Map<String, AudioPlayer> _naturePlayers = <String, AudioPlayer>{};
   final Random _random = Random();
 
   NoiseColor _selected = NoiseColor.white;
   bool _loaded = false;
   bool _playing = false;
-  bool _natureMix = false;
   bool _starting = false;
   double _volume = 0.72;
-  _NatureClip? _activeNatureClip;
+  final Map<String, bool> _natureEnabled = <String, bool>{};
+  final Map<String, double> _naturePhases = <String, double>{};
+  final Map<String, double> _naturePeriods = <String, double>{};
+  final Set<String> _activeNatureIds = <String>{};
+  DateTime? _natureFadeStartedAt;
+  Timer? _natureFadeTimer;
+  Timer? _noiseVariationTimer;
 
   @override
   void initState() {
     super.initState();
+    for (final _NatureClip clip in _natureClips) {
+      _naturePlayers[clip.id] = AudioPlayer();
+      _naturePhases[clip.id] = _random.nextDouble() * 2 * pi;
+      _naturePeriods[clip.id] = 38 + _random.nextDouble() * 42;
+    }
     _loadPreferences();
   }
 
   @override
   void dispose() {
+    _natureFadeTimer?.cancel();
+    _noiseVariationTimer?.cancel();
     _noisePlayer.dispose();
-    _naturePlayer.dispose();
+    for (final AudioPlayer player in _naturePlayers.values) {
+      player.dispose();
+    }
     super.dispose();
   }
 
@@ -76,7 +118,17 @@ class _NoisesAppState extends State<NoisesApp> {
             orElse: () => NoiseColor.white,
           );
         }
-        _natureMix = json['natureMix'] as bool? ?? false;
+        final bool legacyNatureMix = json['natureMix'] as bool? ?? false;
+        final Object? storedNature = json['natureEnabled'];
+        if (storedNature is Map<String, dynamic>) {
+          for (final _NatureClip clip in _natureClips) {
+            _natureEnabled[clip.id] = storedNature[clip.id] as bool? ?? false;
+          }
+        } else {
+          for (final _NatureClip clip in _natureClips) {
+            _natureEnabled[clip.id] = legacyNatureMix;
+          }
+        }
         _volume = ((json['volume'] as num?)?.toDouble() ?? 0.72)
             .clamp(0.0, 1.0)
             .toDouble();
@@ -93,7 +145,7 @@ class _NoisesAppState extends State<NoisesApp> {
       _preferencesKey,
       jsonEncode(<String, Object>{
         'color': _selected.name,
-        'natureMix': _natureMix,
+        'natureEnabled': _natureEnabled,
         'volume': _volume,
       }),
     );
@@ -129,9 +181,6 @@ class _NoisesAppState extends State<NoisesApp> {
   Future<void> _startPlayers() async {
     setState(() {
       _starting = true;
-      _activeNatureClip = _selected == NoiseColor.green && _natureMix
-          ? _randomNatureClip()
-          : null;
     });
 
     try {
@@ -143,13 +192,13 @@ class _NoisesAppState extends State<NoisesApp> {
         mode: PlayerMode.lowLatency,
       );
 
-      if (_activeNatureClip != null) {
-        await _naturePlayer.setReleaseMode(ReleaseMode.loop);
-        await _naturePlayer.play(
-          AssetSource(_activeNatureClip!.path),
-          volume: _volume * 0.42,
-          mode: PlayerMode.mediaPlayer,
-        );
+      if (_selected == NoiseColor.green) {
+        _startNatureFadeCycle();
+        for (final _NatureClip clip in _natureClips) {
+          if (_natureEnabled[clip.id] ?? false) {
+            await _startNatureClip(clip.id);
+          }
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -167,12 +216,17 @@ class _NoisesAppState extends State<NoisesApp> {
       _playing = true;
       _starting = false;
     });
+    _scheduleNoiseVariation();
   }
 
   Future<void> _stopPlayers() async {
+    _natureFadeTimer?.cancel();
+    _natureFadeTimer = null;
+    _noiseVariationTimer?.cancel();
+    _noiseVariationTimer = null;
     await Future.wait<void>(<Future<void>>[
       _noisePlayer.stop(),
-      _naturePlayer.stop(),
+      ..._activeNatureIds.map((String id) => _naturePlayers[id]!.stop()),
     ]);
     if (!mounted) {
       return;
@@ -181,35 +235,116 @@ class _NoisesAppState extends State<NoisesApp> {
     setState(() {
       _playing = false;
       _starting = false;
-      _activeNatureClip = null;
+      _activeNatureIds.clear();
     });
   }
 
-  Future<void> _setNatureMix(bool value) async {
-    setState(() => _natureMix = value);
+  Future<void> _setNatureEnabled(String id, bool value) async {
+    setState(() => _natureEnabled[id] = value);
     await _savePreferences();
 
-    if (_playing) {
-      await _naturePlayer.stop();
-      setState(() => _activeNatureClip = null);
+    if (_playing && _selected == NoiseColor.green) {
+      if (value) {
+        await _startNatureClip(id);
+      } else {
+        await _stopNatureClip(id);
+      }
+    }
+  }
 
-      if (value && _selected == NoiseColor.green) {
-        final _NatureClip clip = _randomNatureClip();
-        setState(() => _activeNatureClip = clip);
+  Future<void> _startNatureClip(String id) async {
+    if (_activeNatureIds.contains(id)) {
+      return;
+    }
+
+    final _NatureClip clip = _natureClips.firstWhere(
+      (_NatureClip clip) => clip.id == id,
+    );
+    final AudioPlayer player = _naturePlayers[id]!;
+    try {
+      await player.setReleaseMode(ReleaseMode.loop);
+      await player.play(
+        AssetSource(clip.path),
+        volume: _natureVolumeFor(id),
+        mode: PlayerMode.mediaPlayer,
+      );
+      if (mounted) {
+        setState(() => _activeNatureIds.add(id));
+      } else {
+        _activeNatureIds.add(id);
+      }
+    } catch (_) {
+      // Nature playback is optional; the generated noise keeps playing.
+    }
+  }
+
+  Future<void> _stopNatureClip(String id) async {
+    if (_activeNatureIds.remove(id)) {
+      try {
+        await _naturePlayers[id]!.stop();
+      } catch (_) {
+        // A stopped nature layer needs no recovery.
+      }
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  double _natureVolumeFor(String id) {
+    final double phase = _naturePhases[id] ?? 0;
+    final double period = _naturePeriods[id] ?? 60;
+    final double elapsed = _natureFadeStartedAt == null
+        ? 0.0
+        : DateTime.now().difference(_natureFadeStartedAt!).inMilliseconds /
+              1000.0;
+    final double fade = 0.5 + 0.5 * sin(phase + elapsed * 2 * pi / period);
+    final double factor = 0.38 + 0.27 * fade;
+    return (_volume * _natureTargetLevel * factor).clamp(0.0, 1.0).toDouble();
+  }
+
+  void _startNatureFadeCycle() {
+    _natureFadeTimer?.cancel();
+    _natureFadeStartedAt = DateTime.now();
+    _natureFadeTimer = Timer.periodic(const Duration(milliseconds: 900), (
+      _,
+    ) async {
+      if (!_playing || _selected != NoiseColor.green) {
+        return;
+      }
+      for (final String id in _activeNatureIds) {
         try {
-          await _naturePlayer.setReleaseMode(ReleaseMode.loop);
-          await _naturePlayer.play(
-            AssetSource(clip.path),
-            volume: _volume * 0.42,
-            mode: PlayerMode.mediaPlayer,
-          );
+          await _naturePlayers[id]!.setVolume(_natureVolumeFor(id));
         } catch (_) {
-          // Nature playback is optional; the generated noise keeps playing.
+          // Ignore transient platform volume errors.
         }
       }
-    } else if (value && _selected == NoiseColor.green) {
-      setState(() => _activeNatureClip = _randomNatureClip());
-    }
+    });
+  }
+
+  void _scheduleNoiseVariation() {
+    _noiseVariationTimer?.cancel();
+    final int seconds = 90 + _random.nextInt(61);
+    _noiseVariationTimer = Timer(Duration(seconds: seconds), () async {
+      if (!_playing) {
+        return;
+      }
+
+      try {
+        final Uint8List wavBytes = NoiseEngine.generateWav(_selected);
+        await _noisePlayer.play(
+          BytesSource(wavBytes, mimeType: 'audio/wav'),
+          volume: _volume,
+          mode: PlayerMode.lowLatency,
+        );
+      } catch (_) {
+        // The existing loop keeps playing when variation is unavailable.
+      }
+      if (!_playing) {
+        return;
+      }
+      _scheduleNoiseVariation();
+    });
   }
 
   Future<void> _setVolume(double value) async {
@@ -217,15 +352,15 @@ class _NoisesAppState extends State<NoisesApp> {
     await _savePreferences();
 
     if (_playing) {
-      await Future.wait<void>(<Future<void>>[
-        _noisePlayer.setVolume(value),
-        _naturePlayer.setVolume(value * 0.42),
-      ]);
+      await _noisePlayer.setVolume(value);
+      for (final String id in _activeNatureIds) {
+        try {
+          await _naturePlayers[id]!.setVolume(_natureVolumeFor(id));
+        } catch (_) {
+          // Keep the rest of the mix playing when one layer fails.
+        }
+      }
     }
-  }
-
-  _NatureClip _randomNatureClip() {
-    return _natureClips[_random.nextInt(_natureClips.length)];
   }
 
   @override
@@ -271,17 +406,19 @@ class _NoisesAppState extends State<NoisesApp> {
                 ),
                 if (_selected == NoiseColor.green) ...<Widget>[
                   const SizedBox(height: 18),
-                  _NatureMixCard(
-                    value: _natureMix,
-                    activeClip: _activeNatureClip,
-                    onChanged: _setNatureMix,
+                  _NatureLayersCard(
+                    enabledIds: _natureEnabled,
+                    activeIds: _activeNatureIds,
+                    onChanged: _setNatureEnabled,
                   ),
                 ],
                 const SizedBox(height: 20),
                 Text(
                   'Nature clips are bundled from Wikimedia Commons and used '
-                  'under Creative Commons BY-SA 4.0. Attribution details are in '
-                  'the project README.',
+                  'under Creative Commons BY-SA 4.0 or CC0/public-domain '
+                  'licenses. Each sound independently drifts in and out around '
+                  'the steady green noise. Attribution details are in the '
+                  'project README.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -480,16 +617,16 @@ class _NoiseColorTile extends StatelessWidget {
   }
 }
 
-class _NatureMixCard extends StatelessWidget {
-  const _NatureMixCard({
-    required this.value,
-    required this.activeClip,
+class _NatureLayersCard extends StatelessWidget {
+  const _NatureLayersCard({
+    required this.enabledIds,
+    required this.activeIds,
     required this.onChanged,
   });
 
-  final bool value;
-  final _NatureClip? activeClip;
-  final ValueChanged<bool> onChanged;
+  final Map<String, bool> enabledIds;
+  final Set<String> activeIds;
+  final void Function(String id, bool value) onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -497,33 +634,78 @@ class _NatureMixCard extends StatelessWidget {
     final Color accent = _noiseColor(NoiseColor.green, scheme.brightness);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 10, 10),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: accent.withValues(alpha: 0.24)),
       ),
-      child: SwitchListTile.adaptive(
-        value: value,
-        onChanged: onChanged,
-        activeThumbColor: accent,
-        activeTrackColor: accent.withValues(alpha: 0.35),
-        contentPadding: EdgeInsets.zero,
-        secondary: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.layers_rounded, color: accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Nature layers',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Add natural ambience around the steady green noise. '
+                      'Each layer independently swells and recedes.',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          child: Icon(Icons.forest_rounded, color: accent),
-        ),
-        title: const Text('Nature mix'),
-        subtitle: Text(
-          value && activeClip != null
-              ? 'Randomly mixing ${activeClip!.label}'
-              : 'Randomly layer Creative Commons nature audio.',
-        ),
+          const SizedBox(height: 8),
+          for (final _NatureClip clip in _natureClips) ...<Widget>[
+            SwitchListTile.adaptive(
+              value: enabledIds[clip.id] ?? false,
+              onChanged: (bool value) => onChanged(clip.id, value),
+              activeThumbColor: accent,
+              activeTrackColor: accent.withValues(alpha: 0.35),
+              contentPadding: const EdgeInsets.only(left: 4, right: 4),
+              secondary: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(clip.icon, color: accent, size: 21),
+              ),
+              title: Text(
+                clip.label,
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                activeIds.contains(clip.id)
+                    ? 'Drifting in and out of the mix'
+                    : 'Layer this sound over green noise',
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

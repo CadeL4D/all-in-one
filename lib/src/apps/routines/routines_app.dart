@@ -3,6 +3,15 @@ import 'package:flutter/material.dart';
 import '../../core/local_store.dart';
 import '../../screens/app_scaffold.dart';
 
+String _formatSeconds(int seconds) {
+  if (seconds < 60) {
+    return '${seconds}s';
+  }
+  final int minutes = seconds ~/ 60;
+  final int remainder = seconds % 60;
+  return remainder == 0 ? '${minutes}m' : '${minutes}m ${remainder}s';
+}
+
 String _localDateKey() {
   final DateTime now = DateTime.now();
   final String month = now.month.toString().padLeft(2, '0');
@@ -11,22 +20,52 @@ String _localDateKey() {
 }
 
 class _RoutineStep {
-  _RoutineStep({required this.id, required this.title, this.done = false});
+  _RoutineStep({
+    required this.id,
+    required this.title,
+    this.done = false,
+    this.durationSeconds,
+  });
 
   factory _RoutineStep.fromJson(Map<String, dynamic> json) {
     return _RoutineStep(
       id: (json['id'] as num).toInt(),
       title: json['title'] as String? ?? 'Untitled step',
       done: json['done'] as bool? ?? false,
+      durationSeconds: (json['durationSeconds'] as num?)?.toInt(),
     );
   }
 
   final int id;
   String title;
   bool done;
+  int? durationSeconds;
+
+  bool get hasDuration => durationSeconds != null && durationSeconds! > 0;
+
+  String get durationLabel {
+    if (!hasDuration) {
+      return 'No time';
+    }
+    final int seconds = durationSeconds!;
+    if (seconds < 60) {
+      return '${seconds}s';
+    }
+    final int minutes = seconds ~/ 60;
+    final int remainder = seconds % 60;
+    if (remainder == 0) {
+      return '${minutes}m';
+    }
+    return '${minutes}m ${remainder}s';
+  }
 
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{'id': id, 'title': title, 'done': done};
+    return <String, dynamic>{
+      'id': id,
+      'title': title,
+      'done': done,
+      'durationSeconds': durationSeconds,
+    };
   }
 }
 
@@ -77,6 +116,16 @@ class _Routine {
 
   double get progress => steps.isEmpty ? 0 : completedSteps / steps.length;
 
+  int get totalDurationSeconds => steps
+      .where((_RoutineStep step) => step.hasDuration)
+      .fold<int>(
+        0,
+        (int total, _RoutineStep step) => total + step.durationSeconds!,
+      );
+
+  String get totalDurationLabel =>
+      totalDurationSeconds == 0 ? '' : _formatSeconds(totalDurationSeconds);
+
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'id': id,
@@ -88,6 +137,15 @@ class _Routine {
   }
 }
 
+class _RoutineStepDraft {
+  const _RoutineStepDraft({required this.title, this.durationSeconds});
+
+  final String title;
+  final int? durationSeconds;
+
+  bool get hasDuration => durationSeconds != null && durationSeconds! > 0;
+}
+
 class _RoutineDraft {
   const _RoutineDraft({
     required this.name,
@@ -97,7 +155,7 @@ class _RoutineDraft {
 
   final String name;
   final String description;
-  final List<String> steps;
+  final List<_RoutineStepDraft> steps;
 }
 
 class RoutinesApp extends StatefulWidget {
@@ -194,7 +252,11 @@ class _RoutinesAppState extends State<RoutinesApp> {
           lastResetDate: _localDateKey(),
           steps: draft.steps
               .map(
-                (String title) => _RoutineStep(id: _nextStepId++, title: title),
+                (_RoutineStepDraft step) => _RoutineStep(
+                  id: _nextStepId++,
+                  title: step.title,
+                  durationSeconds: step.durationSeconds,
+                ),
               )
               .toList(),
         ),
@@ -225,10 +287,11 @@ class _RoutinesAppState extends State<RoutinesApp> {
         ..description = draft.description
         ..steps = draft.steps
             .map(
-              (String title) => _RoutineStep(
+              (_RoutineStepDraft step) => _RoutineStep(
                 id: _nextStepId++,
-                title: title,
-                done: completedByTitle[title] ?? false,
+                title: step.title,
+                durationSeconds: step.durationSeconds,
+                done: completedByTitle[step.title] ?? false,
               ),
             )
             .toList();
@@ -566,6 +629,32 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
                             : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
+                    subtitle: step.hasDuration
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(
+                                  Icons.timer_outlined,
+                                  size: 15,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  step.durationLabel,
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : null,
                   ),
                 ),
             const SizedBox(height: 18),
@@ -601,7 +690,9 @@ class _RoutineProgress extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '${routine.completedSteps} of ${routine.steps.length} steps complete',
+              routine.totalDurationLabel.isEmpty
+                  ? '${routine.completedSteps} of ${routine.steps.length} steps complete'
+                  : '${routine.completedSteps} of ${routine.steps.length} • ${routine.totalDurationLabel} planned',
               style: TextStyle(
                 color: scheme.onPrimaryContainer,
                 fontWeight: FontWeight.w700,
@@ -635,7 +726,7 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   final TextEditingController _stepController = TextEditingController();
-  late final List<String> _steps;
+  late final List<_RoutineStepDraft> _steps;
 
   @override
   void initState() {
@@ -644,10 +735,16 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
     _descriptionController = TextEditingController(
       text: widget.routine?.description ?? '',
     );
-    _steps = List<String>.from(
-      widget.routine?.steps.map((_RoutineStep step) => step.title) ??
-          const <String>[],
-    );
+    _steps =
+        widget.routine?.steps
+            .map(
+              (_RoutineStep step) => _RoutineStepDraft(
+                title: step.title,
+                durationSeconds: step.durationSeconds,
+              ),
+            )
+            .toList() ??
+        <_RoutineStepDraft>[];
   }
 
   @override
@@ -658,7 +755,7 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
     super.dispose();
   }
 
-  Future<String?> _promptForStep() async {
+  Future<_RoutineStepDraft?> _promptForStep() async {
     final TextEditingController controller = TextEditingController();
     final String? title = await showDialog<String>(
       context: context,
@@ -684,23 +781,26 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
       ),
     );
     controller.dispose();
-    return title == null || title.trim().isEmpty ? null : title.trim();
+    if (title == null || title.trim().isEmpty) {
+      return null;
+    }
+    return _RoutineStepDraft(title: title.trim());
   }
 
   Future<void> _addStepToEnd() async {
-    final String? title = await _promptForStep();
-    if (title == null || !mounted) {
+    final _RoutineStepDraft? step = await _promptForStep();
+    if (step == null || !mounted) {
       return;
     }
-    setState(() => _steps.add(title));
+    setState(() => _steps.add(step));
   }
 
   Future<void> _insertStepAt(int index) async {
-    final String? title = await _promptForStep();
-    if (title == null || !mounted) {
+    final _RoutineStepDraft? step = await _promptForStep();
+    if (step == null || !mounted) {
       return;
     }
-    setState(() => _steps.insert(index, title));
+    setState(() => _steps.insert(index, step));
   }
 
   void _removeStepAt(int index) {
@@ -709,8 +809,29 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
 
   void _reorderStep(int oldIndex, int newIndex) {
     setState(() {
-      final String step = _steps.removeAt(oldIndex);
+      final _RoutineStepDraft step = _steps.removeAt(oldIndex);
       _steps.insert(newIndex, step);
+    });
+  }
+
+  Future<void> _editStepDuration(int index) async {
+    final _RoutineStepDraft step = _steps[index];
+    final _DurationChoice? choice = await showModalBottomSheet<_DurationChoice>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) =>
+          _DurationPickerSheet(initialSeconds: step.durationSeconds),
+    );
+    if (choice == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _steps[index] = _RoutineStepDraft(
+        title: step.title,
+        durationSeconds: choice.hasTime ? choice.minutes * 60 : null,
+      );
     });
   }
 
@@ -727,7 +848,7 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
       _RoutineDraft(
         name: name,
         description: _descriptionController.text.trim(),
-        steps: List<String>.from(_steps),
+        steps: List<_RoutineStepDraft>.from(_steps),
       ),
     );
   }
@@ -805,8 +926,9 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
                       itemCount: _steps.length,
                       onReorderItem: _reorderStep,
                       itemBuilder: (BuildContext context, int index) {
+                        final _RoutineStepDraft step = _steps[index];
                         return Padding(
-                          key: ValueKey<String>('step-$index-${_steps[index]}'),
+                          key: ValueKey<String>('step-$index-${step.title}'),
                           padding: const EdgeInsets.only(bottom: 10),
                           child: Material(
                             color: Theme.of(context).cardColor,
@@ -814,6 +936,10 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
                             child: ListTile(
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
+                              ),
+                              contentPadding: const EdgeInsets.only(
+                                left: 8,
+                                right: 4,
                               ),
                               leading: ReorderableDragStartListener(
                                 index: index,
@@ -824,10 +950,30 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
                                       .onSurfaceVariant,
                                 ),
                               ),
-                              title: Text(_steps[index]),
+                              title: Text(step.title),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 5),
+                                child: _StepDurationButton(
+                                  hasDuration: step.hasDuration,
+                                  durationSeconds: step.durationSeconds,
+                                  onTap: () => _editStepDuration(index),
+                                ),
+                              ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: <Widget>[
+                                  IconButton(
+                                    tooltip: 'Set step time',
+                                    onPressed: () => _editStepDuration(index),
+                                    icon: Icon(
+                                      step.hasDuration
+                                          ? Icons.timer_rounded
+                                          : Icons.timer_outlined,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary,
+                                    ),
+                                  ),
                                   IconButton(
                                     tooltip: 'Insert step below',
                                     onPressed: () => _insertStepAt(index + 1),
@@ -865,7 +1011,9 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
                         if (title.isEmpty) {
                           return;
                         }
-                        setState(() => _steps.add(title));
+                        setState(() {
+                          _steps.add(_RoutineStepDraft(title: title));
+                        });
                         _stepController.clear();
                       },
                       decoration: const InputDecoration(
@@ -881,7 +1029,9 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
                       if (title.isEmpty) {
                         return;
                       }
-                      setState(() => _steps.add(title));
+                      setState(() {
+                        _steps.add(_RoutineStepDraft(title: title));
+                      });
                       _stepController.clear();
                     },
                     icon: const Icon(Icons.add_rounded),
@@ -892,6 +1042,346 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _StepDurationButton extends StatelessWidget {
+  const _StepDurationButton({
+    required this.hasDuration,
+    required this.durationSeconds,
+    required this.onTap,
+  });
+
+  final bool hasDuration;
+  final int? durationSeconds;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final String label = hasDuration
+        ? _formatSeconds(durationSeconds ?? 0)
+        : 'Add optional time';
+    final Color accent = hasDuration
+        ? scheme.primary
+        : scheme.onSurfaceVariant.withValues(alpha: 0.72);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: accent.withValues(alpha: 0.34)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              hasDuration ? Icons.timer_rounded : Icons.add_rounded,
+              size: 15,
+              color: accent,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(color: accent, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DurationChoice {
+  const _DurationChoice._({required this.minutes});
+
+  const _DurationChoice.noTime() : this._(minutes: 0);
+
+  const _DurationChoice.time(int minutes) : this._(minutes: minutes);
+
+  final int minutes;
+
+  bool get hasTime => minutes > 0;
+}
+
+class _DurationPickerSheet extends StatefulWidget {
+  const _DurationPickerSheet({this.initialSeconds});
+
+  final int? initialSeconds;
+
+  @override
+  State<_DurationPickerSheet> createState() => _DurationPickerSheetState();
+}
+
+class _DurationPickerSheetState extends State<_DurationPickerSheet> {
+  static const List<int> _presets = <int>[5, 10, 15, 20, 25, 30, 45, 60, 90];
+
+  late bool _hasTime;
+  late double _minutes;
+
+  @override
+  void initState() {
+    super.initState();
+    final int? seconds = widget.initialSeconds;
+    _hasTime = seconds != null && seconds > 0;
+    _minutes = _hasTime ? (seconds! / 60).round().clamp(1, 120).toDouble() : 15;
+  }
+
+  void _usePreset(int minutes) {
+    setState(() {
+      _hasTime = true;
+      _minutes = minutes.toDouble();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final double inset = MediaQuery.of(context).viewInsets.bottom;
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(bottom: inset),
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.24),
+              blurRadius: 30,
+              offset: const Offset(0, -8),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 12, 22, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: scheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'Step timing',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Optional. Leave time-free by default.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      transitionBuilder: (
+                        Widget child,
+                        Animation<double> anim,
+                      ) => FadeTransition(opacity: anim, child: child),
+                      child: _hasTime
+                          ? _TimeBubble(
+                              key: ValueKey<String>('timed-$_minutes'),
+                              minutes: _minutes.round(),
+                            )
+                          : _NoTimeBubble(
+                              key: const ValueKey<String>('notime'),
+                            ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _PresetChip(
+                      label: 'No time',
+                      selected: !_hasTime,
+                      onTap: () => setState(() => _hasTime = false),
+                    ),
+                    for (final int preset in _presets)
+                      _PresetChip(
+                        label: '${preset}m',
+                        selected: _hasTime && _minutes.round() == preset,
+                        onTap: () => _usePreset(preset),
+                      ),
+                  ],
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  child: _hasTime
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Row(
+                            children: <Widget>[
+                              IconButton(
+                                tooltip: 'Subtract 5 minutes',
+                                onPressed: () => setState(() {
+                                  _minutes = (_minutes - 5).clamp(1, 120);
+                                }),
+                                icon: const Icon(
+                                  Icons.remove_circle_outline_rounded,
+                                ),
+                              ),
+                              Expanded(
+                                child: Slider(
+                                  value: _minutes,
+                                  min: 1,
+                                  max: 120,
+                                  divisions: 119,
+                                  label: '${_minutes.round()} min',
+                                  onChanged: (double value) => setState(() {
+                                    _hasTime = true;
+                                    _minutes = value.roundToDouble();
+                                  }),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Add 5 minutes',
+                                onPressed: () => setState(() {
+                                  _minutes = (_minutes + 5).clamp(1, 120);
+                                }),
+                                icon: const Icon(
+                                  Icons.add_circle_outline_rounded,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            Navigator.of(context)
+                                .pop(const _DurationChoice.noTime()),
+                        child: const Text('Keep time-free'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(
+                          _hasTime
+                              ? _DurationChoice.time(_minutes.round())
+                              : const _DurationChoice.noTime(),
+                        ),
+                        child: Text(
+                          _hasTime ? 'Use ${_minutes.round()} min' : 'Done',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TimeBubble extends StatelessWidget {
+  const _TimeBubble({super.key, required this.minutes});
+
+  final int minutes;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Text(
+        '$minutes min',
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: scheme.onPrimaryContainer,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _NoTimeBubble extends StatelessWidget {
+  const _NoTimeBubble({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Text(
+        'No time',
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _PresetChip extends StatelessWidget {
+  const _PresetChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      showCheckmark: false,
+      selectedColor: scheme.primary,
+      labelStyle: TextStyle(
+        color: selected ? scheme.onPrimary : scheme.onSurface,
+        fontWeight: FontWeight.w700,
+      ),
+      backgroundColor: scheme.surfaceContainerHighest,
+      side: BorderSide.none,
     );
   }
 }

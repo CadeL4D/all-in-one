@@ -23,8 +23,14 @@ void main() {
     expect(find.text('Maths'), findsOneWidget);
     expect(find.text('Routines'), findsOneWidget);
     expect(find.text('Focus'), findsOneWidget);
-    expect(find.text('Noises'), findsOneWidget);
 
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -320));
+    await tester.pumpAndSettle();
+    expect(find.text('Noises'), findsOneWidget);
+    expect(find.text('Signal'), findsOneWidget);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 380));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
 
