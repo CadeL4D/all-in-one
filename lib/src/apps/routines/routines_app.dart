@@ -1137,6 +1137,23 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
     });
   }
 
+  Future<void> _pickExactTime() async {
+    final int minutes = _timeMinutes.round();
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60),
+      initialEntryMode: TimePickerEntryMode.input,
+      helpText: 'Enter a step time',
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _hasTime = true;
+      _timeMinutes = (picked.hour * 60 + picked.minute).toDouble();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
@@ -1185,7 +1202,7 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Optional. Pick a clock time like 7:00 AM.',
+                            'Optional. Enter an exact time like 7:13 AM.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
@@ -1228,42 +1245,55 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
                       ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _pickExactTime,
+                    icon: const Icon(Icons.keyboard_rounded),
+                    label: const Text('Enter exact time'),
+                  ),
+                ),
                 AnimatedSize(
                   duration: const Duration(milliseconds: 240),
                   curve: Curves.easeOutCubic,
                   child: _hasTime
                       ? Padding(
                           padding: const EdgeInsets.only(top: 16),
-                          child: Row(
+                          child: Column(
                             children: <Widget>[
-                              IconButton(
-                                tooltip: 'Subtract 15 minutes',
-                                onPressed: () => _adjust(-15),
-                                icon: const Icon(
-                                  Icons.remove_circle_outline_rounded,
-                                ),
-                              ),
-                              Expanded(
-                                child: Slider(
-                                  value: _timeMinutes,
-                                  min: 0,
-                                  max: 1439,
-                                  divisions: 287,
-                                  label: _formatClockMinutes(
-                                    _timeMinutes.round(),
+                              Row(
+                                children: <Widget>[
+                                  IconButton(
+                                    tooltip: 'Subtract 1 minute',
+                                    onPressed: () => _adjust(-1),
+                                    icon: const Icon(
+                                      Icons.remove_circle_outline_rounded,
+                                    ),
                                   ),
-                                  onChanged: (double value) => setState(() {
-                                    _hasTime = true;
-                                    _timeMinutes = value.roundToDouble();
-                                  }),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Add 15 minutes',
-                                onPressed: () => _adjust(15),
-                                icon: const Icon(
-                                  Icons.add_circle_outline_rounded,
-                                ),
+                                  Expanded(
+                                    child: Slider(
+                                      value: _timeMinutes,
+                                      min: 0,
+                                      max: 1439,
+                                      divisions: 1439,
+                                      label: _formatClockMinutes(
+                                        _timeMinutes.round(),
+                                      ),
+                                      onChanged: (double value) => setState(() {
+                                        _hasTime = true;
+                                        _timeMinutes = value.roundToDouble();
+                                      }),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Add 1 minute',
+                                    onPressed: () => _adjust(1),
+                                    icon: const Icon(
+                                      Icons.add_circle_outline_rounded,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

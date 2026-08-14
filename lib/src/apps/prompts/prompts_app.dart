@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -114,37 +116,52 @@ class _PromptsAppState extends State<PromptsApp> {
   }
 
   Future<void> _openEditor({_Prompt? prompt}) async {
+    _Prompt? workingPrompt = prompt;
+    Future<void> autosave(_PromptDraft draft) async {
+      final bool isEmpty = draft.title.trim().isEmpty && draft.note.isEmpty;
+      if (workingPrompt == null && isEmpty) {
+        return;
+      }
+      final _PromptDraft normalized = _PromptDraft(
+        title: draft.title.trim().isEmpty ? 'Untitled prompt' : draft.title,
+        note: draft.note,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (workingPrompt == null) {
+          workingPrompt = _Prompt(
+            id: _nextId++,
+            title: normalized.title,
+            note: normalized.note,
+            updatedAt: DateTime.now(),
+          );
+          _prompts.insert(0, workingPrompt!);
+        } else {
+          workingPrompt!
+            ..title = normalized.title
+            ..note = normalized.note
+            ..updatedAt = DateTime.now();
+          _prompts.remove(workingPrompt);
+          _prompts.insert(0, workingPrompt!);
+        }
+      });
+      await _persistPrompts();
+    }
+
     final _PromptDraft? draft = await Navigator.of(context).push<_PromptDraft>(
       MaterialPageRoute<_PromptDraft>(
-        builder: (BuildContext context) => _PromptEditorScreen(prompt: prompt),
+        builder: (BuildContext context) =>
+            _PromptEditorScreen(prompt: prompt, onAutosave: autosave),
       ),
     );
 
     if (draft == null) {
       return;
     }
-
-    setState(() {
-      if (prompt == null) {
-        _prompts.insert(
-          0,
-          _Prompt(
-            id: _nextId++,
-            title: draft.title,
-            note: draft.note,
-            updatedAt: DateTime.now(),
-          ),
-        );
-      } else {
-        prompt
-          ..title = draft.title
-          ..note = draft.note
-          ..updatedAt = DateTime.now();
-        _prompts.remove(prompt);
-        _prompts.insert(0, prompt);
-      }
-    });
-    await _persistPrompts();
+    await autosave(draft);
   }
 
   Future<void> _deletePrompt(_Prompt prompt) async {
@@ -319,9 +336,10 @@ class _EmptyPrompts extends StatelessWidget {
 }
 
 class _PromptEditorScreen extends StatefulWidget {
-  const _PromptEditorScreen({this.prompt});
+  const _PromptEditorScreen({this.prompt, required this.onAutosave});
 
   final _Prompt? prompt;
+  final Future<void> Function(_PromptDraft draft) onAutosave;
 
   @override
   State<_PromptEditorScreen> createState() => _PromptEditorScreenState();
@@ -330,74 +348,109 @@ class _PromptEditorScreen extends StatefulWidget {
 class _PromptEditorScreenState extends State<_PromptEditorScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _noteController;
+  Timer? _autosaveTimer;
+  Future<void> _autosaveChain = Future<void>.value();
+  bool _allowPop = false;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.prompt?.title ?? '');
     _noteController = TextEditingController(text: widget.prompt?.note ?? '');
+    _titleController.addListener(_scheduleAutosave);
+    _noteController.addListener(_scheduleAutosave);
   }
 
   @override
   void dispose() {
+    _autosaveTimer?.cancel();
     _titleController.dispose();
     _noteController.dispose();
     super.dispose();
   }
 
-  void _save() {
+  _PromptDraft _draft() {
     final String title = _titleController.text.trim();
     final String note = _noteController.text.trim();
-    Navigator.of(context).pop(
-      _PromptDraft(
-        title: title.isEmpty ? 'Untitled prompt' : title,
-        note: note,
-      ),
-    );
+    return _PromptDraft(title: title, note: note);
+  }
+
+  void _scheduleAutosave() {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = Timer(const Duration(milliseconds: 550), () {
+      final _PromptDraft draft = _draft();
+      _autosaveChain = _autosaveChain.then((_) => widget.onAutosave(draft));
+    });
+  }
+
+  Future<void> _save() async {
+    await _flushAutosave();
+    if (mounted) {
+      setState(() => _allowPop = true);
+      Navigator.of(context).pop(_draft());
+    }
+  }
+
+  Future<void> _flushAutosave() async {
+    _autosaveTimer?.cancel();
+    await _autosaveChain;
+    await widget.onAutosave(_draft());
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.prompt == null ? 'New prompt' : 'Edit prompt'),
-        actions: <Widget>[
-          TextButton(onPressed: _save, child: const Text('Save')),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            children: <Widget>[
-              TextField(
-                controller: _titleController,
-                autofocus: widget.prompt == null,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  hintText: 'Title',
-                  border: InputBorder.none,
-                ),
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: TextField(
-                  controller: _noteController,
-                  expands: true,
-                  minLines: null,
-                  maxLines: null,
-                  textAlignVertical: TextAlignVertical.top,
+    return PopScope<_PromptDraft>(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (bool didPop, _PromptDraft? result) async {
+        if (!didPop) {
+          await _flushAutosave();
+          if (mounted) {
+            setState(() => _allowPop = true);
+            Navigator.of(this.context).pop();
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.prompt == null ? 'New prompt' : 'Edit prompt'),
+          actions: <Widget>[
+            TextButton(onPressed: _save, child: const Text('Save')),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              children: <Widget>[
+                TextField(
+                  controller: _titleController,
+                  autofocus: widget.prompt == null,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: const InputDecoration(
-                    hintText: 'Write the note…',
+                    hintText: 'Title',
                     border: InputBorder.none,
                   ),
-                  style: Theme.of(context).textTheme.bodyLarge,
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _noteController,
+                    expands: true,
+                    minLines: null,
+                    maxLines: null,
+                    textAlignVertical: TextAlignVertical.top,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText: 'Write the note…',
+                      border: InputBorder.none,
+                    ),
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

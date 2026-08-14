@@ -569,6 +569,8 @@ class _AppTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final Color accent = app.gradient.first;
     return RepaintBoundary(
       child: Semantics(
         button: true,
@@ -578,114 +580,121 @@ class _AppTile extends StatelessWidget {
           child: Ink(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: app.gradient,
-              ),
+              color: Theme.of(context).cardColor,
+              border: Border.all(color: accent.withValues(alpha: 0.24)),
               boxShadow: <BoxShadow>[
                 BoxShadow(
-                  color: app.gradient.last.withValues(alpha: 0.28),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
+                  color: accent.withValues(
+                    alpha: Theme.of(context).brightness == Brightness.dark
+                        ? 0.12
+                        : 0.10,
+                  ),
+                  blurRadius: 22,
+                  offset: const Offset(0, 12),
                 ),
               ],
             ),
             child: InkWell(
               borderRadius: BorderRadius.circular(24),
               onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: <Widget>[
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.20),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(app.icon, color: Colors.white, size: 24),
+              child: Stack(
+                children: <Widget>[
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 86,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(23),
                         ),
-                        if (isRecent)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: const Text(
-                              'Recent',
-                              style: TextStyle(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: <Color>[
+                            accent.withValues(alpha: 0.22),
+                            app.gradient.last.withValues(alpha: 0.05),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 17,
+                    right: 17,
+                    child: _CardMotif(app: app, accent: accent),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: <Widget>[
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: accent,
+                                borderRadius: BorderRadius.circular(15),
+                                boxShadow: <BoxShadow>[
+                                  BoxShadow(
+                                    color: accent.withValues(alpha: 0.28),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                app.icon,
                                 color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                                size: 24,
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                    const Spacer(),
-                    Text(
-                      app.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      app.tagline,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.78),
-                        fontSize: 13,
-                        height: 1.25,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: <Widget>[
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 9,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            app.category.label,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.90),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
+                            if (isRecent)
+                              _TilePill(label: 'Recent', color: accent),
+                          ],
+                        ),
+                        const Spacer(),
+                        Text(
+                          app.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: scheme.onSurface,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          app.tagline,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                height: 1.25,
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: <Widget>[
+                            _TilePill(label: app.category.label, color: accent),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              color: accent,
+                              size: 19,
                             ),
-                          ),
-                        ),
-                        const Icon(
-                          Icons.arrow_forward_rounded,
-                          color: Colors.white,
-                          size: 18,
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -693,6 +702,230 @@ class _AppTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TilePill extends StatelessWidget {
+  const _TilePill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: color, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+class _CardMotif extends StatelessWidget {
+  const _CardMotif({required this.app, required this.accent});
+
+  final AppManifest app;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (app.id) {
+      case 'prompts':
+        return _NoteMotif(accent: accent);
+      case 'tasks':
+        return _ChecklistMotif(accent: accent);
+      case 'routines':
+        return _RoutineMotif(accent: accent);
+      case 'maths':
+        return _MathsMotif(accent: accent);
+      case 'focus':
+        return _FocusMotif(accent: accent);
+      case 'noises':
+        return _NoiseMotif(accent: accent);
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+class _MotifSurface extends StatelessWidget {
+  const _MotifSurface({required this.child, required this.accent});
+
+  final Widget child;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 92,
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _NoteMotif extends StatelessWidget {
+  const _NoteMotif({required this.accent});
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => _MotifSurface(
+    accent: accent,
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        for (final double width in <double>[1, .76, .90])
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: width,
+              child: Container(height: 4, color: accent.withValues(alpha: .72)),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _ChecklistMotif extends StatelessWidget {
+  const _ChecklistMotif({required this.accent});
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => _MotifSurface(
+    accent: accent,
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        for (int index = 0; index < 3; index++)
+          Row(
+            children: <Widget>[
+              Icon(Icons.check_circle_rounded, color: accent, size: 11),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Container(
+                  height: 3,
+                  color: accent.withValues(alpha: .55),
+                ),
+              ),
+            ],
+          ),
+      ],
+    ),
+  );
+}
+
+class _RoutineMotif extends StatelessWidget {
+  const _RoutineMotif({required this.accent});
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => _MotifSurface(
+    accent: accent,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        for (int index = 0; index < 3; index++)
+          Container(
+            width: 15,
+            height: 15,
+            decoration: BoxDecoration(
+              color: index == 2 ? accent : accent.withValues(alpha: .24),
+              shape: BoxShape.circle,
+              border: Border.all(color: accent.withValues(alpha: .58)),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _MathsMotif extends StatelessWidget {
+  const _MathsMotif({required this.accent});
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => _MotifSurface(
+    accent: accent,
+    child: GridView.count(
+      crossAxisCount: 3,
+      crossAxisSpacing: 4,
+      mainAxisSpacing: 4,
+      physics: const NeverScrollableScrollPhysics(),
+      children: <Widget>[
+        for (int index = 0; index < 9; index++)
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: index == 4 ? accent : accent.withValues(alpha: .24),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _FocusMotif extends StatelessWidget {
+  const _FocusMotif({required this.accent});
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => _MotifSurface(
+    accent: accent,
+    child: Center(
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: accent, width: 5),
+        ),
+        child: Center(
+          child: Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _NoiseMotif extends StatelessWidget {
+  const _NoiseMotif({required this.accent});
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => _MotifSurface(
+    accent: accent,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        for (final double height in <double>[10, 24, 16, 30, 20, 12])
+          Container(
+            width: 6,
+            height: height,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: .75),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 class _FilterChip extends StatelessWidget {

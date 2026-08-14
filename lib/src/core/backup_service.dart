@@ -13,15 +13,18 @@ abstract final class BackupService {
     final Map<String, dynamic> data = <String, dynamic>{};
 
     for (final String key in preferences.getKeys()) {
-      final List<String>? stringList = preferences.getStringList(key);
-      if (stringList != null) {
-        data[key] = stringList;
-        continue;
-      }
-
-      final String? stringValue = preferences.getString(key);
-      if (stringValue != null) {
-        data[key] = stringValue;
+      // `getStringList` casts internally, so calling it for a string value
+      // throws on Android. Read the untyped value first, then preserve only
+      // the preference types that can be represented in a JSON backup.
+      final Object? value = preferences.get(key);
+      switch (value) {
+        case String():
+        case bool():
+        case int():
+        case double():
+          data[key] = value;
+        case List<String>():
+          data[key] = value;
       }
     }
 
@@ -92,6 +95,12 @@ abstract final class BackupService {
         );
       } else if (value is String) {
         await preferences.setString(entry.key, value);
+      } else if (value is bool) {
+        await preferences.setBool(entry.key, value);
+      } else if (value is int) {
+        await preferences.setInt(entry.key, value);
+      } else if (value is double) {
+        await preferences.setDouble(entry.key, value);
       }
     }
     await preferences.reload();

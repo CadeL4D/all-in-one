@@ -60,7 +60,6 @@ class NoisesApp extends StatefulWidget {
 
 class _NoisesAppState extends State<NoisesApp> {
   static const String _preferencesKey = 'noises_v1';
-  static const double _natureTargetLevel = 0.80;
 
   final AudioPlayer _noisePlayer = AudioPlayer();
   final Map<String, AudioPlayer> _naturePlayers = <String, AudioPlayer>{};
@@ -71,6 +70,7 @@ class _NoisesAppState extends State<NoisesApp> {
   bool _playing = false;
   bool _starting = false;
   double _volume = 0.72;
+  double _natureVolume = 0.80;
   final Map<String, bool> _natureEnabled = <String, bool>{};
   final Map<String, double> _naturePhases = <String, double>{};
   final Map<String, double> _naturePeriods = <String, double>{};
@@ -132,6 +132,9 @@ class _NoisesAppState extends State<NoisesApp> {
         _volume = ((json['volume'] as num?)?.toDouble() ?? 0.72)
             .clamp(0.0, 1.0)
             .toDouble();
+        _natureVolume = ((json['natureVolume'] as num?)?.toDouble() ?? 0.80)
+            .clamp(0.0, 1.0)
+            .toDouble();
       } on FormatException {
         // Fall back to the defaults when a stored value is malformed.
       }
@@ -147,6 +150,7 @@ class _NoisesAppState extends State<NoisesApp> {
         'color': _selected.name,
         'natureEnabled': _natureEnabled,
         'volume': _volume,
+        'natureVolume': _natureVolume,
       }),
     );
   }
@@ -300,7 +304,7 @@ class _NoisesAppState extends State<NoisesApp> {
               1000.0;
     final double fade = 0.5 + 0.5 * sin(phase + elapsed * 2 * pi / period);
     final double factor = 0.60 + 0.40 * fade;
-    return (_volume * _natureTargetLevel * factor).clamp(0.0, 1.0).toDouble();
+    return (_natureVolume * factor).clamp(0.0, 1.0).toDouble();
   }
 
   void _startNatureFadeCycle() {
@@ -363,6 +367,21 @@ class _NoisesAppState extends State<NoisesApp> {
     }
   }
 
+  Future<void> _setNatureVolume(double value) async {
+    setState(() => _natureVolume = value);
+    await _savePreferences();
+
+    if (_playing) {
+      for (final String id in _activeNatureIds) {
+        try {
+          await _naturePlayers[id]!.setVolume(_natureVolumeFor(id));
+        } catch (_) {
+          // Keep the rest of the mix playing when one layer fails.
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -409,7 +428,9 @@ class _NoisesAppState extends State<NoisesApp> {
                   _NatureLayersCard(
                     enabledIds: _natureEnabled,
                     activeIds: _activeNatureIds,
+                    natureVolume: _natureVolume,
                     onChanged: _setNatureEnabled,
+                    onVolumeChanged: _setNatureVolume,
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -621,12 +642,16 @@ class _NatureLayersCard extends StatelessWidget {
   const _NatureLayersCard({
     required this.enabledIds,
     required this.activeIds,
+    required this.natureVolume,
     required this.onChanged,
+    required this.onVolumeChanged,
   });
 
   final Map<String, bool> enabledIds;
   final Set<String> activeIds;
+  final double natureVolume;
   final void Function(String id, bool value) onChanged;
+  final ValueChanged<double> onVolumeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -676,7 +701,29 @@ class _NatureLayersCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              Icon(Icons.volume_down_rounded, color: accent, size: 20),
+              Expanded(
+                child: Slider(
+                  value: natureVolume,
+                  onChanged: onVolumeChanged,
+                  activeColor: accent,
+                  label: 'Nature ${(natureVolume * 100).round()}%',
+                ),
+              ),
+              Icon(Icons.volume_up_rounded, color: accent, size: 20),
+            ],
+          ),
+          Text(
+            'Nature volume ${(natureVolume * 100).round()}%',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
           for (final _NatureClip clip in _natureClips) ...<Widget>[
             SwitchListTile.adaptive(
               value: enabledIds[clip.id] ?? false,

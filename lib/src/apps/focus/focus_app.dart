@@ -356,7 +356,57 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
       return;
     }
 
-    await _startPhase(_phase);
+    if (_remainingSeconds <= 0) {
+      await _startPhase(_phase);
+      return;
+    }
+
+    _running = true;
+    _endTime = DateTime.now().add(Duration(seconds: _remainingSeconds));
+    if (_phase == _FocusPhase.focus && _preferences.checkInEnabled) {
+      if (_checkInRemainingSeconds <= 0) {
+        _checkInRemainingSeconds = _checkInDurationSeconds;
+      }
+      _checkInRunning = true;
+      _checkInEndTime = DateTime.now().add(
+        Duration(seconds: _checkInRemainingSeconds),
+      );
+    }
+    await _persist();
+    await _scheduleCompletionNotification();
+    if (_checkInRunning) {
+      await _scheduleCheckInNotification();
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _openActiveTimer() async {
+    if (!_running) {
+      await _startPause();
+    }
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (BuildContext context) => _ActiveFocusTimerScreen(
+          phase: () => _phase,
+          timeLabel: () => _timeLabel,
+          progress: () => 1 - (_remainingSeconds / _totalSeconds),
+          taskName: () => _preferences.taskName,
+          checkInEnabled: () => _preferences.checkInEnabled,
+          checkInRunning: () => _checkInRunning,
+          checkInTimeLabel: () => _checkInTimeLabel,
+          sessionCount: () => _sessionCount,
+          running: () => _running,
+          onStartPause: _startPause,
+          onReset: _reset,
+        ),
+      ),
+    );
   }
 
   Future<void> _startPhase(_FocusPhase phase) async {
@@ -798,7 +848,7 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
           checkInRunning: _checkInRunning,
           checkInTimeLabel: _checkInTimeLabel,
           sessionCount: _sessionCount,
-          onStartPause: _startPause,
+          onStartPause: _openActiveTimer,
           onReset: _reset,
           onSwitchPhase: _switchPhase,
         ),
@@ -899,6 +949,192 @@ class _TaskCardState extends State<_TaskCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ActiveFocusTimerScreen extends StatefulWidget {
+  const _ActiveFocusTimerScreen({
+    required this.phase,
+    required this.timeLabel,
+    required this.progress,
+    required this.taskName,
+    required this.checkInEnabled,
+    required this.checkInRunning,
+    required this.checkInTimeLabel,
+    required this.sessionCount,
+    required this.running,
+    required this.onStartPause,
+    required this.onReset,
+  });
+
+  final _FocusPhase Function() phase;
+  final String Function() timeLabel;
+  final double Function() progress;
+  final String Function() taskName;
+  final bool Function() checkInEnabled;
+  final bool Function() checkInRunning;
+  final String Function() checkInTimeLabel;
+  final int Function() sessionCount;
+  final bool Function() running;
+  final Future<void> Function() onStartPause;
+  final Future<void> Function() onReset;
+
+  @override
+  State<_ActiveFocusTimerScreen> createState() =>
+      _ActiveFocusTimerScreenState();
+}
+
+class _ActiveFocusTimerScreenState extends State<_ActiveFocusTimerScreen> {
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final _FocusPhase phase = widget.phase();
+    final bool running = widget.running();
+    return Scaffold(
+      backgroundColor: phase.color,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+          child: Column(
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Close full-screen timer',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  ),
+                  const Spacer(),
+                  Text(
+                    phase.label.toUpperCase(),
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const Spacer(),
+                  const SizedBox(width: 48),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                'WORKING ON',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.76),
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                widget.taskName(),
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  height: 1.08,
+                ),
+              ),
+              const SizedBox(height: 38),
+              SizedBox(
+                width: 260,
+                height: 260,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    CircularProgressIndicator(
+                      value: widget.progress().clamp(0.0, 1.0),
+                      strokeWidth: 14,
+                      backgroundColor: Colors.white.withValues(alpha: 0.22),
+                      color: Colors.white,
+                    ),
+                    Center(
+                      child: Text(
+                        widget.timeLabel(),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 54,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.checkInEnabled()) ...<Widget>[
+                const SizedBox(height: 20),
+                _CheckInPill(
+                  running: widget.checkInRunning(),
+                  timeLabel: widget.checkInTimeLabel(),
+                  foreground: phase.color,
+                  background: Colors.white,
+                ),
+              ],
+              const Spacer(),
+              Text(
+                '${widget.sessionCount()} ${widget.sessionCount() == 1 ? 'session' : 'sessions'} completed',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: Colors.white.withValues(alpha: 0.82)),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 58,
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    await widget.onStartPause();
+                    if (mounted) {
+                      setState(() {});
+                    }
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: phase.color,
+                  ),
+                  icon: Icon(
+                    running ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  ),
+                  label: Text(running ? 'Pause timer' : 'Resume timer'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextButton.icon(
+                onPressed: () async {
+                  await widget.onReset();
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                },
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('End session'),
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1029,25 +1265,30 @@ class _TimerCard extends StatelessWidget {
 }
 
 class _CheckInPill extends StatelessWidget {
-  const _CheckInPill({required this.running, required this.timeLabel});
+  const _CheckInPill({
+    required this.running,
+    required this.timeLabel,
+    this.foreground = const Color(0xFF3F5EFB),
+    this.background,
+  });
 
   final bool running;
   final String timeLabel;
+  final Color foreground;
+  final Color? background;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF3F5EFB).withValues(alpha: 0.12),
+        color: background ?? foreground.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         running ? 'Check-in $timeLabel' : 'Check-in armed',
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: const Color(0xFF3F5EFB),
-          fontWeight: FontWeight.w700,
-        ),
+        style: Theme.of(context).textTheme.labelMedium
+            ?.copyWith(color: foreground, fontWeight: FontWeight.w700),
       ),
     );
   }

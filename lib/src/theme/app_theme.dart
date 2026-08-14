@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 abstract final class AppColors {
   static const Color brand = Color(0xFF5B8DEF);
-  static const Color lightBackground = Color(0xFFF5F7FC);
-  static const Color darkBackground = Color(0xFF0B0E14);
+  static const Color lightBackground = Color(0xFFF7F8FC);
+  static const Color darkBackground = Color(0xFF10131B);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color darkSurface = Color(0xFF151A23);
+  static const Color darkSurface = Color(0xFF191E29);
 }
 
 abstract final class AppTheme {
@@ -33,6 +33,14 @@ abstract final class AppTheme {
       cardColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       visualDensity: VisualDensity.standard,
       splashFactory: InkSparkle.splashFactory,
+      dividerColor: scheme.outlineVariant.withValues(alpha: 0.62),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      ),
       appBarTheme: AppBarTheme(
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -48,6 +56,40 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
         ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: isDark
+            ? scheme.surfaceContainerHighest.withValues(alpha: 0.42)
+            : scheme.surfaceContainerHighest.withValues(alpha: 0.46),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 15,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: scheme.outlineVariant.withValues(alpha: 0.78),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: scheme.primary, width: 1.7),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       textTheme: TextTheme(
         headlineLarge: TextStyle(
