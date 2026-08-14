@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/local_store.dart';
 import '../../screens/app_scaffold.dart';
@@ -1099,59 +1100,62 @@ class _ClockTimePickerSheet extends StatefulWidget {
 }
 
 class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
-  static const List<int> _presets = <int>[
-    360, // 6:00 AM
-    420, // 7:00 AM
-    480, // 8:00 AM
-    540, // 9:00 AM
-    720, // 12:00 PM
-    780, // 1:00 PM
-    1020, // 5:00 PM
-    1200, // 8:00 PM
-    1260, // 9:00 PM
-  ];
-
   late bool _hasTime;
-  late double _timeMinutes;
+  late bool _isPm;
+  late final TextEditingController _hourController;
+  late final TextEditingController _minuteController;
 
   @override
   void initState() {
     super.initState();
     final int? minutes = widget.initialMinutes;
     _hasTime = minutes != null;
-    _timeMinutes = minutes?.clamp(0, 1439).toDouble() ?? 420;
-  }
-
-  void _usePreset(int minutes) {
-    setState(() {
-      _hasTime = true;
-      _timeMinutes = minutes.toDouble();
-    });
-  }
-
-  void _adjust(int deltaMinutes) {
-    setState(() {
-      _hasTime = true;
-      _timeMinutes =
-          ((_timeMinutes.round() + deltaMinutes) % 1440 + 1440) % 1440;
-    });
-  }
-
-  Future<void> _pickExactTime() async {
-    final int minutes = _timeMinutes.round();
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60),
-      initialEntryMode: TimePickerEntryMode.input,
-      helpText: 'Enter a step time',
+    final int initialMinutes = minutes?.clamp(0, 1439) ?? 420;
+    final int hour = initialMinutes ~/ 60;
+    _isPm = hour >= 12;
+    _hourController = TextEditingController(
+      text: (hour % 12 == 0 ? 12 : hour % 12).toString(),
     );
-    if (picked == null || !mounted) {
+    _minuteController = TextEditingController(
+      text: (initialMinutes % 60).toString().padLeft(2, '0'),
+    );
+  }
+
+  @override
+  void dispose() {
+    _hourController.dispose();
+    _minuteController.dispose();
+    super.dispose();
+  }
+
+  int? get _selectedMinutes {
+    final int? hour = int.tryParse(_hourController.text);
+    final int? minute = int.tryParse(_minuteController.text);
+    if (hour == null ||
+        hour < 1 ||
+        hour > 12 ||
+        minute == null ||
+        minute > 59) {
+      return null;
+    }
+    return (hour % 12 + (_isPm ? 12 : 0)) * 60 + minute;
+  }
+
+  void _save() {
+    if (!_hasTime) {
+      Navigator.of(context).pop(const _ClockTimeChoice.noTime());
       return;
     }
-    setState(() {
-      _hasTime = true;
-      _timeMinutes = (picked.hour * 60 + picked.minute).toDouble();
-    });
+    final int? minutes = _selectedMinutes;
+    if (minutes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Use an hour from 1–12 and a minute from 00–59.'),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pop(_ClockTimeChoice.time(minutes));
   }
 
   @override
@@ -1197,133 +1201,54 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            'Step time',
+                            'Schedule this step',
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Optional. Enter an exact time like 7:13 AM.',
+                            'A quick cue, not a reminder. Set it precisely.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
                       ),
                     ),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      transitionBuilder: (
-                        Widget child,
-                        Animation<double> anim,
-                      ) => FadeTransition(opacity: anim, child: child),
-                      child: _hasTime
-                          ? _ClockBubble(
-                              key: ValueKey<String>(
-                                'clock-${_timeMinutes.round()}',
-                              ),
-                              timeMinutes: _timeMinutes.round(),
-                            )
-                          : _NoClockBubble(
-                              key: const ValueKey<String>('notime'),
-                            ),
+                    Switch.adaptive(
+                      value: _hasTime,
+                      onChanged: (bool value) =>
+                          setState(() => _hasTime = value),
                     ),
                   ],
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: <Widget>[
-                    _ClockPresetChip(
-                      label: 'No time',
-                      selected: !_hasTime,
-                      onTap: () => setState(() => _hasTime = false),
-                    ),
-                    for (final int preset in _presets)
-                      _ClockPresetChip(
-                        label: _formatClockMinutes(preset),
-                        selected: _hasTime && _timeMinutes.round() == preset,
-                        onTap: () => _usePreset(preset),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _pickExactTime,
-                    icon: const Icon(Icons.keyboard_rounded),
-                    label: const Text('Enter exact time'),
-                  ),
                 ),
                 AnimatedSize(
                   duration: const Duration(milliseconds: 240),
                   curve: Curves.easeOutCubic,
                   child: _hasTime
                       ? Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Column(
-                            children: <Widget>[
-                              Row(
-                                children: <Widget>[
-                                  IconButton(
-                                    tooltip: 'Subtract 1 minute',
-                                    onPressed: () => _adjust(-1),
-                                    icon: const Icon(
-                                      Icons.remove_circle_outline_rounded,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Slider(
-                                      value: _timeMinutes,
-                                      min: 0,
-                                      max: 1439,
-                                      divisions: 1439,
-                                      label: _formatClockMinutes(
-                                        _timeMinutes.round(),
-                                      ),
-                                      onChanged: (double value) => setState(() {
-                                        _hasTime = true;
-                                        _timeMinutes = value.roundToDouble();
-                                      }),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Add 1 minute',
-                                    onPressed: () => _adjust(1),
-                                    icon: const Icon(
-                                      Icons.add_circle_outline_rounded,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                          padding: const EdgeInsets.only(top: 22),
+                          child: _RoutineTimeComposer(
+                            hourController: _hourController,
+                            minuteController: _minuteController,
+                            isPm: _isPm,
+                            onPeriodChanged: (bool isPm) =>
+                                setState(() => _isPm = isPm),
                           ),
                         )
                       : const SizedBox.shrink(),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 22),
                 Row(
                   children: <Widget>[
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () =>
-                            Navigator.of(context)
-                                .pop(const _ClockTimeChoice.noTime()),
-                        child: const Text('Keep time-free'),
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton(
-                        onPressed: () => Navigator.of(context).pop(
-                          _hasTime
-                              ? _ClockTimeChoice.time(_timeMinutes.round())
-                              : const _ClockTimeChoice.noTime(),
-                        ),
-                        child: Text(
-                          _hasTime
-                              ? 'Use ${_formatClockMinutes(_timeMinutes.round())}'
-                              : 'Done',
-                        ),
+                        onPressed: _save,
+                        child: Text(_hasTime ? 'Save time' : 'Remove time'),
                       ),
                     ),
                   ],
@@ -1337,56 +1262,137 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
   }
 }
 
-class _ClockBubble extends StatelessWidget {
-  const _ClockBubble({super.key, required this.timeMinutes});
+class _RoutineTimeComposer extends StatelessWidget {
+  const _RoutineTimeComposer({
+    required this.hourController,
+    required this.minuteController,
+    required this.isPm,
+    required this.onPeriodChanged,
+  });
 
-  final int timeMinutes;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Text(
-        _formatClockMinutes(timeMinutes),
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: scheme.onPrimaryContainer,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _NoClockBubble extends StatelessWidget {
-  const _NoClockBubble({super.key});
+  final TextEditingController hourController;
+  final TextEditingController minuteController;
+  final bool isPm;
+  final ValueChanged<bool> onPeriodChanged;
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(18),
+        color: scheme.primaryContainer.withValues(alpha: 0.46),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.20)),
       ),
-      child: Text(
-        'No time',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: scheme.onSurfaceVariant,
-          fontWeight: FontWeight.w800,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Expanded(
+            child: _TimeNumberField(
+              controller: hourController,
+              label: 'HOUR',
+              hintText: '7',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 22),
+            child: Center(
+              child: Text(
+                ':',
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontSize: 38,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _TimeNumberField(
+              controller: minuteController,
+              label: 'MINUTE',
+              hintText: '13',
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 54,
+            child: Column(
+              children: <Widget>[
+                _PeriodButton(
+                  label: 'AM',
+                  selected: !isPm,
+                  onTap: () => onPeriodChanged(false),
+                ),
+                const SizedBox(height: 8),
+                _PeriodButton(
+                  label: 'PM',
+                  selected: isPm,
+                  onTap: () => onPeriodChanged(true),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ClockPresetChip extends StatelessWidget {
-  const _ClockPresetChip({
+class _TimeNumberField extends StatelessWidget {
+  const _TimeNumberField({
+    required this.controller,
+    required this.label,
+    required this.hintText,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hintText;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: scheme.primary,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 7),
+        TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          maxLength: 2,
+          inputFormatters: <TextInputFormatter>[
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(2),
+          ],
+          decoration: InputDecoration(
+            hintText: hintText,
+            counterText: '',
+            contentPadding: const EdgeInsets.symmetric(vertical: 7),
+            filled: true,
+            fillColor: scheme.surface,
+          ),
+          style: Theme.of(context).textTheme.headlineSmall
+              ?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w800),
+        ),
+      ],
+    );
+  }
+}
+
+class _PeriodButton extends StatelessWidget {
+  const _PeriodButton({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -1399,18 +1405,26 @@ class _ClockPresetChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTap(),
-      showCheckmark: false,
-      selectedColor: scheme.primary,
-      labelStyle: TextStyle(
-        color: selected ? scheme.onPrimary : scheme.onSurface,
-        fontWeight: FontWeight.w700,
+    return Expanded(
+      child: Material(
+        color: selected
+            ? scheme.primary
+            : scheme.surface.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Center(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
       ),
-      backgroundColor: scheme.surfaceContainerHighest,
-      side: BorderSide.none,
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../apps/apps_registry.dart';
 import '../core/backup_service.dart';
@@ -168,6 +169,7 @@ class _HubScreenState extends State<HubScreen> {
 
     return Scaffold(
       body: CustomScrollView(
+        scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
@@ -179,7 +181,7 @@ class _HubScreenState extends State<HubScreen> {
             ),
           SliverToBoxAdapter(
             child: _SectionHeading(
-              title: 'All apps',
+              title: 'Your tools',
               count: visibleApps.length,
             ),
           ),
@@ -228,78 +230,114 @@ class _HubScreenState extends State<HubScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            'One Hub',
-                            style: Theme.of(context).textTheme.headlineLarge,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Everything you need, in one fast and focused place.',
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                          ),
-                        ],
-                      ),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: <Color>[Color(0xFF171B3A), Color(0xFF313B88)],
                     ),
-                    const SizedBox(width: 16),
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: <Color>[AppColors.brand, Color(0xFF8E5DFF)],
-                        ),
-                        boxShadow: <BoxShadow>[
-                          BoxShadow(
-                            color: AppColors.brand.withValues(alpha: 0.32),
-                            blurRadius: 18,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: AppColors.brand.withValues(alpha: 0.22),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14),
                       ),
-                      child: const Icon(
-                        Icons.apps_rounded,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    PopupMenuButton<String>(
-                      tooltip: 'Backup options',
-                      icon: const Icon(Icons.backup_rounded),
-                      onSelected: _handleBackupAction,
-                      itemBuilder: (BuildContext context) =>
-                          const <PopupMenuEntry<String>>[
-                            PopupMenuItem<String>(
-                              value: 'export',
-                              child: ListTile(
-                                leading: Icon(Icons.upload_file_rounded),
-                                title: Text('Export backup'),
-                              ),
+                    ],
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'YOUR PERSONAL TOOLKIT',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.66),
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.1,
+                                  ),
                             ),
-                            PopupMenuItem<String>(
-                              value: 'import',
-                              child: ListTile(
-                                leading: Icon(Icons.download_rounded),
-                                title: Text('Import backup'),
-                              ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'One Hub',
+                              style: Theme.of(context).textTheme.headlineLarge
+                                  ?.copyWith(color: Colors.white),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Everything you need, in one fast and focused place.',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyLarge
+                                  ?.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.76),
+                                  ),
                             ),
                           ],
-                    ),
-                  ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: <Color>[AppColors.brand, Color(0xFF8E5DFF)],
+                          ),
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color: AppColors.brand.withValues(alpha: 0.32),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.asset(
+                            'assets/branding/one_hub_icon.png',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      PopupMenuButton<String>(
+                        tooltip: 'Backup options',
+                        icon: const Icon(
+                          Icons.backup_rounded,
+                          color: Colors.white,
+                        ),
+                        onSelected: _handleBackupAction,
+                        itemBuilder: (BuildContext context) =>
+                            const <PopupMenuEntry<String>>[
+                              PopupMenuItem<String>(
+                                value: 'export',
+                                child: ListTile(
+                                  leading: Icon(Icons.upload_file_rounded),
+                                  title: Text('Export backup'),
+                                ),
+                              ),
+                              PopupMenuItem<String>(
+                                value: 'import',
+                                child: ListTile(
+                                  leading: Icon(Icons.download_rounded),
+                                  title: Text('Import backup'),
+                                ),
+                              ),
+                            ],
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 26),
                 _buildSearchField(context),

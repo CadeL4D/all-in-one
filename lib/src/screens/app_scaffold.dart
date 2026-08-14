@@ -29,8 +29,20 @@ class AppScaffold extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 78,
+        toolbarHeight: 82,
         titleSpacing: 16,
+        flexibleSpace: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: <Color>[
+                accent.first.withValues(alpha: 0.11),
+                Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
         title: Row(
           children: <Widget>[
             Container(
@@ -42,12 +54,12 @@ class AppScaffold extends StatelessWidget {
                   end: Alignment.bottomRight,
                   colors: accent,
                 ),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: <BoxShadow>[
                   BoxShadow(
-                    color: accent.last.withValues(alpha: 0.28),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
+                    color: accent.last.withValues(alpha: 0.32),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
@@ -63,12 +75,14 @@ class AppScaffold extends StatelessWidget {
                   if (tagline.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 2),
                     Text(
-                      tagline,
+                      'ONE HUB  •  ${tagline.toUpperCase()}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 10,
+                        letterSpacing: 0.75,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
@@ -79,7 +93,7 @@ class AppScaffold extends StatelessWidget {
         ),
         actions: actions,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(3),
+          preferredSize: const Size.fromHeight(2),
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -91,7 +105,19 @@ class AppScaffold extends StatelessWidget {
           ),
         ),
       ),
-      body: SafeArea(top: false, child: body),
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.center,
+            colors: <Color>[
+              accent.first.withValues(alpha: 0.07),
+              Theme.of(context).scaffoldBackgroundColor,
+            ],
+          ),
+        ),
+        child: SafeArea(top: false, child: body),
+      ),
       floatingActionButton: floatingActionButton,
     );
   }
