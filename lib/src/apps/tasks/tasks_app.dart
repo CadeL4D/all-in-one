@@ -100,8 +100,56 @@ class _TasksAppState extends State<TasksApp> {
     await _persistTasks();
   }
 
+  Future<void> _editTodo(_Todo todo) async {
+    final String? title = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) =>
+          _AddTaskDialog(initialTitle: todo.title),
+    );
+
+    if (title == null || title.trim().isEmpty) {
+      return;
+    }
+
+    setState(() => todo.title = title.trim());
+    await _persistTasks();
+  }
+
   Future<void> _deleteTodo(_Todo todo) async {
     setState(() => _todos.remove(todo));
+    await _persistTasks();
+  }
+
+  Future<void> _clearCompleted() async {
+    if (_completedCount == 0) {
+      return;
+    }
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Clear completed?'),
+        content: Text('Delete $_completedCount completed task(s)?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _todos.removeWhere((_Todo todo) => todo.completed);
+    });
     await _persistTasks();
   }
 
@@ -166,6 +214,7 @@ class _TasksAppState extends State<TasksApp> {
                     _TaskTile(
                       todo: todo,
                       onToggle: () => _toggleTodo(todo),
+                      onEdit: () => _editTodo(todo),
                       onDelete: () => _deleteTodo(todo),
                     ),
                     const SizedBox(height: 10),
@@ -175,7 +224,9 @@ class _TasksAppState extends State<TasksApp> {
                   _CompletedTasksSection(
                     tasks: completed,
                     onToggle: _toggleTodo,
+                    onEdit: _editTodo,
                     onDelete: _deleteTodo,
+                    onClearCompleted: _clearCompleted,
                   ),
                 ],
               ],
@@ -239,15 +290,19 @@ class _TaskProgress extends StatelessWidget {
   }
 }
 
+enum _TaskAction { edit, delete }
+
 class _TaskTile extends StatelessWidget {
   const _TaskTile({
     required this.todo,
     required this.onToggle,
+    required this.onEdit,
     required this.onDelete,
   });
 
   final _Todo todo;
   final VoidCallback onToggle;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -311,13 +366,36 @@ class _TaskTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Delete task',
-                  onPressed: onDelete,
+                PopupMenuButton<_TaskAction>(
+                  tooltip: 'Task actions',
+                  onSelected: (_TaskAction action) {
+                    if (action == _TaskAction.edit) {
+                      onEdit();
+                    } else {
+                      onDelete();
+                    }
+                  },
                   icon: Icon(
                     Icons.more_horiz_rounded,
                     color: scheme.onSurfaceVariant,
                   ),
+                  itemBuilder: (BuildContext context) =>
+                      const <PopupMenuEntry<_TaskAction>>[
+                        PopupMenuItem<_TaskAction>(
+                          value: _TaskAction.edit,
+                          child: ListTile(
+                            leading: Icon(Icons.edit_outlined),
+                            title: Text('Edit name'),
+                          ),
+                        ),
+                        PopupMenuItem<_TaskAction>(
+                          value: _TaskAction.delete,
+                          child: ListTile(
+                            leading: Icon(Icons.delete_outline_rounded),
+                            title: Text('Delete'),
+                          ),
+                        ),
+                      ],
                 ),
               ],
             ),
@@ -332,12 +410,16 @@ class _CompletedTasksSection extends StatefulWidget {
   const _CompletedTasksSection({
     required this.tasks,
     required this.onToggle,
+    required this.onEdit,
     required this.onDelete,
+    required this.onClearCompleted,
   });
 
   final List<_Todo> tasks;
   final ValueChanged<_Todo> onToggle;
+  final ValueChanged<_Todo> onEdit;
   final ValueChanged<_Todo> onDelete;
+  final VoidCallback onClearCompleted;
 
   @override
   State<_CompletedTasksSection> createState() => _CompletedTasksSectionState();
@@ -381,6 +463,14 @@ class _CompletedTasksSectionState extends State<_CompletedTasksSection> {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
+                    IconButton(
+                      tooltip: 'Clear completed',
+                      onPressed: widget.onClearCompleted,
+                      icon: Icon(
+                        Icons.delete_sweep_outlined,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -393,6 +483,7 @@ class _CompletedTasksSectionState extends State<_CompletedTasksSection> {
                 child: _TaskTile(
                   todo: todo,
                   onToggle: () => widget.onToggle(todo),
+                  onEdit: () => widget.onEdit(todo),
                   onDelete: () => widget.onDelete(todo),
                 ),
               ),
@@ -446,7 +537,9 @@ class _EmptyTasks extends StatelessWidget {
 }
 
 class _AddTaskDialog extends StatefulWidget {
-  const _AddTaskDialog();
+  const _AddTaskDialog({this.initialTitle = ''});
+
+  final String initialTitle;
 
   @override
   State<_AddTaskDialog> createState() => _AddTaskDialogState();
@@ -456,6 +549,12 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
   final TextEditingController _controller = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _controller.text = widget.initialTitle;
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
@@ -463,8 +562,9 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isEditing = widget.initialTitle.isNotEmpty;
     return AlertDialog(
-      title: const Text('Add task'),
+      title: Text(isEditing ? 'Edit task' : 'Add task'),
       content: TextField(
         controller: _controller,
         autofocus: true,
@@ -479,7 +579,7 @@ class _AddTaskDialogState extends State<_AddTaskDialog> {
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: const Text('Add'),
+          child: Text(isEditing ? 'Save' : 'Add'),
         ),
       ],
     );
