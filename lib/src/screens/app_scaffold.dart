@@ -26,99 +26,89 @@ class AppScaffold extends StatelessWidget {
         identity?.app.gradient ??
         const <Color>[Color(0xFF5B8DEF), Color(0xFF8E5DFF)];
     final String tagline = identity?.app.tagline ?? '';
+    final Color primary = accent.first;
+    final Color onPrimary =
+        ThemeData.estimateBrightnessForColor(primary) == Brightness.dark
+        ? Colors.white
+        : const Color(0xFF171827);
+    final ThemeData baseTheme = Theme.of(context);
+    final ColorScheme appScheme = baseTheme.colorScheme.copyWith(
+      primary: primary,
+      onPrimary: onPrimary,
+      primaryContainer: primary.withValues(alpha: 0.14),
+      onPrimaryContainer: baseTheme.colorScheme.onSurface,
+      secondary: accent.last,
+    );
 
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 82,
-        titleSpacing: 16,
-        flexibleSpace: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: <Color>[
-                accent.first.withValues(alpha: 0.11),
-                Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0),
-              ],
-            ),
-          ),
-        ),
-        title: Row(
-          children: <Widget>[
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: accent,
+    return Theme(
+      data: baseTheme.copyWith(colorScheme: appScheme),
+      child: Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 76,
+          titleSpacing: 12,
+          title: Row(
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: primary.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(color: primary.withValues(alpha: 0.20)),
                 ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: accent.last.withValues(alpha: 0.32),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+                child: Icon(icon, size: 21, color: primary),
               ),
-              child: Icon(icon, size: 23, color: Colors.white),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(title),
-                  if (tagline.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 2),
-                    Text(
-                      'ONE HUB  •  ${tagline.toUpperCase()}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontSize: 10,
-                        letterSpacing: 0.75,
-                        fontWeight: FontWeight.w800,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(title),
+                    if (tagline.isNotEmpty)
+                      Text(
+                        tagline,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: baseTheme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
-        actions: actions,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(2),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: accent,
-              ),
-            ),
-          ),
-        ),
-      ),
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.center,
-            colors: <Color>[
-              accent.first.withValues(alpha: 0.07),
-              Theme.of(context).scaffoldBackgroundColor,
             ],
           ),
+          actions: actions,
         ),
-        child: SafeArea(top: false, child: body),
+        body: Stack(
+          children: <Widget>[
+            Positioned(
+              top: -130,
+              right: -110,
+              child: IgnorePointer(
+                child: Container(
+                  width: 260,
+                  height: 260,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: <Color>[
+                        primary.withValues(alpha: 0.11),
+                        primary.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(child: SafeArea(top: false, child: body)),
+          ],
+        ),
+        floatingActionButton: floatingActionButton,
       ),
-      floatingActionButton: floatingActionButton,
     );
   }
 }

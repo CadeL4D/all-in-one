@@ -1285,56 +1285,59 @@ class _RoutineTimeComposer extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: scheme.primary.withValues(alpha: 0.20)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Expanded(
-            child: _TimeNumberField(
-              controller: hourController,
-              label: 'HOUR',
-              hintText: '7',
+      child: SizedBox(
+        height: 108,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Expanded(
+              child: _TimeNumberField(
+                controller: hourController,
+                label: 'HOUR',
+                hintText: '7',
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 22),
-            child: Center(
-              child: Text(
-                ':',
-                style: TextStyle(
-                  color: scheme.primary,
-                  fontSize: 38,
-                  fontWeight: FontWeight.w800,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 22),
+              child: Center(
+                child: Text(
+                  ':',
+                  style: TextStyle(
+                    color: scheme.primary,
+                    fontSize: 38,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: _TimeNumberField(
-              controller: minuteController,
-              label: 'MINUTE',
-              hintText: '13',
+            Expanded(
+              child: _TimeNumberField(
+                controller: minuteController,
+                label: 'MINUTE',
+                hintText: '13',
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 54,
-            child: Column(
-              children: <Widget>[
-                _PeriodButton(
-                  label: 'AM',
-                  selected: !isPm,
-                  onTap: () => onPeriodChanged(false),
-                ),
-                const SizedBox(height: 8),
-                _PeriodButton(
-                  label: 'PM',
-                  selected: isPm,
-                  onTap: () => onPeriodChanged(true),
-                ),
-              ],
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 54,
+              child: Column(
+                children: <Widget>[
+                  _PeriodButton(
+                    label: 'AM',
+                    selected: !isPm,
+                    onTap: () => onPeriodChanged(false),
+                  ),
+                  const SizedBox(height: 8),
+                  _PeriodButton(
+                    label: 'PM',
+                    selected: isPm,
+                    onTap: () => onPeriodChanged(true),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1369,6 +1372,12 @@ class _TimeNumberField extends StatelessWidget {
         const SizedBox(height: 7),
         TextField(
           controller: controller,
+          onTap: () {
+            controller.selection = TextSelection(
+              baseOffset: 0,
+              extentOffset: controller.text.length,
+            );
+          },
           keyboardType: TextInputType.number,
           textAlign: TextAlign.center,
           maxLength: 2,

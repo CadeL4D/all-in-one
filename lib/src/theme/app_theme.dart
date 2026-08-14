@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  static const Color brand = Color(0xFF5B64F6);
-  static const Color lightBackground = Color(0xFFF5F6FC);
-  static const Color darkBackground = Color(0xFF0A0D17);
+  static const Color brand = Color(0xFF5146E5);
+  static const Color ink = Color(0xFF171827);
+  static const Color lightBackground = Color(0xFFF4F3F8);
+  static const Color darkBackground = Color(0xFF0D0E15);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color darkSurface = Color(0xFF151A28);
+  static const Color darkSurface = Color(0xFF181921);
 }
 
 abstract final class AppTheme {
@@ -18,6 +19,8 @@ abstract final class AppTheme {
     final ColorScheme scheme = ColorScheme.fromSeed(
       seedColor: AppColors.brand,
       brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+      surface: isDark ? AppColors.darkSurface : AppColors.lightSurface,
     );
 
     return ThemeData(
@@ -31,7 +34,8 @@ abstract final class AppTheme {
           ? AppColors.darkBackground
           : AppColors.lightBackground,
       cardColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-      visualDensity: VisualDensity.standard,
+      fontFamily: 'sans-serif',
+      visualDensity: VisualDensity.comfortable,
       splashFactory: InkSparkle.splashFactory,
       dividerColor: scheme.outlineVariant.withValues(alpha: 0.62),
       cardTheme: CardThemeData(
@@ -39,7 +43,7 @@ abstract final class AppTheme {
         margin: EdgeInsets.zero,
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
       appBarTheme: AppBarTheme(
         elevation: 0,
@@ -52,32 +56,32 @@ abstract final class AppTheme {
         iconTheme: IconThemeData(color: scheme.onSurface),
         titleTextStyle: TextStyle(
           color: scheme.onSurface,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.2,
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.35,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: isDark
-            ? scheme.surfaceContainerHighest.withValues(alpha: 0.42)
-            : scheme.surfaceContainerHighest.withValues(alpha: 0.46),
+            ? scheme.surfaceContainerHighest.withValues(alpha: 0.34)
+            : const Color(0xFFF0EFF5),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 15,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
             color: scheme.outlineVariant.withValues(alpha: 0.78),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: scheme.primary, width: 1.7),
         ),
       ),
@@ -85,14 +89,14 @@ abstract final class AppTheme {
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
         elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size(0, 48),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
@@ -103,7 +107,7 @@ abstract final class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           side: BorderSide(color: scheme.outlineVariant),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
@@ -118,15 +122,15 @@ abstract final class AppTheme {
         ),
       ),
       dialogTheme: DialogThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         surfaceTintColor: Colors.transparent,
       ),
       listTileTheme: ListTileThemeData(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         side: BorderSide.none,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       ),
@@ -136,27 +140,27 @@ abstract final class AppTheme {
       ),
       textTheme: TextTheme(
         headlineLarge: TextStyle(
-          fontSize: 40,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -1.4,
+          fontSize: 38,
+          fontWeight: FontWeight.w900,
+          letterSpacing: -1.65,
           color: scheme.onSurface,
         ),
         headlineSmall: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.6,
+          fontSize: 25,
+          fontWeight: FontWeight.w900,
+          letterSpacing: -0.8,
           color: scheme.onSurface,
         ),
         titleLarge: TextStyle(
           fontSize: 20,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.3,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
           color: scheme.onSurface,
         ),
         titleMedium: TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.2,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
           color: scheme.onSurface,
         ),
         bodyLarge: TextStyle(

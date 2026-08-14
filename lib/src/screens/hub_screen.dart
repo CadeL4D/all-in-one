@@ -195,10 +195,10 @@ class _HubScreenState extends State<HubScreen> {
                 : SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 340,
-                          mainAxisExtent: 190,
-                          crossAxisSpacing: 18,
-                          mainAxisSpacing: 18,
+                          maxCrossAxisExtent: 520,
+                          mainAxisExtent: 168,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 14,
                         ),
                     delegate: SliverChildBuilderDelegate((
                       BuildContext context,
@@ -220,6 +220,9 @@ class _HubScreenState extends State<HubScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    if (Theme.of(context).useMaterial3) {
+      return _buildModernHeader(context);
+    }
     return SafeArea(
       bottom: false,
       child: Center(
@@ -342,6 +345,98 @@ class _HubScreenState extends State<HubScreen> {
                 const SizedBox(height: 26),
                 _buildSearchField(context),
                 const SizedBox(height: 16),
+                _buildCategoryFilters(context),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernHeader(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      bottom: false,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(13),
+                      child: Image.asset(
+                        'assets/branding/one_hub_icon.png',
+                        width: 42,
+                        height: 42,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'One Hub',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: scheme.onSurface,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.3,
+                                ),
+                          ),
+                          Text(
+                            '${AppRegistry.apps.length} tools · one workspace',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Backup options',
+                      icon: const Icon(Icons.more_horiz_rounded),
+                      onSelected: _handleBackupAction,
+                      itemBuilder: (BuildContext context) =>
+                          const <PopupMenuEntry<String>>[
+                            PopupMenuItem<String>(
+                              value: 'export',
+                              child: ListTile(
+                                leading: Icon(Icons.upload_file_rounded),
+                                title: Text('Export backup'),
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'import',
+                              child: ListTile(
+                                leading: Icon(Icons.download_rounded),
+                                title: Text('Import backup'),
+                              ),
+                            ),
+                          ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'Make room for\nwhat matters.',
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  'A focused home for the small tools that move your day forward.',
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 20),
+                _buildSearchField(context),
+                const SizedBox(height: 14),
                 _buildCategoryFilters(context),
               ],
             ),
@@ -516,6 +611,62 @@ class _RecentAppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (Theme.of(context).useMaterial3) {
+      final Color accent = app.gradient.first;
+      final ColorScheme scheme = Theme.of(context).colorScheme;
+      return Material(
+        color: Colors.transparent,
+        child: Ink(
+          width: 276,
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(app.icon, color: accent, size: 24),
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          app.name,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          app.tagline,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_rounded, color: accent, size: 19),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return RepaintBoundary(
       child: Material(
         color: Colors.transparent,
@@ -609,6 +760,9 @@ class _AppTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final Color accent = app.gradient.first;
+    if (Theme.of(context).useMaterial3) {
+      return _buildModernTile(context, scheme, accent);
+    }
     return RepaintBoundary(
       child: Semantics(
         button: true,
@@ -729,6 +883,136 @@ class _AppTile extends StatelessWidget {
                             ),
                           ],
                         ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernTile(
+    BuildContext context,
+    ColorScheme scheme,
+    Color accent,
+  ) {
+    return RepaintBoundary(
+      child: Semantics(
+        button: true,
+        label: 'Open ${app.name}',
+        child: Material(
+          color: Colors.transparent,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withValues(
+                    alpha: Theme.of(context).brightness == Brightness.dark
+                        ? 0.18
+                        : 0.055,
+                  ),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24),
+              onTap: onTap,
+              child: Stack(
+                children: <Widget>[
+                  Positioned(
+                    left: 0,
+                    top: 20,
+                    bottom: 20,
+                    child: Container(
+                      width: 4,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: app.gradient,
+                        ),
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(999),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 18, 18),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Row(
+                                children: <Widget>[
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: accent.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(11),
+                                    ),
+                                    child: Icon(
+                                      app.icon,
+                                      color: accent,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  if (isRecent)
+                                    _TilePill(label: 'Recent', color: accent),
+                                ],
+                              ),
+                              const Spacer(),
+                              Text(
+                                app.name,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                app.tagline,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: 9),
+                              Row(
+                                children: <Widget>[
+                                  Text(
+                                    app.category.label.toUpperCase(),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: accent,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.7,
+                                        ),
+                                  ),
+                                  const Spacer(),
+                                  Icon(
+                                    Icons.arrow_outward_rounded,
+                                    color: accent,
+                                    size: 18,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        _CardMotif(app: app, accent: accent),
                       ],
                     ),
                   ),
