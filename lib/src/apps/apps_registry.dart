@@ -6,7 +6,6 @@ import 'maths/maths_app.dart';
 import 'noises/noises_app.dart';
 import 'prompts/prompts_app.dart';
 import 'routines/routines_app.dart';
-import 'signal/signal_app.dart';
 import 'tasks/tasks_app.dart';
 
 abstract final class AppRegistry {
@@ -62,16 +61,6 @@ abstract final class AppRegistry {
       builder: _focusBuilder,
     ),
     AppManifest(
-      id: 'signal',
-      name: 'Signal',
-      tagline: 'Reflex, memory and focus under pressure',
-      description: 'A fast arcade cognitive workout with adaptive rules, distractors and bosses.',
-      icon: Icons.bolt_rounded,
-      gradient: <Color>[Color(0xFF2EE6D6), Color(0xFF3E8DFF)],
-      category: AppCategory.learning,
-      builder: _signalBuilder,
-    ),
-    AppManifest(
       id: 'noises',
       name: 'Noises',
       tagline: 'Ambient soundscapes',
@@ -99,6 +88,4 @@ abstract final class AppRegistry {
   static Widget _routinesBuilder(BuildContext context) => const RoutinesApp();
 
   static Widget _noisesBuilder(BuildContext context) => const NoisesApp();
-
-  static Widget _signalBuilder(BuildContext context) => const SignalApp();
 }

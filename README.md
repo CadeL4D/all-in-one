@@ -9,10 +9,9 @@ Flutter's single codebase.
 - **Tasks** — a lightweight to-do list with completion progress.
 - **Prompts** — reusable titles and notes with one-tap copy without the title.
 - **Maths** — configurable arithmetic challenges with count and timed modes.
-- **Routines** — repeatable routines with step-by-step daily progress and optional per-step timing.
-- **Focus** — named focus/break timers with adjustable durations, optional scheduled starts, and background completion alerts.
-- **Noises** — colored-noise soundscapes with optional Creative Commons nature mixing.
-- **Signal** — a fast arcade cognitive-training game with adaptive attention, memory, inhibition and flexibility challenges.
+- **Routines** — repeatable routines with step-by-step daily progress and optional clock times for steps.
+- **Focus** — named focus/break timers with an optional extra check-in timer and background completion alerts.
+- **Noises** — colored-noise soundscapes with independently toggleable Creative Commons nature layers.
 
 Tasks, prompts, routines, Maths settings/high scores, and recently opened hub cards
 are saved locally with `shared_preferences`.
@@ -39,7 +38,6 @@ lib/
         ├── routines/          # Routines tracker module
         ├── focus/             # Focus timer module
         ├── noises/            # Colored noise and nature mix module
-        └── signal/            # Signal arcade cognitive-training game
 ```
 
 ## Audio credits

@@ -27,22 +27,22 @@ class _FocusPreferences {
     required this.taskName,
     required this.focusMinutes,
     required this.breakMinutes,
-    required this.scheduledStartEnabled,
-    required this.scheduledStart,
+    required this.checkInEnabled,
+    required this.checkInMinutes,
   });
 
   final String taskName;
   final int focusMinutes;
   final int breakMinutes;
-  final bool scheduledStartEnabled;
-  final DateTime? scheduledStart;
+  final bool checkInEnabled;
+  final int checkInMinutes;
 
   factory _FocusPreferences.defaults() => const _FocusPreferences(
     taskName: 'Deep work',
     focusMinutes: 25,
     breakMinutes: 5,
-    scheduledStartEnabled: false,
-    scheduledStart: null,
+    checkInEnabled: false,
+    checkInMinutes: 10,
   );
 
   factory _FocusPreferences.fromJson(Map<String, dynamic> json) {
@@ -50,12 +50,8 @@ class _FocusPreferences {
       taskName: json['taskName'] as String? ?? 'Deep work',
       focusMinutes: (json['focusMinutes'] as num?)?.toInt() ?? 25,
       breakMinutes: (json['breakMinutes'] as num?)?.toInt() ?? 5,
-      scheduledStartEnabled: json['scheduledStartEnabled'] as bool? ?? false,
-      scheduledStart: json['scheduledStart'] is num
-          ? DateTime.fromMillisecondsSinceEpoch(
-              (json['scheduledStart'] as num).toInt(),
-            )
-          : null,
+      checkInEnabled: json['checkInEnabled'] as bool? ?? false,
+      checkInMinutes: (json['checkInMinutes'] as num?)?.toInt() ?? 10,
     );
   }
 
@@ -64,8 +60,8 @@ class _FocusPreferences {
       'taskName': taskName,
       'focusMinutes': focusMinutes,
       'breakMinutes': breakMinutes,
-      'scheduledStartEnabled': scheduledStartEnabled,
-      'scheduledStart': scheduledStart?.millisecondsSinceEpoch,
+      'checkInEnabled': checkInEnabled,
+      'checkInMinutes': checkInMinutes,
     };
   }
 }
@@ -77,6 +73,9 @@ class _FocusSessionState {
     required this.endTime,
     required this.pausedRemainingSeconds,
     required this.sessionCount,
+    required this.checkInRunning,
+    required this.checkInEndTime,
+    required this.checkInPausedRemainingSeconds,
   });
 
   final String phase;
@@ -84,6 +83,9 @@ class _FocusSessionState {
   final int? endTime;
   final int? pausedRemainingSeconds;
   final int sessionCount;
+  final bool checkInRunning;
+  final int? checkInEndTime;
+  final int? checkInPausedRemainingSeconds;
 
   factory _FocusSessionState.fromJson(Map<String, dynamic> json) {
     return _FocusSessionState(
@@ -92,6 +94,10 @@ class _FocusSessionState {
       endTime: (json['endTime'] as num?)?.toInt(),
       pausedRemainingSeconds: (json['pausedRemainingSeconds'] as num?)?.toInt(),
       sessionCount: (json['sessionCount'] as num?)?.toInt() ?? 0,
+      checkInRunning: json['checkInRunning'] as bool? ?? false,
+      checkInEndTime: (json['checkInEndTime'] as num?)?.toInt(),
+      checkInPausedRemainingSeconds:
+          (json['checkInPausedRemainingSeconds'] as num?)?.toInt(),
     );
   }
 
@@ -102,6 +108,9 @@ class _FocusSessionState {
       'endTime': endTime,
       'pausedRemainingSeconds': pausedRemainingSeconds,
       'sessionCount': sessionCount,
+      'checkInRunning': checkInRunning,
+      'checkInEndTime': checkInEndTime,
+      'checkInPausedRemainingSeconds': checkInPausedRemainingSeconds,
     };
   }
 }
@@ -117,6 +126,7 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
   static const String _preferencesKey = 'focus_preferences_v1';
   static const String _sessionKey = 'focus_session_v1';
   static const int _notificationId = 4711;
+  static const int _checkInNotificationId = 4712;
 
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
@@ -128,9 +138,13 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
   bool _running = false;
   DateTime? _endTime;
   int _remainingSeconds = 25 * 60;
+  bool _checkInRunning = false;
+  DateTime? _checkInEndTime;
+  int _checkInRemainingSeconds = 0;
   int _sessionCount = 0;
   bool _loaded = false;
   bool _completionShowing = false;
+  bool _checkInCompletionShowing = false;
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
 
   int get _durationSeconds => _phase == _FocusPhase.focus
@@ -138,6 +152,8 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
       : _preferences.breakMinutes * 60;
 
   int get _totalSeconds => _durationSeconds;
+
+  int get _checkInDurationSeconds => _preferences.checkInMinutes * 60;
 
   @override
   void initState() {
@@ -224,6 +240,7 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
             : _FocusPhase.focus;
         _sessionCount = session.sessionCount;
         _running = session.running;
+        _checkInRunning = session.checkInRunning;
         if (session.running && session.endTime != null) {
           _endTime = DateTime.fromMillisecondsSinceEpoch(session.endTime!);
           _remainingSeconds = _remainingFromEndTime();
@@ -238,11 +255,29 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
           _remainingSeconds =
               session.pausedRemainingSeconds ?? _durationSeconds;
         }
+        if (_checkInRunning && session.checkInEndTime != null) {
+          _checkInEndTime = DateTime.fromMillisecondsSinceEpoch(
+            session.checkInEndTime!,
+          );
+          _checkInRemainingSeconds = _remainingCheckInFromEndTime();
+          if (_checkInRemainingSeconds <= 0) {
+            _checkInRunning = false;
+            _checkInRemainingSeconds = 0;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _completeCheckIn();
+            });
+          }
+        } else {
+          _checkInRemainingSeconds =
+              session.checkInPausedRemainingSeconds ?? _checkInDurationSeconds;
+        }
       } catch (_) {
         _remainingSeconds = _durationSeconds;
+        _checkInRemainingSeconds = _checkInDurationSeconds;
       }
     } else {
       _remainingSeconds = _durationSeconds;
+      _checkInRemainingSeconds = _checkInDurationSeconds;
     }
 
     if (mounted) {
@@ -259,6 +294,15 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
     return (millis / 1000).ceil().clamp(0, _durationSeconds);
   }
 
+  int _remainingCheckInFromEndTime() {
+    final DateTime? endTime = _checkInEndTime;
+    if (endTime == null) {
+      return _checkInDurationSeconds;
+    }
+    final int millis = endTime.difference(DateTime.now()).inMilliseconds;
+    return (millis / 1000).ceil().clamp(0, _checkInDurationSeconds);
+  }
+
   void _onTick() {
     if (!_loaded || !mounted) {
       return;
@@ -270,9 +314,8 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
         _completePhase();
         return;
       }
-    } else {
-      _maybeStartScheduledSession();
     }
+    _maybeCompleteCheckIn();
 
     if (mounted) {
       setState(() {});
@@ -290,25 +333,20 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
         return;
       }
     }
-    _maybeStartScheduledSession();
+    _maybeCompleteCheckIn();
     if (mounted) {
       setState(() {});
     }
   }
 
-  void _maybeStartScheduledSession() {
-    if (_completionShowing || _running) {
-      return;
-    }
-    if (!_preferences.scheduledStartEnabled ||
-        _preferences.scheduledStart == null) {
+  void _maybeCompleteCheckIn() {
+    if (_checkInCompletionShowing || !_checkInRunning) {
       return;
     }
 
-    final DateTime now = DateTime.now();
-    final DateTime start = _preferences.scheduledStart!;
-    if (!now.isBefore(start) && now.difference(start).inSeconds < 90) {
-      _startPhase(_FocusPhase.focus, scheduled: true);
+    _checkInRemainingSeconds = _remainingCheckInFromEndTime();
+    if (_checkInRemainingSeconds <= 0) {
+      _completeCheckIn();
     }
   }
 
@@ -318,57 +356,29 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
       return;
     }
 
-    if (_preferences.scheduledStartEnabled &&
-        _preferences.scheduledStart != null &&
-        _preferences.scheduledStart!.isAfter(DateTime.now())) {
-      await _startScheduledNowQuestion();
-      return;
-    }
-
     await _startPhase(_phase);
   }
 
-  Future<void> _startScheduledNowQuestion() async {
-    final bool? startNow = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: const Text('Scheduled start is on'),
-        content: const Text(
-          'Start now instead of waiting for the scheduled time?',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep schedule'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Start now'),
-          ),
-        ],
-      ),
-    );
-    if (startNow == true && mounted) {
-      await _startPhase(_phase, scheduled: true);
-    }
-  }
-
-  Future<void> _startPhase(_FocusPhase phase, {bool scheduled = false}) async {
+  Future<void> _startPhase(_FocusPhase phase) async {
     _phase = phase;
     _running = true;
     _endTime = DateTime.now().add(Duration(seconds: _durationSeconds));
     _remainingSeconds = _durationSeconds;
-    if (scheduled) {
-      _preferences = _FocusPreferences(
-        taskName: _preferences.taskName,
-        focusMinutes: _preferences.focusMinutes,
-        breakMinutes: _preferences.breakMinutes,
-        scheduledStartEnabled: false,
-        scheduledStart: null,
+    if (phase == _FocusPhase.focus && _preferences.checkInEnabled) {
+      _checkInRunning = true;
+      _checkInEndTime = DateTime.now().add(
+        Duration(seconds: _checkInDurationSeconds),
       );
+      _checkInRemainingSeconds = _checkInDurationSeconds;
+    } else {
+      _checkInRunning = false;
+      _checkInEndTime = null;
     }
     await _persist();
     await _scheduleCompletionNotification();
+    if (_checkInRunning) {
+      await _scheduleCheckInNotification();
+    }
     if (mounted) {
       setState(() {});
     }
@@ -378,7 +388,13 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
     _running = false;
     _remainingSeconds = _remainingFromEndTime();
     _endTime = null;
+    if (_checkInRunning) {
+      _checkInRemainingSeconds = _remainingCheckInFromEndTime();
+      _checkInRunning = false;
+      _checkInEndTime = null;
+    }
     await _notifications.cancel(id: _notificationId);
+    await _notifications.cancel(id: _checkInNotificationId);
     await _persist();
     if (mounted) {
       setState(() {});
@@ -388,9 +404,13 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
   Future<void> _reset() async {
     _running = false;
     _endTime = null;
+    _checkInRunning = false;
+    _checkInEndTime = null;
     _phase = _FocusPhase.focus;
     _remainingSeconds = _preferences.focusMinutes * 60;
+    _checkInRemainingSeconds = _checkInDurationSeconds;
     await _notifications.cancel(id: _notificationId);
+    await _notifications.cancel(id: _checkInNotificationId);
     await _persist();
     if (mounted) {
       setState(() {});
@@ -400,9 +420,13 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
   Future<void> _switchPhase(_FocusPhase phase) async {
     _running = false;
     _endTime = null;
+    _checkInRunning = false;
+    _checkInEndTime = null;
     _phase = phase;
     _remainingSeconds = _durationSeconds;
+    _checkInRemainingSeconds = _checkInDurationSeconds;
     await _notifications.cancel(id: _notificationId);
+    await _notifications.cancel(id: _checkInNotificationId);
     await _persist();
     if (mounted) {
       setState(() {});
@@ -416,6 +440,8 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
     final _FocusPhase completedPhase = _phase;
     _running = false;
     _endTime = null;
+    _checkInRunning = false;
+    _checkInEndTime = null;
     _completionShowing = true;
     _remainingSeconds = 0;
 
@@ -425,6 +451,7 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
 
     _persist();
     _notifications.cancel(id: _notificationId);
+    _notifications.cancel(id: _checkInNotificationId);
     _playCompletionFeedback();
 
     showDialog<void>(
@@ -470,6 +497,54 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
                   ? 'Start break'
                   : 'Start focus',
             ),
+          ),
+        ],
+      ),
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _completeCheckIn() {
+    if (_checkInCompletionShowing) {
+      return;
+    }
+    _checkInRunning = false;
+    _checkInEndTime = null;
+    _checkInRemainingSeconds = 0;
+    _checkInCompletionShowing = true;
+
+    _persist();
+    _notifications.cancel(id: _checkInNotificationId);
+    _playCompletionFeedback();
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Check-in time'),
+        content: Text(
+          'Your check-in timer is up. Keep going on "${_preferences.taskName}" '
+          'or stop the work timer here?',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _checkInCompletionShowing = false;
+              _reset();
+            },
+            child: const Text('Stop here'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _checkInCompletionShowing = false;
+            },
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const Text('Keep working'),
           ),
         ],
       ),
@@ -543,6 +618,52 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _scheduleCheckInNotification() async {
+    final DateTime? endTime = _checkInEndTime;
+    if (endTime == null) {
+      return;
+    }
+
+    try {
+      final tz.TZDateTime scheduledDate = tz.TZDateTime.from(endTime, tz.local);
+      final NotificationDetails details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'focus_check_in',
+          'Focus check-in',
+          channelDescription: 'A quick nudge to keep going or stop the timer',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          vibrationPattern: Int64List.fromList(<int>[0, 350, 180, 350]),
+          category: AndroidNotificationCategory.alarm,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentSound: true,
+          presentBanner: true,
+          presentList: true,
+        ),
+        macOS: DarwinNotificationDetails(
+          presentSound: true,
+          presentBanner: true,
+          presentList: true,
+        ),
+      );
+
+      await _notifications.zonedSchedule(
+        id: _checkInNotificationId,
+        title: 'Check-in time',
+        body:
+            'Keep going on "${_preferences.taskName}" or stop the work timer?',
+        scheduledDate: scheduledDate,
+        notificationDetails: details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } catch (_) {
+      // Some desktop platforms do not support scheduled notifications.
+    }
+  }
+
   Future<void> _persist() async {
     final SharedPreferences preferences = await SharedPreferences.getInstance();
     await preferences.setString(
@@ -558,6 +679,11 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
           endTime: _endTime?.millisecondsSinceEpoch,
           pausedRemainingSeconds: _running ? null : _remainingSeconds,
           sessionCount: _sessionCount,
+          checkInRunning: _checkInRunning,
+          checkInEndTime: _checkInEndTime?.millisecondsSinceEpoch,
+          checkInPausedRemainingSeconds: _checkInRunning
+              ? null
+              : _checkInRemainingSeconds,
         ).toJson(),
       ),
     );
@@ -568,8 +694,8 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
       taskName: value.trim().isEmpty ? 'Deep work' : value.trim(),
       focusMinutes: _preferences.focusMinutes,
       breakMinutes: _preferences.breakMinutes,
-      scheduledStartEnabled: _preferences.scheduledStartEnabled,
-      scheduledStart: _preferences.scheduledStart,
+      checkInEnabled: _preferences.checkInEnabled,
+      checkInMinutes: _preferences.checkInMinutes,
     );
     await _persist();
     if (mounted) {
@@ -582,8 +708,8 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
       taskName: _preferences.taskName,
       focusMinutes: focusMinutes ?? _preferences.focusMinutes,
       breakMinutes: breakMinutes ?? _preferences.breakMinutes,
-      scheduledStartEnabled: _preferences.scheduledStartEnabled,
-      scheduledStart: _preferences.scheduledStart,
+      checkInEnabled: _preferences.checkInEnabled,
+      checkInMinutes: _preferences.checkInMinutes,
     );
 
     if (!_running) {
@@ -595,27 +721,18 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _setScheduledStartEnabled(bool enabled) async {
-    if (enabled) {
-      final DateTime? picked = await _pickScheduledStart();
-      if (picked == null) {
-        return;
-      }
-      _preferences = _FocusPreferences(
-        taskName: _preferences.taskName,
-        focusMinutes: _preferences.focusMinutes,
-        breakMinutes: _preferences.breakMinutes,
-        scheduledStartEnabled: true,
-        scheduledStart: picked,
-      );
-    } else {
-      _preferences = _FocusPreferences(
-        taskName: _preferences.taskName,
-        focusMinutes: _preferences.focusMinutes,
-        breakMinutes: _preferences.breakMinutes,
-        scheduledStartEnabled: false,
-        scheduledStart: null,
-      );
+  Future<void> _setCheckInEnabled(bool enabled) async {
+    _preferences = _FocusPreferences(
+      taskName: _preferences.taskName,
+      focusMinutes: _preferences.focusMinutes,
+      breakMinutes: _preferences.breakMinutes,
+      checkInEnabled: enabled,
+      checkInMinutes: _preferences.checkInMinutes,
+    );
+    if (!enabled) {
+      _checkInRunning = false;
+      _checkInEndTime = null;
+      await _notifications.cancel(id: _checkInNotificationId);
     }
     await _persist();
     if (mounted) {
@@ -623,38 +740,28 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<DateTime?> _pickScheduledStart() async {
-    final DateTime now = DateTime.now();
-    final DateTime initial = now.add(const Duration(minutes: 5));
-    final DateTime? date = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: now.subtract(const Duration(days: 1)),
-      lastDate: now.add(const Duration(days: 365)),
+  Future<void> _setCheckInMinutes(int minutes) async {
+    _preferences = _FocusPreferences(
+      taskName: _preferences.taskName,
+      focusMinutes: _preferences.focusMinutes,
+      breakMinutes: _preferences.breakMinutes,
+      checkInEnabled: _preferences.checkInEnabled,
+      checkInMinutes: minutes,
     );
-    if (date == null || !mounted) {
-      return null;
+    if (!_checkInRunning) {
+      _checkInRemainingSeconds = _checkInDurationSeconds;
     }
+    await _persist();
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
-    final TimeOfDay? time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(initial),
-    );
-    if (time == null) {
-      return null;
-    }
-
-    final DateTime selected = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
-    if (selected.isBefore(now)) {
-      return selected.add(const Duration(days: 1));
-    }
-    return selected;
+  String get _checkInTimeLabel {
+    final int minutes = _checkInRemainingSeconds ~/ 60;
+    final int seconds = _checkInRemainingSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
   }
 
   String get _timeLabel {
@@ -687,8 +794,9 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
           progress: 1 - (_remainingSeconds / _totalSeconds),
           running: _running,
           taskName: _preferences.taskName,
-          scheduledStartEnabled: _preferences.scheduledStartEnabled,
-          scheduledStart: _preferences.scheduledStart,
+          checkInEnabled: _preferences.checkInEnabled,
+          checkInRunning: _checkInRunning,
+          checkInTimeLabel: _checkInTimeLabel,
           sessionCount: _sessionCount,
           onStartPause: _startPause,
           onReset: _reset,
@@ -702,10 +810,11 @@ class _FocusAppState extends State<FocusApp> with WidgetsBindingObserver {
           onBreakChanged: (int value) => _setDuration(breakMinutes: value),
         ),
         const SizedBox(height: 14),
-        _ScheduleCard(
-          enabled: _preferences.scheduledStartEnabled,
-          scheduledStart: _preferences.scheduledStart,
-          onEnabledChanged: _setScheduledStartEnabled,
+        _CheckInCard(
+          enabled: _preferences.checkInEnabled,
+          minutes: _preferences.checkInMinutes,
+          onEnabledChanged: _setCheckInEnabled,
+          onMinutesChanged: _setCheckInMinutes,
         ),
         const SizedBox(height: 14),
         _InfoNote(),
@@ -802,8 +911,9 @@ class _TimerCard extends StatelessWidget {
     required this.progress,
     required this.running,
     required this.taskName,
-    required this.scheduledStartEnabled,
-    required this.scheduledStart,
+    required this.checkInEnabled,
+    required this.checkInRunning,
+    required this.checkInTimeLabel,
     required this.sessionCount,
     required this.onStartPause,
     required this.onReset,
@@ -815,8 +925,9 @@ class _TimerCard extends StatelessWidget {
   final double progress;
   final bool running;
   final String taskName;
-  final bool scheduledStartEnabled;
-  final DateTime? scheduledStart;
+  final bool checkInEnabled;
+  final bool checkInRunning;
+  final String checkInTimeLabel;
   final int sessionCount;
   final VoidCallback onStartPause;
   final VoidCallback onReset;
@@ -868,11 +979,12 @@ class _TimerCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      if (scheduledStartEnabled && scheduledStart != null)
+                      if (checkInEnabled)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: _ScheduledPill(
-                            scheduledStart: scheduledStart!,
+                          child: _CheckInPill(
+                            running: checkInRunning,
+                            timeLabel: checkInTimeLabel,
                           ),
                         ),
                     ],
@@ -916,24 +1028,24 @@ class _TimerCard extends StatelessWidget {
   }
 }
 
-class _ScheduledPill extends StatelessWidget {
-  const _ScheduledPill({required this.scheduledStart});
+class _CheckInPill extends StatelessWidget {
+  const _CheckInPill({required this.running, required this.timeLabel});
 
-  final DateTime scheduledStart;
+  final bool running;
+  final String timeLabel;
 
   @override
   Widget build(BuildContext context) {
-    final String time = TimeOfDay.fromDateTime(scheduledStart).format(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFFC466B).withValues(alpha: 0.12),
+        color: const Color(0xFF3F5EFB).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        'Scheduled $time',
+        running ? 'Check-in $timeLabel' : 'Check-in armed',
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: const Color(0xFFFC466B),
+          color: const Color(0xFF3F5EFB),
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -1115,34 +1227,87 @@ class _DurationSlider extends StatelessWidget {
   }
 }
 
-class _ScheduleCard extends StatelessWidget {
-  const _ScheduleCard({
+class _CheckInCard extends StatelessWidget {
+  const _CheckInCard({
     required this.enabled,
-    required this.scheduledStart,
+    required this.minutes,
     required this.onEnabledChanged,
+    required this.onMinutesChanged,
   });
 
   final bool enabled;
-  final DateTime? scheduledStart;
+  final int minutes;
   final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<int> onMinutesChanged;
 
   @override
   Widget build(BuildContext context) {
     return _SettingsCard(
-      icon: Icons.event_available_rounded,
-      title: 'Scheduled start',
+      icon: Icons.notifications_rounded,
+      title: 'Extra check-in timer',
       child: Column(
         children: <Widget>[
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Start at a chosen time'),
-            subtitle: Text(
-              enabled && scheduledStart != null
-                  ? '${TimeOfDay.fromDateTime(scheduledStart!).format(context)} • ${scheduledStart!.month}/${scheduledStart!.day}'
-                  : 'Off until you enable it',
+            title: const Text('Nudge me during focus'),
+            subtitle: const Text(
+              'Add a second timer that asks whether to keep working or stop.',
             ),
             value: enabled,
             onChanged: onEnabledChanged,
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: enabled
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: <Widget>[
+                          Text(
+                            'Check-in after',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const Spacer(),
+                          Text(
+                            '$minutes min',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: const Color(0xFF3F5EFB),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ],
+                      ),
+                      Slider(
+                        value: minutes.clamp(1, 60).toDouble(),
+                        min: 1,
+                        max: 60,
+                        divisions: 59,
+                        activeColor: const Color(0xFF3F5EFB),
+                        label: '$minutes min',
+                        onChanged: (double value) =>
+                            onMinutesChanged(value.round()),
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        children: <Widget>[
+                          for (final int preset in <int>[1, 3, 5, 10, 15])
+                            ActionChip(
+                              label: Text('$preset'),
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
+                              side: BorderSide.none,
+                              onPressed: () => onMinutesChanged(preset),
+                            ),
+                        ],
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
@@ -1167,7 +1332,9 @@ class _InfoNote extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Focus keeps counting even when you leave the app. When a timer ends, it can vibrate and chime from the background.',
+              'Focus keeps counting even when you leave the app. The optional '
+              'check-in timer nudges you to keep working or stop, and timers '
+              'can vibrate and chime from the background.',
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),

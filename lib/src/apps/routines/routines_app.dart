@@ -3,13 +3,15 @@ import 'package:flutter/material.dart';
 import '../../core/local_store.dart';
 import '../../screens/app_scaffold.dart';
 
-String _formatSeconds(int seconds) {
-  if (seconds < 60) {
-    return '${seconds}s';
+String _formatClockMinutes(int? minutes) {
+  if (minutes == null) {
+    return 'No time';
   }
-  final int minutes = seconds ~/ 60;
-  final int remainder = seconds % 60;
-  return remainder == 0 ? '${minutes}m' : '${minutes}m ${remainder}s';
+  final int hour = minutes ~/ 60;
+  final int minute = minutes % 60;
+  final String period = hour < 12 ? 'AM' : 'PM';
+  final int displayHour = hour % 12 == 0 ? 12 : hour % 12;
+  return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
 }
 
 String _localDateKey() {
@@ -24,7 +26,7 @@ class _RoutineStep {
     required this.id,
     required this.title,
     this.done = false,
-    this.durationSeconds,
+    this.timeMinutes,
   });
 
   factory _RoutineStep.fromJson(Map<String, dynamic> json) {
@@ -32,39 +34,25 @@ class _RoutineStep {
       id: (json['id'] as num).toInt(),
       title: json['title'] as String? ?? 'Untitled step',
       done: json['done'] as bool? ?? false,
-      durationSeconds: (json['durationSeconds'] as num?)?.toInt(),
+      timeMinutes: (json['timeMinutes'] as num?)?.toInt(),
     );
   }
 
   final int id;
   String title;
   bool done;
-  int? durationSeconds;
+  int? timeMinutes;
 
-  bool get hasDuration => durationSeconds != null && durationSeconds! > 0;
+  bool get hasTime => timeMinutes != null;
 
-  String get durationLabel {
-    if (!hasDuration) {
-      return 'No time';
-    }
-    final int seconds = durationSeconds!;
-    if (seconds < 60) {
-      return '${seconds}s';
-    }
-    final int minutes = seconds ~/ 60;
-    final int remainder = seconds % 60;
-    if (remainder == 0) {
-      return '${minutes}m';
-    }
-    return '${minutes}m ${remainder}s';
-  }
+  String get timeLabel => _formatClockMinutes(timeMinutes);
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'id': id,
       'title': title,
       'done': done,
-      'durationSeconds': durationSeconds,
+      'timeMinutes': timeMinutes,
     };
   }
 }
@@ -116,15 +104,7 @@ class _Routine {
 
   double get progress => steps.isEmpty ? 0 : completedSteps / steps.length;
 
-  int get totalDurationSeconds => steps
-      .where((_RoutineStep step) => step.hasDuration)
-      .fold<int>(
-        0,
-        (int total, _RoutineStep step) => total + step.durationSeconds!,
-      );
-
-  String get totalDurationLabel =>
-      totalDurationSeconds == 0 ? '' : _formatSeconds(totalDurationSeconds);
+  int get timedSteps => steps.where((_RoutineStep step) => step.hasTime).length;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -138,12 +118,12 @@ class _Routine {
 }
 
 class _RoutineStepDraft {
-  const _RoutineStepDraft({required this.title, this.durationSeconds});
+  const _RoutineStepDraft({required this.title, this.timeMinutes});
 
   final String title;
-  final int? durationSeconds;
+  final int? timeMinutes;
 
-  bool get hasDuration => durationSeconds != null && durationSeconds! > 0;
+  bool get hasTime => timeMinutes != null;
 }
 
 class _RoutineDraft {
@@ -255,7 +235,7 @@ class _RoutinesAppState extends State<RoutinesApp> {
                 (_RoutineStepDraft step) => _RoutineStep(
                   id: _nextStepId++,
                   title: step.title,
-                  durationSeconds: step.durationSeconds,
+                  timeMinutes: step.timeMinutes,
                 ),
               )
               .toList(),
@@ -290,7 +270,7 @@ class _RoutinesAppState extends State<RoutinesApp> {
               (_RoutineStepDraft step) => _RoutineStep(
                 id: _nextStepId++,
                 title: step.title,
-                durationSeconds: step.durationSeconds,
+                timeMinutes: step.timeMinutes,
                 done: completedByTitle[step.title] ?? false,
               ),
             )
@@ -629,20 +609,20 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
                             : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    subtitle: step.hasDuration
+                    subtitle: step.hasTime
                         ? Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[
                                 Icon(
-                                  Icons.timer_outlined,
+                                  Icons.schedule_rounded,
                                   size: 15,
                                   color: Theme.of(context).colorScheme.primary,
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
-                                  step.durationLabel,
+                                  step.timeLabel,
                                   style: Theme.of(context).textTheme.labelMedium
                                       ?.copyWith(
                                         color: Theme.of(context)
@@ -690,9 +670,9 @@ class _RoutineProgress extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              routine.totalDurationLabel.isEmpty
+              routine.timedSteps == 0
                   ? '${routine.completedSteps} of ${routine.steps.length} steps complete'
-                  : '${routine.completedSteps} of ${routine.steps.length} • ${routine.totalDurationLabel} planned',
+                  : '${routine.completedSteps} of ${routine.steps.length} steps • ${routine.timedSteps} timed',
               style: TextStyle(
                 color: scheme.onPrimaryContainer,
                 fontWeight: FontWeight.w700,
@@ -740,7 +720,7 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
             .map(
               (_RoutineStep step) => _RoutineStepDraft(
                 title: step.title,
-                durationSeconds: step.durationSeconds,
+                timeMinutes: step.timeMinutes,
               ),
             )
             .toList() ??
@@ -814,15 +794,16 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
     });
   }
 
-  Future<void> _editStepDuration(int index) async {
+  Future<void> _editStepTime(int index) async {
     final _RoutineStepDraft step = _steps[index];
-    final _DurationChoice? choice = await showModalBottomSheet<_DurationChoice>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) =>
-          _DurationPickerSheet(initialSeconds: step.durationSeconds),
-    );
+    final _ClockTimeChoice? choice =
+        await showModalBottomSheet<_ClockTimeChoice>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (BuildContext context) =>
+              _ClockTimePickerSheet(initialMinutes: step.timeMinutes),
+        );
     if (choice == null || !mounted) {
       return;
     }
@@ -830,7 +811,7 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
     setState(() {
       _steps[index] = _RoutineStepDraft(
         title: step.title,
-        durationSeconds: choice.hasTime ? choice.minutes * 60 : null,
+        timeMinutes: choice.hasTime ? choice.timeMinutes : null,
       );
     });
   }
@@ -953,10 +934,10 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
                               title: Text(step.title),
                               subtitle: Padding(
                                 padding: const EdgeInsets.only(top: 5),
-                                child: _StepDurationButton(
-                                  hasDuration: step.hasDuration,
-                                  durationSeconds: step.durationSeconds,
-                                  onTap: () => _editStepDuration(index),
+                                child: _StepTimeButton(
+                                  hasTime: step.hasTime,
+                                  timeMinutes: step.timeMinutes,
+                                  onTap: () => _editStepTime(index),
                                 ),
                               ),
                               trailing: Row(
@@ -964,11 +945,11 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
                                 children: <Widget>[
                                   IconButton(
                                     tooltip: 'Set step time',
-                                    onPressed: () => _editStepDuration(index),
+                                    onPressed: () => _editStepTime(index),
                                     icon: Icon(
-                                      step.hasDuration
-                                          ? Icons.timer_rounded
-                                          : Icons.timer_outlined,
+                                      step.hasTime
+                                          ? Icons.schedule_rounded
+                                          : Icons.schedule_outlined,
                                       color: Theme.of(context)
                                           .colorScheme
                                           .primary,
@@ -1046,24 +1027,24 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
   }
 }
 
-class _StepDurationButton extends StatelessWidget {
-  const _StepDurationButton({
-    required this.hasDuration,
-    required this.durationSeconds,
+class _StepTimeButton extends StatelessWidget {
+  const _StepTimeButton({
+    required this.hasTime,
+    required this.timeMinutes,
     required this.onTap,
   });
 
-  final bool hasDuration;
-  final int? durationSeconds;
+  final bool hasTime;
+  final int? timeMinutes;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final String label = hasDuration
-        ? _formatSeconds(durationSeconds ?? 0)
-        : 'Add optional time';
-    final Color accent = hasDuration
+    final String label = hasTime
+        ? _formatClockMinutes(timeMinutes)
+        : 'Add clock time';
+    final Color accent = hasTime
         ? scheme.primary
         : scheme.onSurfaceVariant.withValues(alpha: 0.72);
 
@@ -1081,7 +1062,7 @@ class _StepDurationButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Icon(
-              hasDuration ? Icons.timer_rounded : Icons.add_rounded,
+              hasTime ? Icons.schedule_rounded : Icons.add_rounded,
               size: 15,
               color: accent,
             ),
@@ -1098,45 +1079,61 @@ class _StepDurationButton extends StatelessWidget {
   }
 }
 
-class _DurationChoice {
-  const _DurationChoice._({required this.minutes});
+class _ClockTimeChoice {
+  const _ClockTimeChoice.noTime() : timeMinutes = null;
 
-  const _DurationChoice.noTime() : this._(minutes: 0);
+  const _ClockTimeChoice.time(int minutes) : timeMinutes = minutes;
 
-  const _DurationChoice.time(int minutes) : this._(minutes: minutes);
+  final int? timeMinutes;
 
-  final int minutes;
-
-  bool get hasTime => minutes > 0;
+  bool get hasTime => timeMinutes != null;
 }
 
-class _DurationPickerSheet extends StatefulWidget {
-  const _DurationPickerSheet({this.initialSeconds});
+class _ClockTimePickerSheet extends StatefulWidget {
+  const _ClockTimePickerSheet({this.initialMinutes});
 
-  final int? initialSeconds;
+  final int? initialMinutes;
 
   @override
-  State<_DurationPickerSheet> createState() => _DurationPickerSheetState();
+  State<_ClockTimePickerSheet> createState() => _ClockTimePickerSheetState();
 }
 
-class _DurationPickerSheetState extends State<_DurationPickerSheet> {
-  static const List<int> _presets = <int>[5, 10, 15, 20, 25, 30, 45, 60, 90];
+class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
+  static const List<int> _presets = <int>[
+    360, // 6:00 AM
+    420, // 7:00 AM
+    480, // 8:00 AM
+    540, // 9:00 AM
+    720, // 12:00 PM
+    780, // 1:00 PM
+    1020, // 5:00 PM
+    1200, // 8:00 PM
+    1260, // 9:00 PM
+  ];
 
   late bool _hasTime;
-  late double _minutes;
+  late double _timeMinutes;
 
   @override
   void initState() {
     super.initState();
-    final int? seconds = widget.initialSeconds;
-    _hasTime = seconds != null && seconds > 0;
-    _minutes = _hasTime ? (seconds! / 60).round().clamp(1, 120).toDouble() : 15;
+    final int? minutes = widget.initialMinutes;
+    _hasTime = minutes != null;
+    _timeMinutes = minutes?.clamp(0, 1439).toDouble() ?? 420;
   }
 
   void _usePreset(int minutes) {
     setState(() {
       _hasTime = true;
-      _minutes = minutes.toDouble();
+      _timeMinutes = minutes.toDouble();
+    });
+  }
+
+  void _adjust(int deltaMinutes) {
+    setState(() {
+      _hasTime = true;
+      _timeMinutes =
+          ((_timeMinutes.round() + deltaMinutes) % 1440 + 1440) % 1440;
     });
   }
 
@@ -1183,12 +1180,12 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            'Step timing',
+                            'Step time',
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Optional. Leave time-free by default.',
+                            'Optional. Pick a clock time like 7:00 AM.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
@@ -1201,11 +1198,13 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
                         Animation<double> anim,
                       ) => FadeTransition(opacity: anim, child: child),
                       child: _hasTime
-                          ? _TimeBubble(
-                              key: ValueKey<String>('timed-$_minutes'),
-                              minutes: _minutes.round(),
+                          ? _ClockBubble(
+                              key: ValueKey<String>(
+                                'clock-${_timeMinutes.round()}',
+                              ),
+                              timeMinutes: _timeMinutes.round(),
                             )
-                          : _NoTimeBubble(
+                          : _NoClockBubble(
                               key: const ValueKey<String>('notime'),
                             ),
                     ),
@@ -1216,15 +1215,15 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
                   spacing: 8,
                   runSpacing: 8,
                   children: <Widget>[
-                    _PresetChip(
+                    _ClockPresetChip(
                       label: 'No time',
                       selected: !_hasTime,
                       onTap: () => setState(() => _hasTime = false),
                     ),
                     for (final int preset in _presets)
-                      _PresetChip(
-                        label: '${preset}m',
-                        selected: _hasTime && _minutes.round() == preset,
+                      _ClockPresetChip(
+                        label: _formatClockMinutes(preset),
+                        selected: _hasTime && _timeMinutes.round() == preset,
                         onTap: () => _usePreset(preset),
                       ),
                   ],
@@ -1238,32 +1237,30 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
                           child: Row(
                             children: <Widget>[
                               IconButton(
-                                tooltip: 'Subtract 5 minutes',
-                                onPressed: () => setState(() {
-                                  _minutes = (_minutes - 5).clamp(1, 120);
-                                }),
+                                tooltip: 'Subtract 15 minutes',
+                                onPressed: () => _adjust(-15),
                                 icon: const Icon(
                                   Icons.remove_circle_outline_rounded,
                                 ),
                               ),
                               Expanded(
                                 child: Slider(
-                                  value: _minutes,
-                                  min: 1,
-                                  max: 120,
-                                  divisions: 119,
-                                  label: '${_minutes.round()} min',
+                                  value: _timeMinutes,
+                                  min: 0,
+                                  max: 1439,
+                                  divisions: 287,
+                                  label: _formatClockMinutes(
+                                    _timeMinutes.round(),
+                                  ),
                                   onChanged: (double value) => setState(() {
                                     _hasTime = true;
-                                    _minutes = value.roundToDouble();
+                                    _timeMinutes = value.roundToDouble();
                                   }),
                                 ),
                               ),
                               IconButton(
-                                tooltip: 'Add 5 minutes',
-                                onPressed: () => setState(() {
-                                  _minutes = (_minutes + 5).clamp(1, 120);
-                                }),
+                                tooltip: 'Add 15 minutes',
+                                onPressed: () => _adjust(15),
                                 icon: const Icon(
                                   Icons.add_circle_outline_rounded,
                                 ),
@@ -1280,7 +1277,7 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
                       child: OutlinedButton(
                         onPressed: () =>
                             Navigator.of(context)
-                                .pop(const _DurationChoice.noTime()),
+                                .pop(const _ClockTimeChoice.noTime()),
                         child: const Text('Keep time-free'),
                       ),
                     ),
@@ -1289,11 +1286,13 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
                       child: FilledButton(
                         onPressed: () => Navigator.of(context).pop(
                           _hasTime
-                              ? _DurationChoice.time(_minutes.round())
-                              : const _DurationChoice.noTime(),
+                              ? _ClockTimeChoice.time(_timeMinutes.round())
+                              : const _ClockTimeChoice.noTime(),
                         ),
                         child: Text(
-                          _hasTime ? 'Use ${_minutes.round()} min' : 'Done',
+                          _hasTime
+                              ? 'Use ${_formatClockMinutes(_timeMinutes.round())}'
+                              : 'Done',
                         ),
                       ),
                     ),
@@ -1308,10 +1307,10 @@ class _DurationPickerSheetState extends State<_DurationPickerSheet> {
   }
 }
 
-class _TimeBubble extends StatelessWidget {
-  const _TimeBubble({super.key, required this.minutes});
+class _ClockBubble extends StatelessWidget {
+  const _ClockBubble({super.key, required this.timeMinutes});
 
-  final int minutes;
+  final int timeMinutes;
 
   @override
   Widget build(BuildContext context) {
@@ -1323,7 +1322,7 @@ class _TimeBubble extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       child: Text(
-        '$minutes min',
+        _formatClockMinutes(timeMinutes),
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
           color: scheme.onPrimaryContainer,
           fontWeight: FontWeight.w800,
@@ -1333,8 +1332,8 @@ class _TimeBubble extends StatelessWidget {
   }
 }
 
-class _NoTimeBubble extends StatelessWidget {
-  const _NoTimeBubble({super.key});
+class _NoClockBubble extends StatelessWidget {
+  const _NoClockBubble({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -1356,8 +1355,8 @@ class _NoTimeBubble extends StatelessWidget {
   }
 }
 
-class _PresetChip extends StatelessWidget {
-  const _PresetChip({
+class _ClockPresetChip extends StatelessWidget {
+  const _ClockPresetChip({
     required this.label,
     required this.selected,
     required this.onTap,

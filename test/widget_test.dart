@@ -27,7 +27,6 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -320));
     await tester.pumpAndSettle();
     expect(find.text('Noises'), findsOneWidget);
-    expect(find.text('Signal'), findsOneWidget);
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, 380));
     await tester.pumpAndSettle();

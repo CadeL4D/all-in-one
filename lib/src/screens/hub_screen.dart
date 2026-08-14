@@ -112,6 +112,12 @@ class _HubScreenState extends State<HubScreen> {
         .toList(growable: false);
   }
 
+  List<AppManifest> get _recentApps {
+    return _recentIds
+        .map((String id) => AppRegistry.byId(id))
+        .toList(growable: false);
+  }
+
   void _openApp(AppManifest app) {
     setState(() {
       _recentIds
@@ -167,6 +173,16 @@ class _HubScreenState extends State<HubScreen> {
         ),
         slivers: <Widget>[
           SliverToBoxAdapter(child: _buildHeader(context)),
+          if (_query.isEmpty && _category == null && _recentApps.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _RecentStrip(apps: _recentApps, onTap: _openApp),
+            ),
+          SliverToBoxAdapter(
+            child: _SectionHeading(
+              title: 'All apps',
+              count: visibleApps.length,
+            ),
+          ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
             sliver: visibleApps.isEmpty
@@ -177,10 +193,10 @@ class _HubScreenState extends State<HubScreen> {
                 : SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 300,
-                          mainAxisExtent: 220,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
+                          maxCrossAxisExtent: 340,
+                          mainAxisExtent: 190,
+                          crossAxisSpacing: 18,
+                          mainAxisSpacing: 18,
                         ),
                     delegate: SliverChildBuilderDelegate((
                       BuildContext context,
@@ -372,6 +388,173 @@ class _HubScreenState extends State<HubScreen> {
   }
 }
 
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.title, required this.count});
+
+  final String title;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1120),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+          child: Row(
+            children: <Widget>[
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentStrip extends StatelessWidget {
+  const _RecentStrip({required this.apps, required this.onTap});
+
+  final List<AppManifest> apps;
+  final ValueChanged<AppManifest> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Text(
+                'Jump back in',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            SizedBox(
+              height: 116,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: apps.length,
+                separatorBuilder: (BuildContext context, int index) =>
+                    const SizedBox(width: 12),
+                itemBuilder: (BuildContext context, int index) {
+                  final AppManifest app = apps[index];
+                  return _RecentAppCard(app: app, onTap: () => onTap(app));
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentAppCard extends StatelessWidget {
+  const _RecentAppCard({required this.app, required this.onTap});
+
+  final AppManifest app;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: Material(
+        color: Colors.transparent,
+        child: Ink(
+          width: 286,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: app.gradient,
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: app.gradient.last.withValues(alpha: 0.24),
+                blurRadius: 18,
+                offset: const Offset(0, 9),
+              ),
+            ],
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.20),
+                      borderRadius: BorderRadius.circular(17),
+                    ),
+                    child: Icon(app.icon, color: Colors.white, size: 29),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          app.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          app.tagline,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.80),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AppTile extends StatelessWidget {
   const _AppTile({
     super.key,
@@ -471,6 +654,35 @@ class _AppTile extends StatelessWidget {
                         fontSize: 13,
                         height: 1.25,
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: <Widget>[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            app.category.label,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.90),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ],
                     ),
                   ],
                 ),

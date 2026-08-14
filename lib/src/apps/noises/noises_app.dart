@@ -60,7 +60,7 @@ class NoisesApp extends StatefulWidget {
 
 class _NoisesAppState extends State<NoisesApp> {
   static const String _preferencesKey = 'noises_v1';
-  static const double _natureTargetLevel = 0.42;
+  static const double _natureTargetLevel = 0.80;
 
   final AudioPlayer _noisePlayer = AudioPlayer();
   final Map<String, AudioPlayer> _naturePlayers = <String, AudioPlayer>{};
@@ -299,7 +299,7 @@ class _NoisesAppState extends State<NoisesApp> {
         : DateTime.now().difference(_natureFadeStartedAt!).inMilliseconds /
               1000.0;
     final double fade = 0.5 + 0.5 * sin(phase + elapsed * 2 * pi / period);
-    final double factor = 0.38 + 0.27 * fade;
+    final double factor = 0.60 + 0.40 * fade;
     return (_volume * _natureTargetLevel * factor).clamp(0.0, 1.0).toDouble();
   }
 
