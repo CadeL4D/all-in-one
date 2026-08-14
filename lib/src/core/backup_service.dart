@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show Rect;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -40,11 +41,12 @@ abstract final class BackupService {
     return file;
   }
 
-  static Future<void> exportAndShare() async {
+  static Future<void> exportAndShare({Rect? sharePositionOrigin}) async {
     final File file = await createBackupFile();
     await SharePlus.instance.share(
       ShareParams(
         files: <XFile>[XFile(file.path)],
+        sharePositionOrigin: sharePositionOrigin ?? Rect.fromLTWH(0, 0, 1, 1),
         subject: 'One Hub backup',
         text: 'One Hub backup file',
         fileNameOverrides: const <String>['one_hub_backup.json'],

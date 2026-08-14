@@ -26,12 +26,20 @@ class _HubScreenState extends State<HubScreen> {
   }
 
   Future<void> _exportBackup() async {
+    final Size screenSize = MediaQuery.sizeOf(context);
+    final Rect shareOrigin = Rect.fromLTWH(
+      screenSize.width / 2,
+      screenSize.height / 2,
+      1,
+      1,
+    );
+
     try {
-      await BackupService.exportAndShare();
-    } catch (_) {
+      await BackupService.exportAndShare(sharePositionOrigin: shareOrigin);
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not export the backup file.')),
+          SnackBar(content: Text('Could not export the backup file: $error')),
         );
       }
     }
