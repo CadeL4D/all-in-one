@@ -72,11 +72,7 @@ class _NoisesAppState extends State<NoisesApp> {
   double _volume = 0.72;
   double _natureVolume = 0.80;
   final Map<String, bool> _natureEnabled = <String, bool>{};
-  final Map<String, double> _naturePhases = <String, double>{};
-  final Map<String, double> _naturePeriods = <String, double>{};
   final Set<String> _activeNatureIds = <String>{};
-  DateTime? _natureFadeStartedAt;
-  Timer? _natureFadeTimer;
   Timer? _noiseVariationTimer;
 
   @override
@@ -84,15 +80,12 @@ class _NoisesAppState extends State<NoisesApp> {
     super.initState();
     for (final _NatureClip clip in _natureClips) {
       _naturePlayers[clip.id] = AudioPlayer();
-      _naturePhases[clip.id] = _random.nextDouble() * 2 * pi;
-      _naturePeriods[clip.id] = 38 + _random.nextDouble() * 42;
     }
     _loadPreferences();
   }
 
   @override
   void dispose() {
-    _natureFadeTimer?.cancel();
     _noiseVariationTimer?.cancel();
     _noisePlayer.dispose();
     for (final AudioPlayer player in _naturePlayers.values) {
@@ -197,7 +190,6 @@ class _NoisesAppState extends State<NoisesApp> {
       );
 
       if (_selected == NoiseColor.green) {
-        _startNatureFadeCycle();
         for (final _NatureClip clip in _natureClips) {
           if (_natureEnabled[clip.id] ?? false) {
             await _startNatureClip(clip.id);
@@ -224,8 +216,6 @@ class _NoisesAppState extends State<NoisesApp> {
   }
 
   Future<void> _stopPlayers() async {
-    _natureFadeTimer?.cancel();
-    _natureFadeTimer = null;
     _noiseVariationTimer?.cancel();
     _noiseVariationTimer = null;
     await Future.wait<void>(<Future<void>>[
@@ -269,7 +259,7 @@ class _NoisesAppState extends State<NoisesApp> {
       await player.setReleaseMode(ReleaseMode.loop);
       await player.play(
         AssetSource(clip.path),
-        volume: _natureVolumeFor(id),
+        volume: _natureVolume,
         mode: PlayerMode.mediaPlayer,
       );
       if (mounted) {
@@ -293,37 +283,6 @@ class _NoisesAppState extends State<NoisesApp> {
         setState(() {});
       }
     }
-  }
-
-  double _natureVolumeFor(String id) {
-    final double phase = _naturePhases[id] ?? 0;
-    final double period = _naturePeriods[id] ?? 60;
-    final double elapsed = _natureFadeStartedAt == null
-        ? 0.0
-        : DateTime.now().difference(_natureFadeStartedAt!).inMilliseconds /
-              1000.0;
-    final double fade = 0.5 + 0.5 * sin(phase + elapsed * 2 * pi / period);
-    final double factor = 0.60 + 0.40 * fade;
-    return (_natureVolume * factor).clamp(0.0, 1.0).toDouble();
-  }
-
-  void _startNatureFadeCycle() {
-    _natureFadeTimer?.cancel();
-    _natureFadeStartedAt = DateTime.now();
-    _natureFadeTimer = Timer.periodic(const Duration(milliseconds: 900), (
-      _,
-    ) async {
-      if (!_playing || _selected != NoiseColor.green) {
-        return;
-      }
-      for (final String id in _activeNatureIds) {
-        try {
-          await _naturePlayers[id]!.setVolume(_natureVolumeFor(id));
-        } catch (_) {
-          // Ignore transient platform volume errors.
-        }
-      }
-    });
   }
 
   void _scheduleNoiseVariation() {
@@ -356,14 +315,7 @@ class _NoisesAppState extends State<NoisesApp> {
     await _savePreferences();
 
     if (_playing) {
-      await _noisePlayer.setVolume(value);
-      for (final String id in _activeNatureIds) {
-        try {
-          await _naturePlayers[id]!.setVolume(_natureVolumeFor(id));
-        } catch (_) {
-          // Keep the rest of the mix playing when one layer fails.
-        }
-      }
+      await _noisePlayer.setVolume(_volume);
     }
   }
 
@@ -374,7 +326,7 @@ class _NoisesAppState extends State<NoisesApp> {
     if (_playing) {
       for (final String id in _activeNatureIds) {
         try {
-          await _naturePlayers[id]!.setVolume(_natureVolumeFor(id));
+          await _naturePlayers[id]!.setVolume(_natureVolume);
         } catch (_) {
           // Keep the rest of the mix playing when one layer fails.
         }
@@ -437,9 +389,8 @@ class _NoisesAppState extends State<NoisesApp> {
                 Text(
                   'Nature clips are bundled from Wikimedia Commons and used '
                   'under Creative Commons BY-SA 4.0 or CC0/public-domain '
-                  'licenses. Each sound independently drifts in and out around '
-                  'the steady green noise. Attribution details are in the '
-                  'project README.',
+                  'licenses. Enabled sounds loop continuously over the steady '
+                  'green noise. Attribution details are in the project README.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -691,8 +642,8 @@ class _NatureLayersCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Add natural ambience around the steady green noise. '
-                      'Each layer independently swells and recedes.',
+                      'Enabled sounds play continuously over green noise at '
+                      'the nature volume you choose.',
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: scheme.onSurfaceVariant),
                     ),
@@ -747,7 +698,7 @@ class _NatureLayersCard extends StatelessWidget {
               ),
               subtitle: Text(
                 activeIds.contains(clip.id)
-                    ? 'Drifting in and out of the mix'
+                    ? 'Playing continuously over green noise'
                     : 'Layer this sound over green noise',
               ),
             ),
