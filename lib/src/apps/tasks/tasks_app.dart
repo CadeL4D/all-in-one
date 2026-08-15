@@ -149,7 +149,10 @@ class _TasksAppState extends State<TasksApp> {
     for (final _Todo todo in base) {
       visit(todo);
     }
-    return result;
+    return <_Todo>[
+      ...result.where((_Todo todo) => !todo.completed),
+      ...result.where((_Todo todo) => todo.completed),
+    ];
   }
 
   void _normalizeTodayOrder([List<_Todo>? ordered]) {
@@ -185,8 +188,12 @@ class _TasksAppState extends State<TasksApp> {
     while (parentId != null &&
         byId.containsKey(parentId) &&
         seen.add(parentId)) {
+      final _Todo parent = byId[parentId]!;
+      if (parent.completed != todo.completed) {
+        break;
+      }
       depth++;
-      parentId = byId[parentId]!.parentId;
+      parentId = parent.parentId;
     }
     return depth.clamp(0, 3);
   }
@@ -224,7 +231,10 @@ class _TasksAppState extends State<TasksApp> {
   }
 
   Future<void> _toggleTodo(_Todo todo) async {
-    setState(() => todo.completed = !todo.completed);
+    setState(() {
+      todo.completed = !todo.completed;
+      _normalizeTodayOrder();
+    });
     await _persistTasks();
   }
 
@@ -299,7 +309,11 @@ class _TasksAppState extends State<TasksApp> {
   }
 
   bool _canDropOn(int sourceId, int targetId) {
-    return sourceId != targetId && !_descendantIds(sourceId).contains(targetId);
+    final _Todo source = _todos.firstWhere((_Todo todo) => todo.id == sourceId);
+    final _Todo target = _todos.firstWhere((_Todo todo) => todo.id == targetId);
+    return sourceId != targetId &&
+        source.completed == target.completed &&
+        !_descendantIds(sourceId).contains(targetId);
   }
 
   _DropMode _dropModeFor(double targetMidpointY) {
@@ -944,7 +958,7 @@ class _TaskDropZone extends StatelessWidget {
                     child: LongPressDraggable<int>(
                       data: todo.id,
                       delay: const Duration(milliseconds: 260),
-                      dragAnchorStrategy: pointerDragAnchorStrategy,
+                      dragAnchorStrategy: childDragAnchorStrategy,
                       rootOverlay: true,
                       onDragStarted: onDragStarted,
                       onDragUpdate: onDragUpdate,
@@ -1177,6 +1191,7 @@ class _TaskDragFeedback extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     return Container(
+      key: ValueKey<String>('task-drag-feedback-${todo.id}'),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: scheme.surface,

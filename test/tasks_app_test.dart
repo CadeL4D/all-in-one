@@ -79,6 +79,57 @@ void main() {
     );
   });
 
+  testWidgets('completed tasks move to the bottom of Today', (
+    WidgetTester tester,
+  ) async {
+    await pumpTasks(tester);
+
+    await tester.tap(find.byTooltip('Mark complete').first);
+    await tester.pumpAndSettle();
+
+    final double secondTaskY = tester
+        .getTopLeft(find.byKey(const ValueKey<String>('task-2')))
+        .dy;
+    final double thirdTaskY = tester
+        .getTopLeft(find.byKey(const ValueKey<String>('task-3')))
+        .dy;
+    final double completedTaskY = tester
+        .getTopLeft(find.byKey(const ValueKey<String>('task-1')))
+        .dy;
+    expect(secondTaskY, lessThan(thirdTaskY));
+    expect(thirdTaskY, lessThan(completedTaskY));
+
+    final Finder completedRank = find.byKey(
+      const ValueKey<String>('today-rank-1'),
+    );
+    expect(
+      find.descendant(of: completedRank, matching: find.text('3')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('holding a task does not shift its drag preview', (
+    WidgetTester tester,
+  ) async {
+    await pumpTasks(tester);
+
+    final Finder source = find.byKey(const ValueKey<String>('task-2'));
+    final double originalX = tester.getTopLeft(source).dx;
+    final TestGesture gesture = await tester.startGesture(
+      tester.getCenter(source),
+    );
+    await tester.pump(const Duration(milliseconds: 320));
+
+    final Finder feedback = find.byKey(
+      const ValueKey<String>('task-drag-feedback-2'),
+    );
+    expect(feedback, findsOneWidget);
+    expect((tester.getTopLeft(feedback).dx - originalX).abs(), lessThan(2));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('a task can be dragged from Today to All', (
     WidgetTester tester,
   ) async {

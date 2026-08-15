@@ -12,8 +12,9 @@ Flutter's single codebase.
 - **Routines** — repeatable routines with step-by-step daily progress and optional clock times for steps.
 - **Focus** — named focus/break timers with an optional extra check-in timer and background completion alerts.
 - **Noises** — colored-noise soundscapes with independently toggleable Creative Commons nature layers.
+- **Tetherloom** — an endless procedural arcade game about weaving color through a living cosmic loom.
 
-Tasks, prompts, routines, Maths settings/high scores, and recently opened hub cards
+Tasks, prompts, routines, Maths/Tetherloom high scores, and recently opened hub cards
 are saved locally with `shared_preferences`.
 
 ## Project structure
@@ -38,6 +39,7 @@ lib/
         ├── routines/          # Routines tracker module
         ├── focus/             # Focus timer module
         ├── noises/            # Colored noise and nature mix module
+        └── tetherloom/        # Endless procedural arcade game
 ```
 
 ## Audio credits

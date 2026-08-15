@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum AppCategory { tools, productivity, wellness, learning }
+enum AppCategory { tools, productivity, wellness, learning, games }
 
 extension AppCategoryLabel on AppCategory {
   String get label {
@@ -13,6 +13,8 @@ extension AppCategoryLabel on AppCategory {
         return 'Wellness';
       case AppCategory.learning:
         return 'Learning';
+      case AppCategory.games:
+        return 'Games';
     }
   }
 }

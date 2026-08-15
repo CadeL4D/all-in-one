@@ -2,7 +2,7 @@ name: all_in_one
 description: "A fast cross-platform hub for a growing collection of focused apps."
 publish_to: 'none'
 
-version: 0.2.4+6
+version: 0.2.5+7
 
 environment:
   sdk: ^3.13.0

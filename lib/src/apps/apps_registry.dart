@@ -7,6 +7,7 @@ import 'noises/noises_app.dart';
 import 'prompts/prompts_app.dart';
 import 'routines/routines_app.dart';
 import 'tasks/tasks_app.dart';
+import 'tetherloom/tetherloom_app.dart';
 
 abstract final class AppRegistry {
   static const List<AppManifest> apps = <AppManifest>[
@@ -72,6 +73,17 @@ abstract final class AppRegistry {
       category: AppCategory.wellness,
       builder: _noisesBuilder,
     ),
+    AppManifest(
+      id: 'tetherloom',
+      name: 'Tetherloom',
+      tagline: 'Weave the endless rift',
+      description:
+          'Steer a light-shuttle through a fast, procedural living loom.',
+      icon: Icons.gesture_rounded,
+      gradient: <Color>[Color(0xFF06B6D4), Color(0xFF8B5CF6)],
+      category: AppCategory.games,
+      builder: _tetherloomBuilder,
+    ),
   ];
 
   static AppManifest byId(String id) {
@@ -89,4 +101,7 @@ abstract final class AppRegistry {
   static Widget _routinesBuilder(BuildContext context) => const RoutinesApp();
 
   static Widget _noisesBuilder(BuildContext context) => const NoisesApp();
+
+  static Widget _tetherloomBuilder(BuildContext context) =>
+      const TetherloomApp();
 }
