@@ -23,8 +23,9 @@ abstract final class AppRegistry {
     AppManifest(
       id: 'tasks',
       name: 'Tasks',
-      tagline: 'Plan your day',
-      description: 'A simple task list that keeps your priorities visible.',
+      tagline: 'Prioritize today',
+      description:
+          'Order today’s priorities, organize every task, and nest subtasks.',
       icon: Icons.check_circle_rounded,
       gradient: <Color>[Color(0xFF2563EB), Color(0xFF38BDF8)],
       category: AppCategory.productivity,

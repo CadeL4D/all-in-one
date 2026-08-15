@@ -6,7 +6,7 @@ Flutter's single codebase.
 
 ## Current apps
 
-- **Tasks** — a lightweight to-do list with completion progress.
+- **Tasks** — numbered Today priorities, an All view, drag ordering, and nested subtasks.
 - **Prompts** — reusable titles and notes with one-tap copy without the title.
 - **Maths** — configurable arithmetic challenges with count and timed modes.
 - **Routines** — repeatable routines with step-by-step daily progress and optional clock times for steps.
