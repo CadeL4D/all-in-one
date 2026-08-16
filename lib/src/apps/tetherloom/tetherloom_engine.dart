@@ -14,6 +14,7 @@ class LoomObject {
     required this.y,
     required this.radius,
     this.colorIndex = 0,
+    this.patternTarget = false,
     this.drift = 0,
     this.phase = 0,
   });
@@ -25,7 +26,8 @@ class LoomObject {
   final double x;
   double y;
   final double radius;
-  final int colorIndex;
+  int colorIndex;
+  final bool patternTarget;
   final double drift;
   final double phase;
   bool nearMissAwarded = false;
@@ -76,6 +78,7 @@ class TetherloomEngine {
   double recoveryFor = 0;
   int lives = maxLives;
   int combo = 0;
+  int bestCombo = 0;
   int stitches = 0;
   int expectedColor = 0;
   int rows = 0;
@@ -103,6 +106,7 @@ class TetherloomEngine {
     recoveryFor = 0;
     lives = maxLives;
     combo = 0;
+    bestCombo = 0;
     stitches = 0;
     expectedColor = _random.nextInt(colorCount);
     rows = 0;
@@ -166,6 +170,7 @@ class TetherloomEngine {
           dx < object.radius + playerRadius + 0.075) {
         object.nearMissAwarded = true;
         combo++;
+        bestCombo = max(bestCombo, combo);
         rawScore += 24 * multiplier;
         _events.add(
           LoomEvent(kind: LoomEventKind.nearMiss, x: objectX, y: object.y),
@@ -183,6 +188,7 @@ class TetherloomEngine {
       case LoomObjectKind.stitch:
         if (object.colorIndex == expectedColor) {
           combo++;
+          bestCombo = max(bestCombo, combo);
           stitches++;
           rawScore += 48 * multiplier;
           _events.add(
@@ -208,6 +214,7 @@ class TetherloomEngine {
         }
       case LoomObjectKind.prism:
         combo += 2;
+        bestCombo = max(bestCombo, combo);
         stitches++;
         rawScore += 72 * multiplier;
         _events.add(
@@ -250,6 +257,11 @@ class TetherloomEngine {
     do {
       expectedColor = _random.nextInt(colorCount);
     } while (expectedColor == previous && _random.nextBool());
+    for (final LoomObject object in objects) {
+      if (object.patternTarget && object.kind == LoomObjectKind.stitch) {
+        object.colorIndex = expectedColor;
+      }
+    }
   }
 
   List<LoomObject> spawnProceduralRow({double y = -0.08}) {
@@ -267,6 +279,7 @@ class TetherloomEngine {
         y: y,
         radius: prismRow ? 0.034 : 0.029,
         colorIndex: expectedColor,
+        patternTarget: true,
       ),
     ];
 

@@ -41,7 +41,7 @@ class TetherloomApp extends StatefulWidget {
 }
 
 class _TetherloomAppState extends State<TetherloomApp>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final Ticker _ticker;
   TetherloomEngine _engine = TetherloomEngine();
   final Random _effectsRandom = Random();
@@ -51,6 +51,7 @@ class _TetherloomAppState extends State<TetherloomApp>
   Size _boardSize = Size.zero;
   bool _playing = false;
   bool _paused = false;
+  bool _pausedAutomatically = false;
   int _bestScore = 0;
   double _trailTimer = 0;
   double _shake = 0;
@@ -61,14 +62,26 @@ class _TetherloomAppState extends State<TetherloomApp>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ticker = createTicker(_tick);
     _loadBestScore();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed &&
+        _playing &&
+        !_paused &&
+        !_engine.gameOver) {
+      _setPaused(true, automatic: true);
+    }
   }
 
   Future<void> _loadBestScore() async {
@@ -87,6 +100,7 @@ class _TetherloomAppState extends State<TetherloomApp>
       _engine = TetherloomEngine();
       _playing = true;
       _paused = false;
+      _pausedAutomatically = false;
       _trail
         ..clear()
         ..add(const Offset(0.5, TetherloomEngine.playerY));
@@ -105,8 +119,18 @@ class _TetherloomAppState extends State<TetherloomApp>
     if (!_playing || _engine.gameOver) {
       return;
     }
-    setState(() => _paused = !_paused);
-    if (_paused) {
+    _setPaused(!_paused);
+  }
+
+  void _setPaused(bool paused, {bool automatic = false}) {
+    if (!_playing || _engine.gameOver || _paused == paused) {
+      return;
+    }
+    setState(() {
+      _paused = paused;
+      _pausedAutomatically = paused && automatic;
+    });
+    if (paused) {
       _ticker.stop();
     } else {
       _lastElapsed = null;
@@ -315,12 +339,18 @@ class _TetherloomAppState extends State<TetherloomApp>
                             onPlay: _startGame,
                           )
                         else if (_paused)
-                          _PauseOverlay(onResume: _togglePause)
+                          _PauseOverlay(
+                            pausedAutomatically: _pausedAutomatically,
+                            onResume: _togglePause,
+                            onRestart: _startGame,
+                          )
                         else if (_engine.gameOver)
                           _GameOverOverlay(
                             score: _engine.score,
                             bestScore: _bestScore,
                             stitches: _engine.stitches,
+                            bestCombo: _engine.bestCombo,
+                            elapsedSeconds: _engine.time.floor(),
                             onRestart: _startGame,
                           ),
                       ],
@@ -484,6 +514,16 @@ class _PatternPill extends StatelessWidget {
                 color: color,
                 shape: BoxShape.circle,
                 boxShadow: <BoxShadow>[BoxShadow(color: color, blurRadius: 10)],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _stitchNames[colorIndex].toUpperCase(),
+              style: TextStyle(
+                color: color,
+                fontSize: 8,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
               ),
             ),
           ],
@@ -652,9 +692,15 @@ class _HowToItem extends StatelessWidget {
 }
 
 class _PauseOverlay extends StatelessWidget {
-  const _PauseOverlay({required this.onResume});
+  const _PauseOverlay({
+    required this.pausedAutomatically,
+    required this.onResume,
+    required this.onRestart,
+  });
 
+  final bool pausedAutomatically;
   final VoidCallback onResume;
+  final VoidCallback onRestart;
 
   @override
   Widget build(BuildContext context) {
@@ -676,11 +722,26 @@ class _PauseOverlay extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
+          const SizedBox(height: 7),
+          Text(
+            pausedAutomatically
+                ? 'Paused while the app was in the background.'
+                : 'Your weave is safe. Resume when you are ready.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Color(0xFF9AA4C7)),
+          ),
           const SizedBox(height: 18),
           FilledButton.icon(
+            key: const ValueKey<String>('tetherloom-resume'),
             onPressed: onResume,
             icon: const Icon(Icons.play_arrow_rounded),
             label: const Text('Resume'),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: onRestart,
+            icon: const Icon(Icons.replay_rounded),
+            label: const Text('Restart run'),
           ),
         ],
       ),
@@ -693,12 +754,16 @@ class _GameOverOverlay extends StatelessWidget {
     required this.score,
     required this.bestScore,
     required this.stitches,
+    required this.bestCombo,
+    required this.elapsedSeconds,
     required this.onRestart,
   });
 
   final int score;
   final int bestScore;
   final int stitches;
+  final int bestCombo;
+  final int elapsedSeconds;
   final VoidCallback onRestart;
 
   @override
@@ -729,8 +794,17 @@ class _GameOverOverlay extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '$stitches stitches  ·  best $bestScore',
+            '$stitches stitches  ·  ${_formatLoomTime(elapsedSeconds)}  ·  best $bestScore',
             style: const TextStyle(color: Color(0xFFB7BED8)),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Longest chain  $bestCombo',
+            style: const TextStyle(
+              color: Color(0xFF7F89AC),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
@@ -746,6 +820,12 @@ class _GameOverOverlay extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatLoomTime(int totalSeconds) {
+  final int minutes = totalSeconds ~/ 60;
+  final int seconds = totalSeconds % 60;
+  return '$minutes:${seconds.toString().padLeft(2, '0')}';
 }
 
 class _OverlayScrim extends StatelessWidget {

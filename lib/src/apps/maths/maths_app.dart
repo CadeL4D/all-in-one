@@ -65,6 +65,49 @@ extension on _MathsMode {
   }
 }
 
+class _MathsRun {
+  const _MathsRun({
+    required this.id,
+    required this.mode,
+    required this.correctCount,
+    required this.durationSeconds,
+    required this.goal,
+    required this.completedAt,
+  });
+
+  final String id;
+  final _MathsMode mode;
+  final int correctCount;
+  final int durationSeconds;
+  final int goal;
+  final DateTime completedAt;
+
+  factory _MathsRun.fromJson(Map<String, dynamic> json) {
+    return _MathsRun(
+      id: json['id'] as String? ?? '',
+      mode: _MathsMode.values.firstWhere(
+        (_MathsMode mode) => mode.name == json['mode'],
+        orElse: () => _MathsMode.count,
+      ),
+      correctCount: (json['correctCount'] as num?)?.toInt() ?? 0,
+      durationSeconds: (json['durationSeconds'] as num?)?.toInt() ?? 0,
+      goal: (json['goal'] as num?)?.toInt() ?? 0,
+      completedAt:
+          DateTime.tryParse(json['completedAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id,
+    'mode': mode.name,
+    'correctCount': correctCount,
+    'durationSeconds': durationSeconds,
+    'goal': goal,
+    'completedAt': completedAt.toIso8601String(),
+  };
+}
+
 class _MathsPreferences {
   const _MathsPreferences({
     required this.enabledOperations,
@@ -73,6 +116,7 @@ class _MathsPreferences {
     required this.timedSeconds,
     required this.bestTimes,
     required this.bestScores,
+    required this.recentRuns,
   });
 
   final Set<_MathsOperation> enabledOperations;
@@ -81,6 +125,7 @@ class _MathsPreferences {
   final int timedSeconds;
   final Map<String, int> bestTimes;
   final Map<String, int> bestScores;
+  final List<_MathsRun> recentRuns;
 
   factory _MathsPreferences.fromJson(Map<String, dynamic> json) {
     final List<String> rawOperations =
@@ -114,7 +159,26 @@ class _MathsPreferences {
       timedSeconds: (json['timedSeconds'] as num?)?.toInt() ?? 60,
       bestTimes: _readIntMap(json['bestTimes']),
       bestScores: _readIntMap(json['bestScores']),
+      recentRuns: _readRuns(json['recentRuns']),
     );
+  }
+
+  static List<_MathsRun> _readRuns(Object? value) {
+    if (value is! List) {
+      return const <_MathsRun>[];
+    }
+    return value
+        .whereType<Map>()
+        .map(
+          (Map<dynamic, dynamic> raw) => _MathsRun.fromJson(
+            raw.map(
+              (dynamic key, dynamic value) =>
+                  MapEntry<String, dynamic>(key.toString(), value),
+            ),
+          ),
+        )
+        .take(5)
+        .toList(growable: false);
   }
 
   static Map<String, int> _readIntMap(Object? value) {
@@ -136,6 +200,7 @@ class _MathsPreferences {
       'timedSeconds': timedSeconds,
       'bestTimes': bestTimes,
       'bestScores': bestScores,
+      'recentRuns': recentRuns.map((run) => run.toJson()).toList(),
     };
   }
 }
@@ -179,6 +244,7 @@ class _MathsAppState extends State<MathsApp> {
     timedSeconds: 60,
     bestTimes: <String, int>{},
     bestScores: <String, int>{},
+    recentRuns: <_MathsRun>[],
   );
 
   bool _loaded = false;
@@ -264,6 +330,7 @@ class _MathsAppState extends State<MathsApp> {
           timedSeconds: _preferences.timedSeconds,
           bestTimes: _preferences.bestTimes,
           bestScores: _preferences.bestScores,
+          recentRuns: _preferences.recentRuns,
         );
       } else {
         _preferences = _MathsPreferences(
@@ -275,6 +342,7 @@ class _MathsAppState extends State<MathsApp> {
           timedSeconds: _preferences.timedSeconds,
           bestTimes: _preferences.bestTimes,
           bestScores: _preferences.bestScores,
+          recentRuns: _preferences.recentRuns,
         );
       }
     });
@@ -294,6 +362,7 @@ class _MathsAppState extends State<MathsApp> {
           timedSeconds: _preferences.timedSeconds,
           bestTimes: _preferences.bestTimes,
           bestScores: _preferences.bestScores,
+          recentRuns: _preferences.recentRuns,
         );
       } else {
         _preferences = _MathsPreferences(
@@ -305,6 +374,7 @@ class _MathsAppState extends State<MathsApp> {
           timedSeconds: _preferences.timedSeconds,
           bestTimes: _preferences.bestTimes,
           bestScores: _preferences.bestScores,
+          recentRuns: _preferences.recentRuns,
         );
       }
     });
@@ -320,6 +390,7 @@ class _MathsAppState extends State<MathsApp> {
         timedSeconds: _preferences.timedSeconds,
         bestTimes: _preferences.bestTimes,
         bestScores: _preferences.bestScores,
+        recentRuns: _preferences.recentRuns,
       );
     });
     _savePreferences();
@@ -334,6 +405,7 @@ class _MathsAppState extends State<MathsApp> {
         timedSeconds: value,
         bestTimes: _preferences.bestTimes,
         bestScores: _preferences.bestScores,
+        recentRuns: _preferences.recentRuns,
       );
     });
     _savePreferences();
@@ -549,6 +621,12 @@ class _MathsAppState extends State<MathsApp> {
   void _finishChallenge() {
     _timer?.cancel();
     final _MathsMode mode = _mode;
+    final int completedGoal = mode == _MathsMode.count
+        ? _preferences.targetCount
+        : _preferences.timedSeconds;
+    final int durationSeconds = mode == _MathsMode.count
+        ? _elapsedSeconds
+        : _preferences.timedSeconds;
     final String key = mode == _MathsMode.count ? _countKey : _timedKey;
     final int result = mode == _MathsMode.count
         ? _elapsedSeconds
@@ -583,6 +661,17 @@ class _MathsAppState extends State<MathsApp> {
               key: isNewBest ? result : previousBest!,
             }
           : _preferences.bestScores,
+      recentRuns: <_MathsRun>[
+        _MathsRun(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          mode: mode,
+          correctCount: _correctCount,
+          durationSeconds: durationSeconds,
+          goal: completedGoal,
+          completedAt: DateTime.now(),
+        ),
+        ..._preferences.recentRuns,
+      ].take(5).toList(growable: false),
     );
 
     final String resultMessage = mode == _MathsMode.count
@@ -748,6 +837,8 @@ class _MathsAppState extends State<MathsApp> {
         ),
         const SizedBox(height: 18),
         _BestScoreCard(preferences: _preferences, mode: _mode),
+        const SizedBox(height: 14),
+        _RecentRunsCard(runs: _preferences.recentRuns),
         const SizedBox(height: 18),
         SizedBox(
           height: 56,
@@ -1140,6 +1231,190 @@ class _BestScoreCard extends StatelessWidget {
     }
     return '${minutes}m ${remainder.toString().padLeft(2, '0')}s';
   }
+}
+
+class _RecentRunsCard extends StatelessWidget {
+  const _RecentRunsCard({required this.runs});
+
+  final List<_MathsRun> runs;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return _SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: scheme.tertiaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.history_rounded,
+                  color: scheme.onTertiaryContainer,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Recent runs',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    Text(
+                      'Your latest five completed challenges',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (runs.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Text(
+                'Complete a challenge and its result will appear here.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            )
+          else
+            for (int index = 0; index < runs.length; index++) ...<Widget>[
+              _RecentRunRow(run: runs[index]),
+              if (index != runs.length - 1)
+                Divider(
+                  height: 20,
+                  color: scheme.outlineVariant.withValues(alpha: 0.55),
+                ),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentRunRow extends StatelessWidget {
+  const _RecentRunRow({required this.run});
+
+  final _MathsRun run;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final bool countMode = run.mode == _MathsMode.count;
+    final String result = countMode
+        ? '${run.correctCount} questions'
+        : '${run.correctCount} correct';
+
+    return Semantics(
+      label:
+          '${run.mode.label}, $result in ${_formatRunDuration(run.durationSeconds)}, ${_formatRunDate(run.completedAt)}',
+      child: Row(
+        key: ValueKey<String>('maths-run-${run.id}'),
+        children: <Widget>[
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: countMode
+                  ? scheme.primaryContainer
+                  : scheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(
+              countMode ? Icons.flag_rounded : Icons.bolt_rounded,
+              color: countMode
+                  ? scheme.onPrimaryContainer
+                  : scheme.onSecondaryContainer,
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(result, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 2),
+                Text(
+                  '${countMode ? 'Question count' : 'Time trial'}  ·  ${_formatRunDate(run.completedAt)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Text(
+                _formatRunClock(run.durationSeconds),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: scheme.primary,
+                  fontFeatures: const <FontFeature>[
+                    FontFeature.tabularFigures(),
+                  ],
+                ),
+              ),
+              Text('time', style: Theme.of(context).textTheme.labelSmall),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatRunClock(int seconds) {
+  final int safeSeconds = max(0, seconds);
+  final int minutes = safeSeconds ~/ 60;
+  final int remainder = safeSeconds % 60;
+  return '${minutes.toString().padLeft(2, '0')}:${remainder.toString().padLeft(2, '0')}';
+}
+
+String _formatRunDuration(int seconds) {
+  final int safeSeconds = max(0, seconds);
+  final int minutes = safeSeconds ~/ 60;
+  final int remainder = safeSeconds % 60;
+  if (minutes == 0) {
+    return '${safeSeconds}s';
+  }
+  return remainder == 0 ? '${minutes}m' : '${minutes}m ${remainder}s';
+}
+
+String _formatRunDate(DateTime completedAt) {
+  final DateTime local = completedAt.toLocal();
+  final DateTime now = DateTime.now();
+  final DateTime today = DateTime(now.year, now.month, now.day);
+  final DateTime date = DateTime(local.year, local.month, local.day);
+  final int daysAgo = today.difference(date).inDays;
+  final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final String time =
+      '$hour:${local.minute.toString().padLeft(2, '0')} ${local.hour < 12 ? 'AM' : 'PM'}';
+  if (daysAgo == 0) {
+    return 'Today, $time';
+  }
+  if (daysAgo == 1) {
+    return 'Yesterday, $time';
+  }
+  return '${local.month}/${local.day}/${local.year}, $time';
 }
 
 class _ChallengeTimer extends StatelessWidget {

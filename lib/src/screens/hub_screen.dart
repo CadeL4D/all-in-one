@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/services.dart';
 
 import '../apps/apps_registry.dart';
 import '../core/backup_service.dart';
@@ -17,13 +18,14 @@ class HubScreen extends StatefulWidget {
 class _HubScreenState extends State<HubScreen> {
   final TextEditingController _searchController = TextEditingController();
   final List<String> _recentIds = <String>[];
+  final List<String> _orderedIds = <String>[];
   String _query = '';
   AppCategory? _category;
 
   @override
   void initState() {
     super.initState();
-    _loadRecentApps();
+    _loadHubPreferences();
   }
 
   Future<void> _exportBackup() async {
@@ -63,7 +65,7 @@ class _HubScreenState extends State<HubScreen> {
     );
 
     if (restored) {
-      await _loadRecentApps();
+      await _loadHubPreferences();
     }
   }
 
@@ -76,18 +78,34 @@ class _HubScreenState extends State<HubScreen> {
     }
   }
 
-  Future<void> _loadRecentApps() async {
-    final List<String> stored = await LocalStore.readStringList(
+  Future<void> _loadHubPreferences() async {
+    final List<String> storedRecents = await LocalStore.readStringList(
       LocalStore.recentAppsKey,
+    );
+    final List<String> storedOrder = await LocalStore.readStringList(
+      LocalStore.appOrderKey,
     );
     if (!mounted) {
       return;
     }
 
+    final Set<String> validIds = AppRegistry.apps
+        .map((AppManifest app) => app.id)
+        .toSet();
+    final Set<String> seenOrderIds = <String>{};
+    final List<String> normalizedOrder = <String>[
+      ...storedOrder.where(
+        (String id) => validIds.contains(id) && seenOrderIds.add(id),
+      ),
+      ...validIds.where(seenOrderIds.add),
+    ];
     setState(() {
       _recentIds
         ..clear()
-        ..addAll(stored.where(AppRegistry.apps.map((app) => app.id).contains));
+        ..addAll(storedRecents.where(validIds.contains).take(3));
+      _orderedIds
+        ..clear()
+        ..addAll(normalizedOrder);
     });
   }
 
@@ -99,7 +117,11 @@ class _HubScreenState extends State<HubScreen> {
 
   List<AppManifest> get _visibleApps {
     final String normalizedQuery = _query.trim().toLowerCase();
-    return AppRegistry.apps
+    final List<String> order = _orderedIds.isEmpty
+        ? AppRegistry.apps.map((AppManifest app) => app.id).toList()
+        : _orderedIds;
+    return order
+        .map(AppRegistry.byId)
         .where((AppManifest app) {
           final bool matchesCategory =
               _category == null || app.category == _category;
@@ -111,6 +133,28 @@ class _HubScreenState extends State<HubScreen> {
           return matchesCategory && matchesQuery;
         })
         .toList(growable: false);
+  }
+
+  void _reorderApp(String draggedId, String targetId) {
+    if (draggedId == targetId) {
+      return;
+    }
+    final List<String> order = _orderedIds.isEmpty
+        ? AppRegistry.apps.map((AppManifest app) => app.id).toList()
+        : List<String>.of(_orderedIds);
+    if (!order.contains(draggedId) || !order.contains(targetId)) {
+      return;
+    }
+    order.remove(draggedId);
+    final int adjustedTarget = order.indexOf(targetId);
+    order.insert(adjustedTarget, draggedId);
+    setState(() {
+      _orderedIds
+        ..clear()
+        ..addAll(order);
+    });
+    HapticFeedback.selectionClick();
+    LocalStore.writeStringList(LocalStore.appOrderKey, order);
   }
 
   List<AppManifest> get _recentApps {
@@ -179,14 +223,12 @@ class _HubScreenState extends State<HubScreen> {
             SliverToBoxAdapter(
               child: _RecentStrip(apps: _recentApps, onTap: _openApp),
             ),
+          SliverToBoxAdapter(child: _buildBrowseControls(context)),
           SliverToBoxAdapter(
-            child: _SectionHeading(
-              title: 'Your tools',
-              count: visibleApps.length,
-            ),
+            child: _SectionHeading(title: 'Apps', count: visibleApps.length),
           ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
             sliver: visibleApps.isEmpty
                 ? SliverFillRemaining(
                     hasScrollBody: false,
@@ -194,22 +236,22 @@ class _HubScreenState extends State<HubScreen> {
                   )
                 : SliverGrid(
                     gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 520,
-                          mainAxisExtent: 168,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisExtent: 164,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
                         ),
                     delegate: SliverChildBuilderDelegate((
                       BuildContext context,
                       int index,
                     ) {
                       final AppManifest app = visibleApps[index];
-                      return _AppTile(
+                      return _DraggableAppTile(
                         key: ValueKey<String>(app.id),
                         app: app,
-                        isRecent: _recentIds.contains(app.id),
                         onTap: () => _openApp(app),
+                        onReorder: _reorderApp,
                       );
                     }, childCount: visibleApps.length),
                   ),
@@ -362,7 +404,7 @@ class _HubScreenState extends State<HubScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1120),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
@@ -423,23 +465,26 @@ class _HubScreenState extends State<HubScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 28),
-                Text(
-                  'Make room for\nwhat matters.',
-                  style: Theme.of(context).textTheme.headlineLarge,
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  'A focused home for the small tools that move your day forward.',
-                  style: Theme.of(context).textTheme.bodyLarge
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: 20),
-                _buildSearchField(context),
-                const SizedBox(height: 14),
-                _buildCategoryFilters(context),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBrowseControls(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1120),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Column(
+            children: <Widget>[
+              _buildSearchField(context),
+              const SizedBox(height: 10),
+              _buildCategoryFilters(context),
+            ],
           ),
         ),
       ),
@@ -451,10 +496,10 @@ class _HubScreenState extends State<HubScreen> {
       textField: true,
       label: 'Search apps',
       child: Container(
-        height: 54,
+        height: 48,
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: Theme.of(context).colorScheme.outlineVariant
                 .withValues(alpha: 0.8),
@@ -489,7 +534,7 @@ class _HubScreenState extends State<HubScreen> {
                     icon: const Icon(Icons.close_rounded),
                   ),
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(vertical: 13),
           ),
         ),
       ),
@@ -575,27 +620,30 @@ class _RecentStrip extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
               child: Text(
-                'Jump back in',
-                style: Theme.of(context).textTheme.titleLarge,
+                'Recent',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
             SizedBox(
-              height: 116,
+              height: 48,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: apps.length,
                 separatorBuilder: (BuildContext context, int index) =>
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                 itemBuilder: (BuildContext context, int index) {
                   final AppManifest app = apps[index];
                   return _RecentAppCard(app: app, onTap: () => onTap(app));
                 },
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 4),
           ],
         ),
       ),
@@ -615,51 +663,41 @@ class _RecentAppCard extends StatelessWidget {
       final Color accent = app.gradient.first;
       final ColorScheme scheme = Theme.of(context).colorScheme;
       return Material(
+        key: ValueKey<String>('recent-app-${app.id}'),
         color: Colors.transparent,
         child: Ink(
-          width: 276,
+          width: 116,
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: scheme.outlineVariant),
           ),
           child: InkWell(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(14),
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Row(
                 children: <Widget>[
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(9),
                     ),
-                    child: Icon(app.icon, color: accent, size: 24),
+                    child: Icon(app.icon, color: accent, size: 17),
                   ),
-                  const SizedBox(width: 13),
+                  const SizedBox(width: 7),
                   Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          app.name,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          app.tagline,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                    child: Text(
+                      app.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                   ),
-                  Icon(Icons.arrow_forward_rounded, color: accent, size: 19),
                 ],
               ),
             ),
@@ -744,16 +782,69 @@ class _RecentAppCard extends StatelessWidget {
   }
 }
 
-class _AppTile extends StatelessWidget {
-  const _AppTile({
+class _DraggableAppTile extends StatelessWidget {
+  const _DraggableAppTile({
     super.key,
     required this.app,
-    required this.isRecent,
     required this.onTap,
+    required this.onReorder,
   });
 
   final AppManifest app;
-  final bool isRecent;
+  final VoidCallback onTap;
+  final void Function(String draggedId, String targetId) onReorder;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        return DragTarget<String>(
+          onWillAcceptWithDetails: (DragTargetDetails<String> details) =>
+              details.data != app.id,
+          onAcceptWithDetails: (DragTargetDetails<String> details) =>
+              onReorder(details.data, app.id),
+          builder:
+              (
+                BuildContext context,
+                List<String?> candidateData,
+                List<dynamic> rejectedData,
+              ) {
+                final bool isTarget = candidateData.isNotEmpty;
+                return AnimatedScale(
+                  duration: const Duration(milliseconds: 140),
+                  scale: isTarget ? 0.96 : 1,
+                  child: LongPressDraggable<String>(
+                    key: ValueKey<String>('draggable-app-${app.id}'),
+                    data: app.id,
+                    dragAnchorStrategy: childDragAnchorStrategy,
+                    maxSimultaneousDrags: 1,
+                    onDragStarted: HapticFeedback.mediumImpact,
+                    feedback: Material(
+                      color: Colors.transparent,
+                      child: SizedBox(
+                        width: constraints.maxWidth,
+                        height: constraints.maxHeight,
+                        child: _AppTile(app: app, onTap: () {}),
+                      ),
+                    ),
+                    childWhenDragging: Opacity(
+                      opacity: 0.22,
+                      child: _AppTile(app: app, onTap: onTap),
+                    ),
+                    child: _AppTile(app: app, onTap: onTap),
+                  ),
+                );
+              },
+        );
+      },
+    );
+  }
+}
+
+class _AppTile extends StatelessWidget {
+  const _AppTile({required this.app, required this.onTap});
+
+  final AppManifest app;
   final VoidCallback onTap;
 
   @override
@@ -845,8 +936,13 @@ class _AppTile extends StatelessWidget {
                                 size: 24,
                               ),
                             ),
-                            if (isRecent)
-                              _TilePill(label: 'Recent', color: accent),
+                            Icon(
+                              Icons.drag_indicator_rounded,
+                              color: scheme.onSurfaceVariant.withValues(
+                                alpha: 0.55,
+                              ),
+                              size: 20,
+                            ),
                           ],
                         ),
                         const Spacer(),
@@ -875,7 +971,7 @@ class _AppTile extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: <Widget>[
-                            _TilePill(label: app.category.label, color: accent),
+                            const Spacer(),
                             Icon(
                               Icons.arrow_forward_rounded,
                               color: accent,
@@ -947,7 +1043,7 @@ class _AppTile extends StatelessWidget {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 18, 18),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
                     child: Row(
                       children: <Widget>[
                         Expanded(
@@ -970,49 +1066,32 @@ class _AppTile extends StatelessWidget {
                                     ),
                                   ),
                                   const Spacer(),
-                                  if (isRecent)
-                                    _TilePill(label: 'Recent', color: accent),
+                                  Icon(
+                                    Icons.drag_indicator_rounded,
+                                    color: scheme.onSurfaceVariant.withValues(
+                                      alpha: 0.55,
+                                    ),
+                                    size: 20,
+                                  ),
                                 ],
                               ),
                               const Spacer(),
                               Text(
                                 app.name,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                app.tagline,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodyMedium,
+                                style: Theme.of(context).textTheme.titleMedium,
                               ),
-                              const SizedBox(height: 9),
-                              Row(
-                                children: <Widget>[
-                                  Text(
-                                    app.category.label.toUpperCase(),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: accent,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 0.7,
-                                        ),
-                                  ),
-                                  const Spacer(),
-                                  Icon(
-                                    Icons.arrow_outward_rounded,
-                                    color: accent,
-                                    size: 18,
-                                  ),
-                                ],
+                              const SizedBox(height: 2),
+                              Text(
+                                app.tagline,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 18),
-                        _CardMotif(app: app, accent: accent),
                       ],
                     ),
                   ),
@@ -1021,29 +1100,6 @@ class _AppTile extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TilePill extends StatelessWidget {
-  const _TilePill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w800),
       ),
     );
   }

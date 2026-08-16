@@ -72,6 +72,36 @@ void main() {
     );
   });
 
+  test('queued pattern targets stay valid after the pattern changes', () {
+    final TetherloomEngine engine = TetherloomEngine(seed: 17);
+    engine.objects.clear();
+    final List<LoomObject> currentRow = engine.spawnProceduralRow(
+      y: TetherloomEngine.playerY,
+    );
+    engine.spawnProceduralRow(y: 0.2);
+    final LoomObject currentTarget = currentRow.singleWhere(
+      (LoomObject object) => object.patternTarget,
+    );
+    engine.playerX = currentTarget.x;
+    engine.targetX = currentTarget.x;
+
+    engine.tick(0.01);
+
+    final List<LoomObject> queuedTargets = engine.objects
+        .where(
+          (LoomObject object) =>
+              object.patternTarget && object.kind == LoomObjectKind.stitch,
+        )
+        .toList();
+    expect(queuedTargets, isNotEmpty);
+    expect(
+      queuedTargets.every(
+        (LoomObject object) => object.colorIndex == engine.expectedColor,
+      ),
+      isTrue,
+    );
+  });
+
   test('a snag costs one thread and briefly eases the pace', () {
     final TetherloomEngine engine = TetherloomEngine(seed: 11);
     engine.objects.clear();
@@ -121,5 +151,31 @@ void main() {
 
     expect(find.text('Loom paused'), findsOneWidget);
     expect(find.text('Resume'), findsOneWidget);
+  });
+
+  testWidgets('Tetherloom pauses when the app leaves the foreground', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(() {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    });
+
+    await tester.pumpWidget(const MaterialApp(home: TetherloomApp()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('tetherloom-play')));
+    await tester.pump(const Duration(milliseconds: 32));
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+
+    expect(find.text('Loom paused'), findsOneWidget);
+    expect(
+      find.text('Paused while the app was in the background.'),
+      findsOneWidget,
+    );
   });
 }
