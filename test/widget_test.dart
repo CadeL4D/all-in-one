@@ -104,7 +104,7 @@ void main() {
       'maths',
       'focus',
       'noises',
-      'tetherloom',
+      'parking',
     ]);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -177,7 +177,7 @@ void main() {
     expect(find.text('7:13 AM'), findsOneWidget);
   });
 
-  testWidgets('routine steps support offsets from the first step time', (
+  testWidgets('routine step offsets chain from the previous step', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(430, 900);
@@ -211,27 +211,44 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(Switch).last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('From first step'));
+    await tester.tap(find.text('From previous step'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey<String>('routine-offset-minutes')),
       '10',
     );
     await tester.pump();
-    expect(find.text('10 min after first step · 7:23 AM'), findsOneWidget);
+    expect(find.text('10 min after previous step · 7:23 AM'), findsOneWidget);
 
     await tester.tap(find.text('Before'));
     await tester.pump();
-    expect(find.text('10 min before first step · 7:03 AM'), findsOneWidget);
+    expect(find.text('10 min before previous step · 7:03 AM'), findsOneWidget);
     await tester.tap(find.text('After'));
     await tester.pump();
     await tester.tap(find.text('Save offset'));
     await tester.pumpAndSettle();
 
-    expect(find.text('10 min after first step · 7:23 AM'), findsOneWidget);
+    expect(find.text('10 min after previous step · 7:23 AM'), findsOneWidget);
+
+    await tester.tap(find.text('Add time or offset'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('From previous step'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('routine-offset-minutes')),
+      '5',
+    );
+    await tester.pump();
+    expect(find.text('5 min after previous step · 7:28 AM'), findsOneWidget);
+    await tester.tap(find.text('Save offset'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
-    expect(find.text('10 min after first step · 7:23 AM'), findsOneWidget);
+    expect(find.text('10 min after previous step · 7:23 AM'), findsOneWidget);
+    expect(find.text('5 min after previous step · 7:28 AM'), findsOneWidget);
 
     final SharedPreferences preferences = await SharedPreferences.getInstance();
     final List<dynamic> routines =
@@ -239,5 +256,6 @@ void main() {
     final Map<String, dynamic> routine = routines.first as Map<String, dynamic>;
     final List<dynamic> steps = routine['steps'] as List<dynamic>;
     expect((steps[1] as Map<String, dynamic>)['offsetMinutes'], 10);
+    expect((steps[2] as Map<String, dynamic>)['offsetMinutes'], 5);
   });
 }

@@ -19,10 +19,10 @@ int _wrapClockMinutes(int minutes) => ((minutes % 1440) + 1440) % 1440;
 
 String _formatStepOffset(int offsetMinutes) {
   if (offsetMinutes == 0) {
-    return 'Same time as first step';
+    return 'Same time as previous step';
   }
   final int amount = offsetMinutes.abs();
-  return '$amount min ${offsetMinutes < 0 ? 'before' : 'after'} first step';
+  return '$amount min ${offsetMinutes < 0 ? 'before' : 'after'} previous step';
 }
 
 String _localDateKey() {
@@ -59,24 +59,24 @@ class _RoutineStep {
 
   bool get hasTime => timeMinutes != null || offsetMinutes != null;
 
-  int? effectiveTimeMinutes(int? firstStepMinutes) {
+  int? effectiveTimeMinutes(int? previousStepMinutes) {
     if (timeMinutes != null) {
       return timeMinutes;
     }
-    if (offsetMinutes != null && firstStepMinutes != null) {
-      return _wrapClockMinutes(firstStepMinutes + offsetMinutes!);
+    if (offsetMinutes != null && previousStepMinutes != null) {
+      return _wrapClockMinutes(previousStepMinutes + offsetMinutes!);
     }
     return null;
   }
 
-  String scheduleLabel(int? firstStepMinutes) {
+  String scheduleLabel(int? previousStepMinutes) {
     if (timeMinutes != null) {
       return _formatClockMinutes(timeMinutes);
     }
     if (offsetMinutes != null) {
-      final int? effective = effectiveTimeMinutes(firstStepMinutes);
+      final int? effective = effectiveTimeMinutes(previousStepMinutes);
       return effective == null
-          ? '${_formatStepOffset(offsetMinutes!)} · set first step time'
+          ? '${_formatStepOffset(offsetMinutes!)} · set previous step time'
           : '${_formatStepOffset(offsetMinutes!)} · ${_formatClockMinutes(effective)}';
     }
     return 'No time';
@@ -142,6 +142,18 @@ class _Routine {
 
   int get timedSteps => steps.where((_RoutineStep step) => step.hasTime).length;
 
+  int? effectiveTimeAt(int index) {
+    if (index < 0 || index >= steps.length) {
+      return null;
+    }
+    int? effective;
+    for (int stepIndex = 0; stepIndex <= index; stepIndex++) {
+      final _RoutineStep step = steps[stepIndex];
+      effective = step.effectiveTimeMinutes(stepIndex == 0 ? null : effective);
+    }
+    return effective;
+  }
+
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'id': id,
@@ -166,12 +178,12 @@ class _RoutineStepDraft {
 
   bool get hasTime => timeMinutes != null || offsetMinutes != null;
 
-  int? effectiveTimeMinutes(int? firstStepMinutes) {
+  int? effectiveTimeMinutes(int? previousStepMinutes) {
     if (timeMinutes != null) {
       return timeMinutes;
     }
-    if (offsetMinutes != null && firstStepMinutes != null) {
-      return _wrapClockMinutes(firstStepMinutes + offsetMinutes!);
+    if (offsetMinutes != null && previousStepMinutes != null) {
+      return _wrapClockMinutes(previousStepMinutes + offsetMinutes!);
     }
     return null;
   }
@@ -600,9 +612,6 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final int? firstStepMinutes = routine.steps.isEmpty
-        ? null
-        : routine.steps.first.timeMinutes;
     return Scaffold(
       appBar: AppBar(
         title: Text(routine.name),
@@ -645,7 +654,8 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
                 ),
               )
             else
-              for (final _RoutineStep step in routine.steps)
+              for (final (int index, _RoutineStep step)
+                  in routine.steps.indexed)
                 Card(
                   elevation: 0,
                   color: Theme.of(context).cardColor,
@@ -678,7 +688,11 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
                                 const SizedBox(width: 5),
                                 Expanded(
                                   child: Text(
-                                    step.scheduleLabel(firstStepMinutes),
+                                    step.scheduleLabel(
+                                      index == 0
+                                          ? null
+                                          : routine.effectiveTimeAt(index - 1),
+                                    ),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: Theme.of(context)
@@ -856,11 +870,23 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
     });
   }
 
+  int? _effectiveStepTimeAt(int index) {
+    if (index < 0 || index >= _steps.length) {
+      return null;
+    }
+    int? effective;
+    for (int stepIndex = 0; stepIndex <= index; stepIndex++) {
+      final _RoutineStepDraft step = _steps[stepIndex];
+      effective = step.effectiveTimeMinutes(stepIndex == 0 ? null : effective);
+    }
+    return effective;
+  }
+
   Future<void> _editStepTime(int index) async {
     final _RoutineStepDraft step = _steps[index];
-    final int? firstStepMinutes = _steps.isEmpty
+    final int? previousStepMinutes = index == 0
         ? null
-        : _steps.first.timeMinutes;
+        : _effectiveStepTimeAt(index - 1);
     final _ClockTimeChoice? choice =
         await showModalBottomSheet<_ClockTimeChoice>(
           context: context,
@@ -870,7 +896,8 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
             initialMinutes: step.timeMinutes,
             initialOffsetMinutes: step.offsetMinutes,
             allowRelative: index > 0,
-            firstStepMinutes: firstStepMinutes,
+            referenceMinutes: previousStepMinutes,
+            referenceTitle: index == 0 ? null : _steps[index - 1].title,
           ),
         );
     if (choice == null || !mounted) {
@@ -891,12 +918,12 @@ class _RoutineEditorScreenState extends State<_RoutineEditorScreen> {
       return _formatClockMinutes(step.timeMinutes);
     }
     if (step.offsetMinutes != null) {
-      final int? firstStepMinutes = _steps.isEmpty
+      final int? previousStepMinutes = index == 0
           ? null
-          : _steps.first.timeMinutes;
-      final int? effective = step.effectiveTimeMinutes(firstStepMinutes);
+          : _effectiveStepTimeAt(index - 1);
+      final int? effective = step.effectiveTimeMinutes(previousStepMinutes);
       return effective == null
-          ? '${_formatStepOffset(step.offsetMinutes!)} · set first step time'
+          ? '${_formatStepOffset(step.offsetMinutes!)} · set previous step time'
           : '${_formatStepOffset(step.offsetMinutes!)} · ${_formatClockMinutes(effective)}';
     }
     return index == 0 ? 'Add start time' : 'Add time or offset';
@@ -1198,13 +1225,15 @@ class _ClockTimePickerSheet extends StatefulWidget {
   const _ClockTimePickerSheet({
     this.initialMinutes,
     this.initialOffsetMinutes,
-    this.firstStepMinutes,
+    this.referenceMinutes,
+    this.referenceTitle,
     this.allowRelative = false,
   });
 
   final int? initialMinutes;
   final int? initialOffsetMinutes;
-  final int? firstStepMinutes;
+  final int? referenceMinutes;
+  final String? referenceTitle;
   final bool allowRelative;
 
   @override
@@ -1228,17 +1257,17 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
     _hasTime =
         minutes != null ||
         (widget.allowRelative &&
-            widget.firstStepMinutes != null &&
+            widget.referenceMinutes != null &&
             offsetMinutes != null);
     _mode =
         widget.allowRelative &&
-            widget.firstStepMinutes != null &&
+            widget.referenceMinutes != null &&
             offsetMinutes != null
         ? _StepTimeMode.relative
         : _StepTimeMode.exact;
     _isAfter = (offsetMinutes ?? 10) >= 0;
     final int initialMinutes =
-        minutes?.clamp(0, 1439) ?? widget.firstStepMinutes ?? 420;
+        minutes?.clamp(0, 1439) ?? widget.referenceMinutes ?? 420;
     final int hour = initialMinutes ~/ 60;
     _isPm = hour >= 12;
     _hourController = TextEditingController(
@@ -1293,9 +1322,9 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
       return;
     }
     if (_mode == _StepTimeMode.relative) {
-      if (widget.firstStepMinutes == null) {
+      if (widget.referenceMinutes == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Set the first step time first.')),
+          const SnackBar(content: Text('Schedule the previous step first.')),
         );
         return;
       }
@@ -1403,8 +1432,8 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
                                       ButtonSegment<_StepTimeMode>(
                                         value: _StepTimeMode.relative,
                                         enabled:
-                                            widget.firstStepMinutes != null,
-                                        label: const Text('From first step'),
+                                            widget.referenceMinutes != null,
+                                        label: const Text('From previous step'),
                                         icon: const Icon(
                                           Icons.timelapse_rounded,
                                         ),
@@ -1415,11 +1444,11 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
                                       Set<_StepTimeMode> value,
                                     ) => setState(() => _mode = value.first),
                                   ),
-                                  if (widget.firstStepMinutes ==
+                                  if (widget.referenceMinutes ==
                                       null) ...<Widget>[
                                     const SizedBox(height: 8),
                                     Text(
-                                      'Set an exact time on the first step to use offsets.',
+                                      'Schedule the previous step to use an offset.',
                                       textAlign: TextAlign.center,
                                       style: Theme.of(context)
                                           .textTheme
@@ -1447,8 +1476,9 @@ class _ClockTimePickerSheetState extends State<_ClockTimePickerSheet> {
                                           ),
                                           controller: _offsetController,
                                           isAfter: _isAfter,
-                                          firstStepMinutes:
-                                              widget.firstStepMinutes!,
+                                          referenceMinutes:
+                                              widget.referenceMinutes!,
+                                          referenceTitle: widget.referenceTitle,
                                           offsetMinutes: _selectedOffsetMinutes,
                                           onDirectionChanged: (bool isAfter) =>
                                               setState(
@@ -1582,14 +1612,16 @@ class _RoutineOffsetComposer extends StatelessWidget {
     super.key,
     required this.controller,
     required this.isAfter,
-    required this.firstStepMinutes,
+    required this.referenceMinutes,
+    required this.referenceTitle,
     required this.offsetMinutes,
     required this.onDirectionChanged,
   });
 
   final TextEditingController controller;
   final bool isAfter;
-  final int firstStepMinutes;
+  final int referenceMinutes;
+  final String? referenceTitle;
   final int? offsetMinutes;
   final ValueChanged<bool> onDirectionChanged;
 
@@ -1598,7 +1630,7 @@ class _RoutineOffsetComposer extends StatelessWidget {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final int? scheduledMinutes = offsetMinutes == null
         ? null
-        : _wrapClockMinutes(firstStepMinutes + offsetMinutes!);
+        : _wrapClockMinutes(referenceMinutes + offsetMinutes!);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1610,7 +1642,8 @@ class _RoutineOffsetComposer extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Relative to ${_formatClockMinutes(firstStepMinutes)}',
+            'Relative to “${referenceTitle ?? 'previous step'}” at '
+            '${_formatClockMinutes(referenceMinutes)}',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: scheme.onSecondaryContainer,
               fontWeight: FontWeight.w800,

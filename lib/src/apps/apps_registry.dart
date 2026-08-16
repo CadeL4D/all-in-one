@@ -4,10 +4,10 @@ import '../core/app_manifest.dart';
 import 'focus/focus_app.dart';
 import 'maths/maths_app.dart';
 import 'noises/noises_app.dart';
+import 'parking/parking_app.dart';
 import 'prompts/prompts_app.dart';
 import 'routines/routines_app.dart';
 import 'tasks/tasks_app.dart';
-import 'tetherloom/tetherloom_app.dart';
 
 abstract final class AppRegistry {
   static const List<AppManifest> apps = <AppManifest>[
@@ -74,15 +74,14 @@ abstract final class AppRegistry {
       builder: _noisesBuilder,
     ),
     AppManifest(
-      id: 'tetherloom',
-      name: 'Tetherloom',
-      tagline: 'Weave the endless rift',
-      description:
-          'Steer a light-shuttle through a fast, procedural living loom.',
-      icon: Icons.gesture_rounded,
-      gradient: <Color>[Color(0xFF06B6D4), Color(0xFF8B5CF6)],
+      id: 'parking',
+      name: 'Parkline',
+      tagline: 'Master every parking space',
+      description: 'Drive through procedural parking challenges with a touch steering wheel.',
+      icon: Icons.local_parking_rounded,
+      gradient: <Color>[Color(0xFF16A36D), Color(0xFF4DE1A8)],
       category: AppCategory.games,
-      builder: _tetherloomBuilder,
+      builder: _parkingBuilder,
     ),
   ];
 
@@ -102,6 +101,5 @@ abstract final class AppRegistry {
 
   static Widget _noisesBuilder(BuildContext context) => const NoisesApp();
 
-  static Widget _tetherloomBuilder(BuildContext context) =>
-      const TetherloomApp();
+  static Widget _parkingBuilder(BuildContext context) => const ParkingApp();
 }
