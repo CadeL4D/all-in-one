@@ -37,8 +37,6 @@ class _ParkingAppState extends State<ParkingApp>
   int _bestParks = 0;
   double _wheelRotation = 0;
   double _bumpFlash = 0;
-  double _messageLife = 0;
-  String _message = '';
 
   @override
   void initState() {
@@ -83,8 +81,6 @@ class _ParkingAppState extends State<ParkingApp>
       _pausedAutomatically = false;
       _wheelRotation = 0;
       _bumpFlash = 0;
-      _message = _engine.scenario.hint;
-      _messageLife = 3.2;
       _lastElapsed = null;
     });
     _ticker.start();
@@ -94,8 +90,6 @@ class _ParkingAppState extends State<ParkingApp>
     _engine.nextScenario();
     setState(() {
       _wheelRotation = 0;
-      _message = _engine.scenario.hint;
-      _messageLife = 2.8;
       _lastElapsed = null;
     });
     _ticker.start();
@@ -105,8 +99,6 @@ class _ParkingAppState extends State<ParkingApp>
     _engine.retryScenario();
     setState(() {
       _wheelRotation = 0;
-      _message = 'Fresh start—take it slowly.';
-      _messageLife = 1.8;
       _lastElapsed = null;
     });
     if (!_ticker.isActive) {
@@ -151,17 +143,16 @@ class _ParkingAppState extends State<ParkingApp>
     }
     _engine.tick(dt);
     _bumpFlash = max(0, _bumpFlash - dt * 3.4);
-    _messageLife = max(0, _messageLife - dt);
     for (final ParkingEvent event in _engine.drainEvents()) {
       switch (event.kind) {
         case ParkingEventKind.bump:
           _bumpFlash = 0.72;
-          _message = 'Bump! Use the brake and make a smaller correction.';
-          _messageLife = 1.7;
           HapticFeedback.heavyImpact();
+        case ParkingEventKind.pickup:
+          HapticFeedback.selectionClick();
         case ParkingEventKind.parked:
           _ticker.stop();
-          final int completed = _engine.parks + 1;
+          final int completed = _engine.parks;
           if (completed > _bestParks) {
             _bestParks = completed;
             LocalStore.writeString(LocalStore.parkingBestKey, '$_bestParks');
@@ -240,8 +231,8 @@ class _ParkingAppState extends State<ParkingApp>
                     ),
                     if (_playing) ...<Widget>[
                       _ParkingHud(engine: _engine, bestParks: _bestParks),
-                      if (_messageLife > 0 && !_engine.isParked)
-                        _DrivingMessage(message: _message),
+                      if (!_engine.isParked)
+                        _ParkingCoach(message: _engine.parkingGuidance),
                     ],
                     if (!_playing)
                       _ReadyOverlay(
@@ -259,8 +250,11 @@ class _ParkingAppState extends State<ParkingApp>
                       )
                     else if (_engine.isParked)
                       _ParkedOverlay(
-                        completed: _engine.parks + 1,
-                        bumps: _engine.bumps,
+                        completed: _engine.parks,
+                        score: _engine.score,
+                        award: _engine.lastAward,
+                        clean: _engine.scenarioBumps == 0,
+                        streak: _engine.streak,
                         onNext: _nextSpace,
                       ),
                   ],
@@ -302,22 +296,66 @@ class _ParkingHud extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _HudCard(
-              eyebrow: 'SPACE ${engine.level}',
-              value: engine.scenario.label,
-              detail: engine.difficulty == ParkingDifficulty.easy
-                  ? 'EASY'
-                  : 'HARD',
+            Expanded(
+              child: _HudCard(
+                eyebrow: 'SPACE ${engine.level}',
+                value: engine.scenario.label,
+                detail: engine.difficulty == ParkingDifficulty.easy
+                    ? 'EASY · BEST $bestParks'
+                    : 'HARD · BEST $bestParks',
+              ),
             ),
-            const Spacer(),
-            _HudCard(
-              eyebrow: 'SPEED',
-              value: '${engine.speedKph.round()} km/h',
-              detail: engine.isReversing ? 'REVERSE' : 'DRIVE',
-              alignEnd: true,
+            const SizedBox(width: 6),
+            _ScoreCard(engine: engine),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _HudCard(
+                eyebrow: 'SPEED',
+                value: '${engine.speedKph.round()} km/h',
+                detail: engine.isReversing ? 'REVERSE' : 'DRIVE',
+                alignEnd: true,
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ScoreCard extends StatelessWidget {
+  const _ScoreCard({required this.engine});
+
+  final ParkingEngine engine;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xE6151B20),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        children: <Widget>[
+          Text(
+            '${engine.score}',
+            style: const TextStyle(
+              color: Color(0xFFFFD166),
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            '${engine.scenarioTime.floor()}s · ${engine.pickupsCollected}/${engine.scenario.pickups.length}',
+            style: const TextStyle(
+              color: Color(0xFFAAB7B0),
+              fontSize: 8,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -347,6 +385,7 @@ class _HudCard extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: alignEnd
             ? CrossAxisAlignment.end
             : CrossAxisAlignment.start,
@@ -384,8 +423,8 @@ class _HudCard extends StatelessWidget {
   }
 }
 
-class _DrivingMessage extends StatelessWidget {
-  const _DrivingMessage({required this.message});
+class _ParkingCoach extends StatelessWidget {
+  const _ParkingCoach({required this.message});
 
   final String message;
 
@@ -394,23 +433,37 @@ class _DrivingMessage extends StatelessWidget {
     return Positioned(
       left: 18,
       right: 18,
-      bottom: 16,
+      bottom: 12,
       child: IgnorePointer(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           decoration: BoxDecoration(
-            color: const Color(0xE6151B20),
-            borderRadius: BorderRadius.circular(999),
+            color: const Color(0xF0151B20),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
           ),
-          child: Text(
-            message,
-            maxLines: 2,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              const Icon(
+                Icons.assistant_navigation,
+                size: 14,
+                color: Color(0xFF4DE1A8),
+              ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  message,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -747,12 +800,12 @@ class _ReadyOverlay extends StatelessWidget {
               ButtonSegment<ParkingDifficulty>(
                 value: ParkingDifficulty.easy,
                 icon: Icon(Icons.directions_car_filled_rounded),
-                label: Text('Easy lots'),
+                label: Text('Easy'),
               ),
               ButtonSegment<ParkingDifficulty>(
                 value: ParkingDifficulty.hard,
                 icon: Icon(Icons.local_fire_department_rounded),
-                label: Text('Hard lots'),
+                label: Text('Hard'),
               ),
             ],
             selected: <ParkingDifficulty>{selectedDifficulty},
@@ -847,12 +900,18 @@ class _PauseOverlay extends StatelessWidget {
 class _ParkedOverlay extends StatelessWidget {
   const _ParkedOverlay({
     required this.completed,
-    required this.bumps,
+    required this.score,
+    required this.award,
+    required this.clean,
+    required this.streak,
     required this.onNext,
   });
 
   final int completed;
-  final int bumps;
+  final int score;
+  final int award;
+  final bool clean;
+  final int streak;
   final VoidCallback onNext;
 
   @override
@@ -878,8 +937,27 @@ class _ParkedOverlay extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '$completed spaces cleared  ·  $bumps bumps',
+            '$completed spaces cleared  ·  $score points',
             style: const TextStyle(color: Color(0xFFB8C5BE)),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _ResultChip(label: '+$award', icon: Icons.bolt_rounded),
+              if (clean)
+                const _ResultChip(
+                  label: 'CLEAN PARK',
+                  icon: Icons.auto_awesome_rounded,
+                ),
+              if (streak > 1)
+                _ResultChip(
+                  label: '$streak× STREAK',
+                  icon: Icons.local_fire_department_rounded,
+                ),
+            ],
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
@@ -891,6 +969,41 @@ class _ParkedOverlay extends StatelessWidget {
             ),
             icon: const Icon(Icons.arrow_forward_rounded),
             label: const Text('Next space'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResultChip extends StatelessWidget {
+  const _ResultChip({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0x1FFFFFD1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0x554DE1A8)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, color: const Color(0xFFFFD166), size: 14),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.4,
+            ),
           ),
         ],
       ),
@@ -1017,6 +1130,14 @@ class _ParkingPainter extends CustomPainter {
     canvas.scale(scale);
     _drawLot(canvas);
     _drawTarget(canvas);
+    for (final ParkingPickup pickup in engine.scenario.pickups) {
+      if (!pickup.collected) {
+        _drawPickup(canvas, pickup);
+      }
+    }
+    for (final TrafficCar traffic in engine.scenario.traffic) {
+      _drawTrafficCar(canvas, traffic);
+    }
     for (final ParkedCar parked in engine.scenario.parkedCars) {
       _drawCar(
         canvas,
@@ -1049,19 +1170,48 @@ class _ParkingPainter extends CustomPainter {
   }
 
   void _drawLot(Canvas canvas) {
-    final Paint curb = Paint()
-      ..color = const Color(0xFF69736E)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.018;
+    final Rect bounds = ParkingEngine.playableBounds;
     canvas.drawRect(
-      const Rect.fromLTWH(
-        0.028,
-        0.028,
-        ParkingEngine.worldWidth - 0.056,
-        ParkingEngine.worldHeight - 0.056,
-      ),
-      curb,
+      Offset.zero &
+          const Size(ParkingEngine.worldWidth, ParkingEngine.worldHeight),
+      Paint()..color = const Color(0xFF404A46),
     );
+    canvas.drawRect(
+      bounds,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFF293338), Color(0xFF20292D)],
+        ).createShader(bounds),
+    );
+    final Paint curb = Paint()
+      ..color = const Color(0xFFD8E0DC)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.012;
+    canvas.drawRect(bounds, curb);
+    final Paint curbAccent = Paint()
+      ..color = const Color(0xFF4DE1A8).withValues(alpha: 0.24)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.003;
+    canvas.drawRect(bounds.deflate(0.009), curbAccent);
+
+    for (double x = bounds.left + 0.02; x < bounds.right; x += 0.075) {
+      canvas.drawLine(
+        Offset(x, bounds.top - 0.025),
+        Offset(min(x + 0.035, bounds.right), bounds.top),
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.10)
+          ..strokeWidth = 0.008,
+      );
+      canvas.drawLine(
+        Offset(x, bounds.bottom),
+        Offset(min(x + 0.035, bounds.right), bounds.bottom + 0.025),
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.10)
+          ..strokeWidth = 0.008,
+      );
+    }
     final Paint dash = Paint()
       ..color = Colors.white.withValues(alpha: 0.12)
       ..strokeWidth = 0.009;
@@ -1072,8 +1222,8 @@ class _ParkingPainter extends CustomPainter {
     for (int index = 0; index < 90; index++) {
       canvas.drawCircle(
         Offset(
-          texture.nextDouble() * ParkingEngine.worldWidth,
-          texture.nextDouble() * ParkingEngine.worldHeight,
+          bounds.left + texture.nextDouble() * bounds.width,
+          bounds.top + texture.nextDouble() * bounds.height,
         ),
         0.002 + texture.nextDouble() * 0.002,
         Paint()..color = Colors.white.withValues(alpha: 0.035),
@@ -1083,8 +1233,6 @@ class _ParkingPainter extends CustomPainter {
 
   void _drawTarget(Canvas canvas) {
     final Rect target = engine.scenario.target;
-    final double pulse =
-        0.55 + sin(DateTime.now().millisecondsSinceEpoch / 280) * 0.12;
     canvas.drawRRect(
       RRect.fromRectAndRadius(target, const Radius.circular(0.015)),
       Paint()..color = const Color(0xFF4DE1A8).withValues(alpha: 0.10),
@@ -1092,7 +1240,7 @@ class _ParkingPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(target, const Radius.circular(0.015)),
       Paint()
-        ..color = const Color(0xFF4DE1A8).withValues(alpha: pulse)
+        ..color = const Color(0xFF4DE1A8).withValues(alpha: 0.72)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.011,
     );
@@ -1123,6 +1271,72 @@ class _ParkingPainter extends CustomPainter {
     label.paint(
       canvas,
       target.center - Offset(label.width / 2, label.height / 2),
+    );
+  }
+
+  void _drawPickup(Canvas canvas, ParkingPickup pickup) {
+    canvas.save();
+    canvas.translate(pickup.center.dx, pickup.center.dy);
+    canvas.rotate(engine.elapsedTime * 1.8);
+    canvas.drawCircle(
+      Offset.zero,
+      0.036,
+      Paint()
+        ..color = const Color(0x33FFD166)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.012),
+    );
+    canvas.drawCircle(
+      Offset.zero,
+      0.025,
+      Paint()..color = const Color(0xFFFFD166),
+    );
+    final Path sparkle = Path();
+    for (int index = 0; index < 8; index++) {
+      final double radius = index.isEven ? 0.017 : 0.007;
+      final double angle = -pi / 2 + index * pi / 4;
+      final Offset point = Offset(cos(angle), sin(angle)) * radius;
+      if (index == 0) {
+        sparkle.moveTo(point.dx, point.dy);
+      } else {
+        sparkle.lineTo(point.dx, point.dy);
+      }
+    }
+    sparkle.close();
+    canvas.drawPath(sparkle, Paint()..color = const Color(0xFF5A4311));
+    canvas.restore();
+  }
+
+  void _drawTrafficCar(Canvas canvas, TrafficCar traffic) {
+    canvas.save();
+    canvas.translate(traffic.center.dx, traffic.center.dy);
+    canvas.rotate(traffic.angle);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: const Offset(0, 0.012),
+        width: ParkingEngine.carWidth * 1.25,
+        height: ParkingEngine.carLength * 1.12,
+      ),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.30)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.010),
+    );
+    canvas.restore();
+    _drawCar(
+      canvas,
+      traffic.center,
+      traffic.angle,
+      ParkingEngine.carWidth + 0.006,
+      ParkingEngine.carLength + 0.004,
+      _parkedCarColors[traffic.colorIndex],
+      false,
+    );
+    canvas.drawCircle(
+      traffic.center,
+      0.052,
+      Paint()
+        ..color = const Color(0xFFFFD166).withValues(alpha: 0.22)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.004,
     );
   }
 

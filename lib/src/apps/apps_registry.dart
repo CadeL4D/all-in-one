@@ -8,6 +8,7 @@ import 'parking/parking_app.dart';
 import 'prompts/prompts_app.dart';
 import 'routines/routines_app.dart';
 import 'tasks/tasks_app.dart';
+import 'workouts/workouts_app.dart';
 
 abstract final class AppRegistry {
   static const List<AppManifest> apps = <AppManifest>[
@@ -83,6 +84,16 @@ abstract final class AppRegistry {
       category: AppCategory.games,
       builder: _parkingBuilder,
     ),
+    AppManifest(
+      id: 'workouts',
+      name: 'Workouts',
+      tagline: 'Meet the pressure. Build resolve.',
+      description: 'Generate a private weekly strength plan and face every workout with an adaptive Resolve rating.',
+      icon: Icons.fitness_center_rounded,
+      gradient: <Color>[Color(0xFF111827), Color(0xFF34D399)],
+      category: AppCategory.wellness,
+      builder: _workoutsBuilder,
+    ),
   ];
 
   static AppManifest byId(String id) {
@@ -102,4 +113,6 @@ abstract final class AppRegistry {
   static Widget _noisesBuilder(BuildContext context) => const NoisesApp();
 
   static Widget _parkingBuilder(BuildContext context) => const ParkingApp();
+
+  static Widget _workoutsBuilder(BuildContext context) => const WorkoutsApp();
 }

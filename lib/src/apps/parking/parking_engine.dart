@@ -3,12 +3,69 @@ import 'dart:ui';
 
 enum ParkingDifficulty { easy, hard }
 
-enum ParkingEventKind { bump, parked }
+enum ParkingEventKind { bump, pickup, parked }
 
 class ParkingEvent {
-  const ParkingEvent(this.kind);
+  const ParkingEvent(this.kind, {this.points = 0});
 
   final ParkingEventKind kind;
+  final int points;
+}
+
+class ParkingPickup {
+  ParkingPickup(this.center);
+
+  final Offset center;
+  bool collected = false;
+
+  void reset() => collected = false;
+}
+
+class TrafficCar {
+  TrafficCar({
+    required this.start,
+    required this.end,
+    required this.speed,
+    required this.colorIndex,
+    this.initialProgress = 0,
+  }) : progress = initialProgress,
+       center = Offset.lerp(start, end, initialProgress)!;
+
+  final Offset start;
+  final Offset end;
+  final double speed;
+  final int colorIndex;
+  final double initialProgress;
+  double progress;
+  double direction = 1;
+  Offset center;
+
+  double get angle {
+    final Offset path = (end - start) * direction;
+    return atan2(path.dx, -path.dy);
+  }
+
+  void tick(double dt) {
+    final double pathLength = (end - start).distance;
+    if (pathLength == 0) {
+      return;
+    }
+    progress += direction * speed * dt / pathLength;
+    if (progress >= 1) {
+      progress = 1;
+      direction = -1;
+    } else if (progress <= 0) {
+      progress = 0;
+      direction = 1;
+    }
+    center = Offset.lerp(start, end, progress)!;
+  }
+
+  void reset() {
+    progress = initialProgress;
+    direction = 1;
+    center = Offset.lerp(start, end, progress)!;
+  }
 }
 
 class ParkedCar {
@@ -36,6 +93,8 @@ class ParkingScenario {
     required this.start,
     required this.startAngle,
     required this.parkedCars,
+    required this.traffic,
+    required this.pickups,
   });
 
   final String label;
@@ -45,6 +104,8 @@ class ParkingScenario {
   final Offset start;
   final double startAngle;
   final List<ParkedCar> parkedCars;
+  final List<TrafficCar> traffic;
+  final List<ParkingPickup> pickups;
 }
 
 class ParkingEngine {
@@ -57,6 +118,7 @@ class ParkingEngine {
   static const double worldHeight = 1.48;
   static const double carWidth = 0.078;
   static const double carLength = 0.152;
+  static const Rect playableBounds = Rect.fromLTRB(0.045, 0.045, 0.955, 1.435);
 
   final int _seed;
   ParkingDifficulty difficulty;
@@ -72,13 +134,58 @@ class ParkingEngine {
   int level = 1;
   int parks = 0;
   int bumps = 0;
+  int score = 0;
+  int streak = 0;
+  int scenarioBumps = 0;
+  int pickupsCollected = 0;
+  int lastAward = 0;
+  double scenarioTime = 0;
+  double elapsedTime = 0;
   double parkedProgress = 0;
   bool isParked = false;
+  bool _collisionLatched = false;
+  double _collisionClearTime = 0;
   final List<ParkingEvent> _events = <ParkingEvent>[];
 
   double get speedKph => speed.abs() * 145;
 
   bool get isReversing => speed < -0.006;
+
+  bool get carInsideTarget => _carInsideTarget();
+
+  bool get carWithinPlayableBounds => _corners(
+    carPosition,
+    carAngle,
+    carWidth,
+    carLength,
+  ).every(playableBounds.contains);
+
+  double get alignmentError => min(
+    _angleDistance(carAngle, scenario.targetAngle),
+    _angleDistance(carAngle, scenario.targetAngle + pi),
+  );
+
+  String get parkingGuidance {
+    if (speed.abs() > 0.11) {
+      return 'Ease off — precision beats speed.';
+    }
+    if (carInsideTarget) {
+      if (alignmentError >= 0.17) {
+        return 'You are in the bay — straighten the wheel.';
+      }
+      if (speed.abs() >= 0.018) {
+        return 'Great line — brake to hold the park.';
+      }
+      return 'Hold steady…';
+    }
+    final double distance = (carPosition - scenario.target.center).distance;
+    if (distance < 0.28) {
+      return alignmentError < 0.28
+          ? 'Good angle — creep into the green bay.'
+          : 'Turn toward the bay, then unwind the wheel.';
+    }
+    return scenario.hint;
+  }
 
   void restart(ParkingDifficulty selectedDifficulty) {
     difficulty = selectedDifficulty;
@@ -86,13 +193,15 @@ class ParkingEngine {
     level = 1;
     parks = 0;
     bumps = 0;
+    score = 0;
+    streak = 0;
+    elapsedTime = 0;
     steering = 0;
     _loadScenario();
   }
 
   void nextScenario() {
     if (isParked) {
-      parks++;
       level++;
     }
     _loadScenario();
@@ -107,6 +216,18 @@ class ParkingEngine {
     brakePressed = false;
     parkedProgress = 0;
     isParked = false;
+    scenarioBumps = 0;
+    pickupsCollected = 0;
+    scenarioTime = 0;
+    lastAward = 0;
+    _collisionLatched = false;
+    _collisionClearTime = 0;
+    for (final TrafficCar car in scenario.traffic) {
+      car.reset();
+    }
+    for (final ParkingPickup pickup in scenario.pickups) {
+      pickup.reset();
+    }
     _events.clear();
   }
 
@@ -129,6 +250,11 @@ class ParkingEngine {
       return;
     }
     final double dt = deltaSeconds.clamp(0, 0.04);
+    elapsedTime += dt;
+    scenarioTime += dt;
+    for (final TrafficCar car in scenario.traffic) {
+      car.tick(dt);
+    }
 
     double acceleration = 0;
     if (throttlePressed && !brakePressed) {
@@ -161,23 +287,54 @@ class ParkingEngine {
     if (_carCollides()) {
       carPosition = previousPosition;
       carAngle = previousAngle;
-      speed = -speed * 0.16;
-      bumps++;
+      speed = 0;
       parkedProgress = 0;
-      _events.add(const ParkingEvent(ParkingEventKind.bump));
+      _collisionClearTime = 0;
+      if (!_collisionLatched) {
+        _collisionLatched = true;
+        bumps++;
+        scenarioBumps++;
+        streak = 0;
+        _events.add(const ParkingEvent(ParkingEventKind.bump));
+      }
       return;
     }
 
+    if (_collisionLatched) {
+      _collisionClearTime += dt;
+      if (_collisionClearTime >= 0.28) {
+        _collisionLatched = false;
+        _collisionClearTime = 0;
+      }
+    }
+
+    for (final ParkingPickup pickup in scenario.pickups) {
+      if (!pickup.collected && (carPosition - pickup.center).distance < 0.066) {
+        pickup.collected = true;
+        pickupsCollected++;
+        score += 75;
+        _events.add(const ParkingEvent(ParkingEventKind.pickup, points: 75));
+      }
+    }
+
     final bool inSpace = _carInsideTarget();
-    final double alignment = min(
-      _angleDistance(carAngle, scenario.targetAngle),
-      _angleDistance(carAngle, scenario.targetAngle + pi),
-    );
-    if (inSpace && alignment < 0.17 && speed.abs() < 0.018) {
+    if (inSpace && alignmentError < 0.17 && speed.abs() < 0.018) {
       parkedProgress += dt;
       if (parkedProgress >= 0.72) {
         parkedProgress = 0.72;
         isParked = true;
+        parks++;
+        if (scenarioBumps == 0) {
+          streak++;
+        }
+        final int timeBonus = max(0, 24 - scenarioTime.floor()) * 8;
+        lastAward =
+            300 +
+            (difficulty == ParkingDifficulty.hard ? 200 : 0) +
+            timeBonus +
+            (scenarioBumps == 0 ? 150 : 0) +
+            streak * 35;
+        score += lastAward;
         speed = 0;
         throttlePressed = false;
         brakePressed = false;
@@ -204,14 +361,22 @@ class ParkingEngine {
       carWidth,
       carLength,
     );
-    if (carCorners.any(
-      (Offset point) =>
-          point.dx < 0.035 ||
-          point.dx > worldWidth - 0.035 ||
-          point.dy < 0.035 ||
-          point.dy > worldHeight - 0.035,
-    )) {
+    if (carCorners.any((Offset point) => !playableBounds.contains(point))) {
       return true;
+    }
+    for (final TrafficCar traffic in scenario.traffic) {
+      if (_rectanglesOverlap(
+        carPosition,
+        carAngle,
+        carWidth,
+        carLength,
+        traffic.center,
+        traffic.angle,
+        carWidth + 0.006,
+        carLength + 0.004,
+      )) {
+        return true;
+      }
     }
     for (final ParkedCar parked in scenario.parkedCars) {
       if (_rectanglesOverlap(
@@ -242,6 +407,12 @@ class ParkingEngine {
     brakePressed = false;
     parkedProgress = 0;
     isParked = false;
+    scenarioBumps = 0;
+    pickupsCollected = 0;
+    scenarioTime = 0;
+    lastAward = 0;
+    _collisionLatched = false;
+    _collisionClearTime = 0;
     _events.clear();
   }
 
@@ -270,6 +441,11 @@ class ParkingEngine {
       start: Offset((targetX + startOffset).clamp(0.22, 0.78), 1.25),
       startAngle: (_random.nextDouble() - 0.5) * 0.10,
       parkedCars: parked,
+      traffic: level >= 2 ? <TrafficCar>[_trafficCar(0.79)] : <TrafficCar>[],
+      pickups: <ParkingPickup>[
+        ParkingPickup(const Offset(0.5, 1.02)),
+        if (level >= 3) ParkingPickup(Offset(targetX, 0.56)),
+      ],
     );
   }
 
@@ -294,6 +470,11 @@ class ParkingEngine {
           _parkedCar(Offset(targetX, targetY - 0.205), 0),
           _parkedCar(Offset(targetX, targetY + 0.205), 0),
         ],
+        traffic: <TrafficCar>[_trafficCar(0.94)],
+        pickups: <ParkingPickup>[
+          ParkingPickup(const Offset(0.5, 1.08)),
+          ParkingPickup(Offset(rightSide ? 0.66 : 0.34, 0.77)),
+        ],
       );
     }
 
@@ -316,6 +497,21 @@ class ParkingEngine {
         _parkedCar(Offset(targetX, targetY - 0.13), pi / 2),
         _parkedCar(Offset(targetX, targetY + 0.13), pi / 2),
       ],
+      traffic: <TrafficCar>[_trafficCar(0.88)],
+      pickups: <ParkingPickup>[
+        ParkingPickup(const Offset(0.5, 1.08)),
+        ParkingPickup(Offset(leftSide ? 0.32 : 0.68, 0.69)),
+      ],
+    );
+  }
+
+  TrafficCar _trafficCar(double y) {
+    return TrafficCar(
+      start: Offset(0.18, y),
+      end: Offset(0.82, y),
+      speed: 0.075 + min(level, 12) * 0.0035,
+      colorIndex: _random.nextInt(5),
+      initialProgress: _random.nextDouble() * 0.45,
     );
   }
 

@@ -9,6 +9,7 @@ abstract final class LocalStore {
   static const String recentAppsKey = 'recent_apps_v1';
   static const String appOrderKey = 'app_order_v1';
   static const String parkingBestKey = 'parking_best_v1';
+  static const String workoutsKey = 'workouts_v1';
 
   static Future<String?> readString(String key) async {
     final SharedPreferences preferences = await SharedPreferences.getInstance();
@@ -51,6 +52,26 @@ abstract final class LocalStore {
   static Future<void> writeJsonList(
     String key,
     List<Map<String, dynamic>> value,
+  ) async {
+    await writeString(key, jsonEncode(value));
+  }
+
+  static Future<Map<String, dynamic>?> readJsonMap(String key) async {
+    final String? raw = await readString(key);
+    if (raw == null) {
+      return null;
+    }
+    try {
+      final Object? decoded = jsonDecode(raw);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static Future<void> writeJsonMap(
+    String key,
+    Map<String, dynamic> value,
   ) async {
     await writeString(key, jsonEncode(value));
   }

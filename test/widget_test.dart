@@ -105,6 +105,7 @@ void main() {
       'focus',
       'noises',
       'parking',
+      'workouts',
     ]);
 
     await tester.pumpWidget(const SizedBox.shrink());

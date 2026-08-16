@@ -32,6 +32,14 @@ void main() {
           lessThan(ParkingEngine.worldHeight - 0.02),
         );
         expect(
+          ParkingEngine.playableBounds.contains(scenario.target.topLeft),
+          isTrue,
+        );
+        expect(
+          ParkingEngine.playableBounds.contains(scenario.target.bottomRight),
+          isTrue,
+        );
+        expect(
           scenario.parkedCars.any(
             (ParkedCar car) => scenario.target.contains(car.center),
           ),
@@ -84,6 +92,8 @@ void main() {
     }
 
     expect(engine.isParked, isTrue);
+    expect(engine.parks, 1);
+    expect(engine.score, greaterThan(0));
     expect(
       engine.drainEvents().map((ParkingEvent event) => event.kind),
       contains(ParkingEventKind.parked),
@@ -93,7 +103,7 @@ void main() {
   testWidgets('Parkline starts with wheel and pedal controls', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(430, 900);
+    tester.view.physicalSize = const Size(360, 780);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -104,8 +114,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('PARKLINE'), findsOneWidget);
-    expect(find.text('Easy lots'), findsOneWidget);
-    expect(find.text('Hard lots'), findsOneWidget);
+    expect(find.text('Easy'), findsOneWidget);
+    expect(find.text('Hard'), findsOneWidget);
+    expect(tester.takeException(), isNull);
     await tester.tap(find.byKey(const ValueKey<String>('parking-play')));
     await tester.pump(const Duration(milliseconds: 40));
 
@@ -116,6 +127,7 @@ void main() {
     expect(find.byKey(const ValueKey<String>('parking-go')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('parking-brake')), findsOneWidget);
     expect(find.byTooltip('Pause game'), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
     await tester.tap(find.byTooltip('Pause game'));
     await tester.pumpAndSettle();
@@ -136,5 +148,49 @@ void main() {
     }
     expect(labels, containsAll(<String>['Parallel pocket', 'Tight turn-in']));
     expect(engine.scenario.targetAngle.abs(), anyOf(0, closeTo(pi / 2, 0.001)));
+  });
+
+  test(
+    'boundary impacts remain stable instead of retriggering every frame',
+    () {
+      final ParkingEngine engine = ParkingEngine(seed: 4)
+        ..carPosition = Offset(
+          ParkingEngine.playableBounds.left + ParkingEngine.carWidth / 2 - 0.01,
+          0.9,
+        );
+
+      for (int index = 0; index < 40; index++) {
+        engine.tick(0.02);
+      }
+
+      expect(engine.carWithinPlayableBounds, isFalse);
+      expect(engine.bumps, 1);
+      expect(
+        engine.drainEvents().where(
+          (ParkingEvent event) => event.kind == ParkingEventKind.bump,
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
+  test('hard scenarios have moving traffic and collectible route tokens', () {
+    final ParkingEngine engine = ParkingEngine(
+      seed: 17,
+      difficulty: ParkingDifficulty.hard,
+    );
+    final TrafficCar traffic = engine.scenario.traffic.single;
+    final Offset trafficStart = traffic.center;
+    engine.tick(0.2);
+    expect(traffic.center, isNot(trafficStart));
+
+    final ParkingPickup pickup = engine.scenario.pickups.first;
+    engine
+      ..carPosition = pickup.center
+      ..speed = 0;
+    engine.tick(0.02);
+    expect(pickup.collected, isTrue);
+    expect(engine.score, 75);
+    expect(engine.pickupsCollected, 1);
   });
 }
