@@ -15,6 +15,35 @@ String _formatClockMinutes(int? minutes) {
   return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
 }
 
+String _formatCompletionTime(DateTime completedAt) {
+  return _formatClockMinutes(completedAt.hour * 60 + completedAt.minute);
+}
+
+String _formatCompletionInterval(
+  DateTime completedAt,
+  DateTime previousCompletedAt,
+) {
+  final int seconds = completedAt.difference(previousCompletedAt).inSeconds;
+  if (seconds == 0) {
+    return 'same time as previous step';
+  }
+
+  final int absoluteSeconds = seconds.abs();
+  if (absoluteSeconds < 60) {
+    return 'less than 1 min ${seconds < 0 ? 'before' : 'after'} previous step';
+  }
+
+  final int minutes = absoluteSeconds ~/ 60;
+  return '$minutes min ${seconds < 0 ? 'before' : 'after'} previous step';
+}
+
+DateTime? _parseCompletionTime(Object? value) {
+  if (value is! String) {
+    return null;
+  }
+  return DateTime.tryParse(value)?.toLocal();
+}
+
 int _wrapClockMinutes(int minutes) => ((minutes % 1440) + 1440) % 1440;
 
 String _formatStepOffset(int offsetMinutes) {
@@ -39,15 +68,18 @@ class _RoutineStep {
     this.done = false,
     this.timeMinutes,
     this.offsetMinutes,
+    this.completedAt,
   });
 
   factory _RoutineStep.fromJson(Map<String, dynamic> json) {
+    final bool done = json['done'] as bool? ?? false;
     return _RoutineStep(
       id: (json['id'] as num).toInt(),
       title: json['title'] as String? ?? 'Untitled step',
-      done: json['done'] as bool? ?? false,
+      done: done,
       timeMinutes: (json['timeMinutes'] as num?)?.toInt(),
       offsetMinutes: (json['offsetMinutes'] as num?)?.toInt(),
+      completedAt: done ? _parseCompletionTime(json['completedAt']) : null,
     );
   }
 
@@ -56,6 +88,7 @@ class _RoutineStep {
   bool done;
   int? timeMinutes;
   int? offsetMinutes;
+  DateTime? completedAt;
 
   bool get hasTime => timeMinutes != null || offsetMinutes != null;
 
@@ -89,6 +122,7 @@ class _RoutineStep {
       'done': done,
       'timeMinutes': timeMinutes,
       'offsetMinutes': offsetMinutes,
+      'completedAt': completedAt?.toIso8601String(),
     };
   }
 }
@@ -130,7 +164,9 @@ class _Routine {
       return;
     }
     for (final _RoutineStep step in steps) {
-      step.done = false;
+      step
+        ..done = false
+        ..completedAt = null;
     }
     lastResetDate = today;
   }
@@ -323,23 +359,26 @@ class _RoutinesAppState extends State<RoutinesApp> {
     }
 
     setState(() {
-      final Map<String, bool> completedByTitle = <String, bool>{
-        for (final _RoutineStep step in routine.steps) step.title: step.done,
-      };
+      final Map<String, _RoutineStep> previousStepByTitle =
+          <String, _RoutineStep>{
+            for (final _RoutineStep step in routine.steps) step.title: step,
+          };
       routine
         ..name = draft.name
         ..description = draft.description
-        ..steps = draft.steps
-            .map(
-              (_RoutineStepDraft step) => _RoutineStep(
-                id: _nextStepId++,
-                title: step.title,
-                timeMinutes: step.timeMinutes,
-                offsetMinutes: step.offsetMinutes,
-                done: completedByTitle[step.title] ?? false,
-              ),
-            )
-            .toList();
+        ..steps = draft.steps.map((_RoutineStepDraft step) {
+          final _RoutineStep? previousStep = previousStepByTitle[step.title];
+          return _RoutineStep(
+            id: _nextStepId++,
+            title: step.title,
+            timeMinutes: step.timeMinutes,
+            offsetMinutes: step.offsetMinutes,
+            done: previousStep?.done ?? false,
+            completedAt: previousStep?.done == true
+                ? previousStep?.completedAt
+                : null,
+          );
+        }).toList();
     });
     await _persistRoutines();
   }
@@ -595,7 +634,10 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
   void _toggleStep(_RoutineStep step) {
     setState(() {
       routine.resetForNewDay();
-      step.done = !step.done;
+      final bool isNowDone = !step.done;
+      step
+        ..done = isNowDone
+        ..completedAt = isNowDone ? DateTime.now() : null;
       widget.onChanged();
     });
   }
@@ -603,7 +645,9 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
   void _resetRoutine() {
     setState(() {
       for (final _RoutineStep step in routine.steps) {
-        step.done = false;
+        step
+          ..done = false
+          ..completedAt = null;
       }
       routine.lastResetDate = _localDateKey();
       widget.onChanged();
@@ -675,37 +719,82 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
                             : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    subtitle: step.hasTime
+                    subtitle:
+                        step.hasTime || (step.done && step.completedAt != null)
                         ? Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Row(
+                            padding: const EdgeInsets.only(top: 5),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                Icon(
-                                  Icons.schedule_rounded,
-                                  size: 15,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(width: 5),
-                                Expanded(
-                                  child: Text(
-                                    step.scheduleLabel(
-                                      index == 0
-                                          ? null
-                                          : routine.effectiveTimeAt(index - 1),
+                                if (step.hasTime)
+                                  Row(
+                                    children: <Widget>[
+                                      Icon(
+                                        Icons.schedule_rounded,
+                                        size: 15,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Expanded(
+                                        child: Text(
+                                          step.scheduleLabel(
+                                            index == 0
+                                                ? null
+                                                : routine.effectiveTimeAt(
+                                                    index - 1,
+                                                  ),
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                if (step.done && step.completedAt != null)
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      top: step.hasTime ? 5 : 0,
                                     ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelMedium
-                                        ?.copyWith(
+                                    child: Row(
+                                      children: <Widget>[
+                                        Icon(
+                                          Icons.check_circle_rounded,
+                                          size: 15,
                                           color: Theme.of(context)
                                               .colorScheme
-                                              .primary,
-                                          fontWeight: FontWeight.w700,
+                                              .tertiary,
                                         ),
+                                        const SizedBox(width: 5),
+                                        Expanded(
+                                          child: Text(
+                                            _completionLabel(index, step),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelMedium
+                                                ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .tertiary,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
                           )
@@ -722,6 +811,20 @@ class _RoutineDetailScreenState extends State<_RoutineDetailScreen> {
         ),
       ),
     );
+  }
+
+  String _completionLabel(int index, _RoutineStep step) {
+    final DateTime completedAt = step.completedAt!;
+    final String time = _formatCompletionTime(completedAt);
+    if (index == 0) {
+      return 'Completed at $time';
+    }
+
+    final DateTime? previousCompletedAt = routine.steps[index - 1].completedAt;
+    if (previousCompletedAt == null) {
+      return 'Completed at $time';
+    }
+    return 'Completed at $time · ${_formatCompletionInterval(completedAt, previousCompletedAt)}';
   }
 }
 

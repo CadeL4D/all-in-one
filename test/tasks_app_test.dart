@@ -198,4 +198,70 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('a task plan canvas persists and Single Task advances one step', (
+    WidgetTester tester,
+  ) async {
+    await pumpTasks(tester);
+
+    await tester.tap(find.text('Set up your first project'));
+    await tester.pumpAndSettle();
+    expect(find.text('Turn this task into a plan'), findsOneWidget);
+
+    Future<void> addStep(String title) async {
+      await tester.tap(find.byKey(const ValueKey<String>('add-plan-step')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('plan-step-title')),
+        title,
+      );
+      await tester.tap(find.text('Add step').last);
+      await tester.pumpAndSettle();
+    }
+
+    await addStep('Define scope');
+    await addStep('Build the first draft');
+
+    expect(
+      find.byKey(const ValueKey<String>('task-plan-canvas')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('plan-step-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('plan-step-2')), findsOneWidget);
+
+    final Finder firstNode = find.byKey(const ValueKey<String>('plan-step-1'));
+    await tester.drag(firstNode, const Offset(42, 28));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Single Task · 2'));
+    await tester.pumpAndSettle();
+    expect(find.text('Define scope'), findsOneWidget);
+    expect(find.text('Build the first draft'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('complete-plan-step-1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Define scope'), findsNothing);
+    expect(find.text('Build the first draft'), findsOneWidget);
+
+    await tester.tap(find.text('Back to task list'));
+    await tester.pumpAndSettle();
+    expect(find.text('Plan · 1/2 steps'), findsOneWidget);
+
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    final List<dynamic> stored = jsonDecode(
+      preferences.getString(LocalStore.tasksKey)!,
+    ) as List<dynamic>;
+    final Map<String, dynamic> task = stored
+        .cast<Map<String, dynamic>>()
+        .firstWhere((Map<String, dynamic> task) => task['id'] == 1);
+    final List<dynamic> planSteps = task['planSteps'] as List<dynamic>;
+    expect(planSteps, hasLength(2));
+    expect((planSteps.first as Map<String, dynamic>)['completed'], isTrue);
+    expect(
+      (planSteps.first as Map<String, dynamic>)['x'] as num,
+      greaterThan(34),
+    );
+  });
 }

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,9 +8,58 @@ import '../../screens/app_scaffold.dart';
 
 enum _TaskPage { today, all }
 
-enum _TaskAction { edit, moveToToday, moveToAll, makeTopLevel, delete }
+enum _TaskAction { plan, edit, moveToToday, moveToAll, makeTopLevel, delete }
 
 enum _DropMode { before, after, nest, topLevel }
+
+enum _TaskDetailMode { plan, single }
+
+enum _PlanStepAction { edit, moveEarlier, moveLater, delete }
+
+class _PlanStep {
+  _PlanStep({
+    required this.id,
+    required this.title,
+    required this.position,
+    this.completed = false,
+  });
+
+  factory _PlanStep.fromJson(Map<String, dynamic> json, int index) {
+    return _PlanStep(
+      id: (json['id'] as num?)?.toInt() ?? index + 1,
+      title: json['title'] as String? ?? 'Untitled step',
+      completed: json['completed'] as bool? ?? false,
+      position: Offset(
+        (json['x'] as num?)?.toDouble() ?? _defaultPlanPosition(index).dx,
+        (json['y'] as num?)?.toDouble() ?? _defaultPlanPosition(index).dy,
+      ),
+    );
+  }
+
+  final int id;
+  String title;
+  Offset position;
+  bool completed;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'title': title,
+      'completed': completed,
+      'x': position.dx,
+      'y': position.dy,
+    };
+  }
+}
+
+Offset _defaultPlanPosition(int index) {
+  const double columnWidth = 224;
+  const double rowHeight = 142;
+  final int row = index ~/ 3;
+  final int columnInRow = index % 3;
+  final int column = row.isEven ? columnInRow : 2 - columnInRow;
+  return Offset(34 + column * columnWidth, 54 + row * rowHeight);
+}
 
 class _Todo {
   _Todo({
@@ -18,9 +69,15 @@ class _Todo {
     this.isToday = true,
     this.todayOrder = 0,
     this.parentId,
-  });
+    List<_PlanStep>? planSteps,
+  }) : planSteps = planSteps ?? <_PlanStep>[];
 
   factory _Todo.fromJson(Map<String, dynamic> json) {
+    final List<Map<String, dynamic>> rawPlanSteps =
+        (json['planSteps'] as List<dynamic>?)
+            ?.whereType<Map<String, dynamic>>()
+            .toList(growable: false) ??
+        <Map<String, dynamic>>[];
     return _Todo(
       id: (json['id'] as num).toInt(),
       title: json['title'] as String? ?? 'Untitled task',
@@ -29,6 +86,11 @@ class _Todo {
       todayOrder:
           (json['todayOrder'] as num?)?.toInt() ?? (json['id'] as num).toInt(),
       parentId: (json['parentId'] as num?)?.toInt(),
+      planSteps: <_PlanStep>[
+        for (final (int index, Map<String, dynamic> step)
+            in rawPlanSteps.indexed)
+          _PlanStep.fromJson(step, index),
+      ],
     );
   }
 
@@ -38,6 +100,17 @@ class _Todo {
   bool isToday;
   int todayOrder;
   int? parentId;
+  List<_PlanStep> planSteps;
+
+  int get completedPlanSteps =>
+      planSteps.where((_PlanStep step) => step.completed).length;
+
+  int get nextPlanStepId =>
+      planSteps.fold<int>(
+        0,
+        (int highest, _PlanStep step) => step.id > highest ? step.id : highest,
+      ) +
+      1;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -47,6 +120,7 @@ class _Todo {
       'isToday': isToday,
       'todayOrder': todayOrder,
       'parentId': parentId,
+      'planSteps': planSteps.map((_PlanStep step) => step.toJson()).toList(),
     };
   }
 }
@@ -249,6 +323,29 @@ class _TasksAppState extends State<TasksApp> {
     }
     setState(() => todo.title = title.trim());
     await _persistTasks();
+  }
+
+  Future<void> _openTaskPlan(
+    _Todo todo, {
+    _TaskDetailMode initialMode = _TaskDetailMode.plan,
+  }) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => _TaskPlanScreen(
+          todo: todo,
+          initialMode: initialMode,
+          onChanged: () async {
+            if (mounted) {
+              setState(() {});
+            }
+            await _persistTasks();
+          },
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _deleteTodo(_Todo todo) async {
@@ -463,6 +560,8 @@ class _TasksAppState extends State<TasksApp> {
 
   Future<void> _handleAction(_Todo todo, _TaskAction action) async {
     switch (action) {
+      case _TaskAction.plan:
+        await _openTaskPlan(todo);
       case _TaskAction.edit:
         await _editTodo(todo);
       case _TaskAction.moveToToday:
@@ -564,6 +663,7 @@ class _TasksAppState extends State<TasksApp> {
                             midpointY,
                           ),
                       onToggle: () => _toggleTodo(visible[index]),
+                      onOpen: () => _openTaskPlan(visible[index]),
                       onAction: (_TaskAction action) =>
                           _handleAction(visible[index], action),
                     ),
@@ -895,6 +995,7 @@ class _TaskDropZone extends StatelessWidget {
     required this.onLeave,
     required this.onAccept,
     required this.onToggle,
+    required this.onOpen,
     required this.onAction,
   });
 
@@ -914,6 +1015,7 @@ class _TaskDropZone extends StatelessWidget {
   final VoidCallback onLeave;
   final void Function(int sourceId, double midpointY) onAccept;
   final VoidCallback onToggle;
+  final VoidCallback onOpen;
   final ValueChanged<_TaskAction> onAction;
 
   @override
@@ -950,6 +1052,7 @@ class _TaskDropZone extends StatelessWidget {
                     highlighted: highlighted && candidateData.isNotEmpty,
                     highlightedMode: highlightedMode,
                     onToggle: onToggle,
+                    onOpen: onOpen,
                     onAction: onAction,
                   );
                   return Listener(
@@ -996,6 +1099,7 @@ class _TaskTileSurface extends StatelessWidget {
     required this.highlighted,
     required this.highlightedMode,
     required this.onToggle,
+    required this.onOpen,
     required this.onAction,
   });
 
@@ -1006,6 +1110,7 @@ class _TaskTileSurface extends StatelessWidget {
   final bool highlighted;
   final _DropMode? highlightedMode;
   final VoidCallback onToggle;
+  final VoidCallback onOpen;
   final ValueChanged<_TaskAction> onAction;
 
   @override
@@ -1036,7 +1141,7 @@ class _TaskTileSurface extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(18),
-            onTap: onToggle,
+            onTap: onOpen,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
               child: Row(
@@ -1099,21 +1204,36 @@ class _TaskTileSurface extends StatelessWidget {
                                     : scheme.onSurface,
                               ),
                         ),
-                        if (page == _TaskPage.all && todo.isToday)
-                          Text(
-                            'Today',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
+                        if ((page == _TaskPage.all && todo.isToday) ||
+                            depth > 0 ||
+                            todo.planSteps.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 3),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 3,
+                            children: <Widget>[
+                              if (page == _TaskPage.all && todo.isToday)
+                                _TaskMetadata(
+                                  icon: Icons.today_rounded,
+                                  label: 'Today',
                                   color: scheme.primary,
-                                  fontWeight: FontWeight.w800,
                                 ),
-                          )
-                        else if (depth > 0)
-                          Text(
-                            'Subtask',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: scheme.onSurfaceVariant),
+                              if (depth > 0)
+                                _TaskMetadata(
+                                  icon: Icons.subdirectory_arrow_right_rounded,
+                                  label: 'Subtask',
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              if (todo.planSteps.isNotEmpty)
+                                _TaskMetadata(
+                                  icon: Icons.account_tree_outlined,
+                                  label:
+                                      'Plan · ${todo.completedPlanSteps}/${todo.planSteps.length} steps',
+                                  color: scheme.tertiary,
+                                ),
+                            ],
                           ),
+                        ],
                       ],
                     ),
                   ),
@@ -1130,6 +1250,13 @@ class _TaskTileSurface extends StatelessWidget {
                     ),
                     itemBuilder: (BuildContext context) =>
                         <PopupMenuEntry<_TaskAction>>[
+                          const PopupMenuItem<_TaskAction>(
+                            value: _TaskAction.plan,
+                            child: ListTile(
+                              leading: Icon(Icons.account_tree_outlined),
+                              title: Text('Plan / Single Task'),
+                            ),
+                          ),
                           const PopupMenuItem<_TaskAction>(
                             value: _TaskAction.edit,
                             child: ListTile(
@@ -1177,6 +1304,920 @@ class _TaskTileSurface extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _TaskMetadata extends StatelessWidget {
+  const _TaskMetadata({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 3),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall
+              ?.copyWith(color: color, fontWeight: FontWeight.w800),
+        ),
+      ],
+    );
+  }
+}
+
+class _TaskPlanScreen extends StatefulWidget {
+  const _TaskPlanScreen({
+    required this.todo,
+    required this.initialMode,
+    required this.onChanged,
+  });
+
+  final _Todo todo;
+  final _TaskDetailMode initialMode;
+  final Future<void> Function() onChanged;
+
+  @override
+  State<_TaskPlanScreen> createState() => _TaskPlanScreenState();
+}
+
+class _TaskPlanScreenState extends State<_TaskPlanScreen> {
+  static const Size _nodeSize = Size(188, 88);
+  late _TaskDetailMode _mode = widget.initialMode;
+
+  _Todo get todo => widget.todo;
+
+  Future<void> _addStep() async {
+    final String? title = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => const _PlanStepDialog(),
+    );
+    if (title == null || title.trim().isEmpty || !mounted) {
+      return;
+    }
+    setState(() {
+      todo.planSteps.add(
+        _PlanStep(
+          id: todo.nextPlanStepId,
+          title: title.trim(),
+          position: _defaultPlanPosition(todo.planSteps.length),
+        ),
+      );
+    });
+    await widget.onChanged();
+  }
+
+  Future<void> _editStep(_PlanStep step) async {
+    final String? title = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) =>
+          _PlanStepDialog(initialTitle: step.title),
+    );
+    if (title == null || title.trim().isEmpty || !mounted) {
+      return;
+    }
+    setState(() => step.title = title.trim());
+    await widget.onChanged();
+  }
+
+  Future<void> _toggleStep(_PlanStep step) async {
+    setState(() => step.completed = !step.completed);
+    HapticFeedback.selectionClick();
+    await widget.onChanged();
+  }
+
+  Future<void> _handleStepAction(_PlanStep step, _PlanStepAction action) async {
+    final int index = todo.planSteps.indexOf(step);
+    switch (action) {
+      case _PlanStepAction.edit:
+        await _editStep(step);
+        return;
+      case _PlanStepAction.moveEarlier:
+        if (index <= 0) {
+          return;
+        }
+        setState(() {
+          todo.planSteps
+            ..removeAt(index)
+            ..insert(index - 1, step);
+        });
+      case _PlanStepAction.moveLater:
+        if (index < 0 || index >= todo.planSteps.length - 1) {
+          return;
+        }
+        setState(() {
+          todo.planSteps
+            ..removeAt(index)
+            ..insert(index + 1, step);
+        });
+      case _PlanStepAction.delete:
+        setState(() => todo.planSteps.remove(step));
+    }
+    await widget.onChanged();
+  }
+
+  Future<void> _persistPosition() => widget.onChanged();
+
+  Future<void> _resetLayout() async {
+    setState(() {
+      for (final (int index, _PlanStep step) in todo.planSteps.indexed) {
+        step.position = _defaultPlanPosition(index);
+      }
+    });
+    await widget.onChanged();
+  }
+
+  Future<void> _markTaskComplete() async {
+    setState(() => todo.completed = true);
+    await widget.onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(todo.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: <Widget>[
+          if (_mode == _TaskDetailMode.plan && todo.planSteps.isNotEmpty)
+            IconButton(
+              tooltip: 'Reset flowchart layout',
+              onPressed: _resetLayout,
+              icon: const Icon(Icons.auto_fix_high_rounded),
+            ),
+        ],
+      ),
+      floatingActionButton: _mode == _TaskDetailMode.plan
+          ? FloatingActionButton.extended(
+              key: const ValueKey<String>('add-plan-step'),
+              tooltip: 'Add planned step',
+              onPressed: _addStep,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add step'),
+            )
+          : null,
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
+              child: _TaskModeSwitcher(
+                selected: _mode,
+                planCount: todo.planSteps.length,
+                onSelected: (_TaskDetailMode mode) =>
+                    setState(() => _mode = mode),
+              ),
+            ),
+            Expanded(
+              child: _mode == _TaskDetailMode.plan
+                  ? _buildPlanCanvas(context)
+                  : _SingleTaskView(
+                      todo: todo,
+                      onCompleteStep: _toggleStep,
+                      onCreatePlan: () =>
+                          setState(() => _mode = _TaskDetailMode.plan),
+                      onMarkTaskComplete: _markTaskComplete,
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlanCanvas(BuildContext context) {
+    if (todo.planSteps.isEmpty) {
+      return _EmptyPlan(onAdd: _addStep);
+    }
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final double canvasWidth = max(
+      760,
+      todo.planSteps.map((_PlanStep step) => step.position.dx).reduce(max) +
+          _nodeSize.width +
+          70,
+    );
+    final double canvasHeight = max(
+      620,
+      todo.planSteps.map((_PlanStep step) => step.position.dy).reduce(max) +
+          _nodeSize.height +
+          110,
+    );
+    return Column(
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                Icons.pan_tool_alt_outlined,
+                size: 16,
+                color: scheme.primary,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'Drag cards to arrange the canvas. Numbered arrows set the Single Task order.',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: InteractiveViewer(
+              key: const ValueKey<String>('task-plan-canvas'),
+              constrained: false,
+              boundaryMargin: const EdgeInsets.all(160),
+              minScale: 0.55,
+              maxScale: 1.8,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: canvasWidth,
+                height: canvasHeight,
+                child: Stack(
+                  children: <Widget>[
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _PlanCanvasPainter(
+                          steps: todo.planSteps,
+                          nodeSize: _nodeSize,
+                          gridColor: scheme.outlineVariant.withValues(
+                            alpha: 0.35,
+                          ),
+                          lineColor: scheme.primary.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                    for (final (int index, _PlanStep step)
+                        in todo.planSteps.indexed)
+                      Positioned(
+                        left: step.position.dx,
+                        top: step.position.dy,
+                        width: _nodeSize.width,
+                        height: _nodeSize.height,
+                        child: _PlanNode(
+                          key: ValueKey<String>('plan-step-${step.id}'),
+                          step: step,
+                          number: index + 1,
+                          canMoveEarlier: index > 0,
+                          canMoveLater: index < todo.planSteps.length - 1,
+                          onDrag: (Offset delta) {
+                            setState(() {
+                              step.position = Offset(
+                                max(12, step.position.dx + delta.dx),
+                                max(12, step.position.dy + delta.dy),
+                              );
+                            });
+                          },
+                          onDragEnd: _persistPosition,
+                          onToggle: () => _toggleStep(step),
+                          onAction: (_PlanStepAction action) =>
+                              _handleStepAction(step, action),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TaskModeSwitcher extends StatelessWidget {
+  const _TaskModeSwitcher({
+    required this.selected,
+    required this.planCount,
+    required this.onSelected,
+  });
+
+  final _TaskDetailMode selected;
+  final int planCount;
+  final ValueChanged<_TaskDetailMode> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<_TaskDetailMode>(
+      key: const ValueKey<String>('task-detail-mode'),
+      segments: <ButtonSegment<_TaskDetailMode>>[
+        const ButtonSegment<_TaskDetailMode>(
+          value: _TaskDetailMode.plan,
+          icon: Icon(Icons.account_tree_outlined),
+          label: Text('Plan'),
+        ),
+        ButtonSegment<_TaskDetailMode>(
+          value: _TaskDetailMode.single,
+          icon: const Icon(Icons.center_focus_strong_rounded),
+          label: Text('Single Task${planCount == 0 ? '' : ' · $planCount'}'),
+        ),
+      ],
+      selected: <_TaskDetailMode>{selected},
+      showSelectedIcon: false,
+      onSelectionChanged: (Set<_TaskDetailMode> value) =>
+          onSelected(value.first),
+    );
+  }
+}
+
+class _PlanNode extends StatelessWidget {
+  const _PlanNode({
+    super.key,
+    required this.step,
+    required this.number,
+    required this.canMoveEarlier,
+    required this.canMoveLater,
+    required this.onDrag,
+    required this.onDragEnd,
+    required this.onToggle,
+    required this.onAction,
+  });
+
+  final _PlanStep step;
+  final int number;
+  final bool canMoveEarlier;
+  final bool canMoveLater;
+  final ValueChanged<Offset> onDrag;
+  final VoidCallback onDragEnd;
+  final VoidCallback onToggle;
+  final ValueChanged<_PlanStepAction> onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanUpdate: (DragUpdateDetails details) => onDrag(details.delta),
+      onPanEnd: (_) => onDragEnd(),
+      child: Material(
+        elevation: step.completed ? 0 : 3,
+        color: step.completed
+            ? scheme.primaryContainer.withValues(alpha: 0.72)
+            : scheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 9, 5, 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: step.completed ? scheme.primary : scheme.outlineVariant,
+              width: step.completed ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  '$number',
+                  style: TextStyle(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: step.completed
+                    ? 'Mark plan step incomplete'
+                    : 'Complete plan step',
+                onPressed: onToggle,
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  step.completed
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
+                  color: step.completed
+                      ? scheme.primary
+                      : scheme.onSurfaceVariant,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  step.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    decoration: step.completed
+                        ? TextDecoration.lineThrough
+                        : null,
+                  ),
+                ),
+              ),
+              PopupMenuButton<_PlanStepAction>(
+                tooltip: 'Plan step actions',
+                padding: EdgeInsets.zero,
+                onSelected: onAction,
+                itemBuilder: (BuildContext context) =>
+                    <PopupMenuEntry<_PlanStepAction>>[
+                      const PopupMenuItem<_PlanStepAction>(
+                        value: _PlanStepAction.edit,
+                        child: Text('Edit step'),
+                      ),
+                      PopupMenuItem<_PlanStepAction>(
+                        value: _PlanStepAction.moveEarlier,
+                        enabled: canMoveEarlier,
+                        child: const Text('Move earlier'),
+                      ),
+                      PopupMenuItem<_PlanStepAction>(
+                        value: _PlanStepAction.moveLater,
+                        enabled: canMoveLater,
+                        child: const Text('Move later'),
+                      ),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem<_PlanStepAction>(
+                        value: _PlanStepAction.delete,
+                        child: Text('Delete step'),
+                      ),
+                    ],
+                icon: const Icon(Icons.more_vert_rounded, size: 18),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanCanvasPainter extends CustomPainter {
+  const _PlanCanvasPainter({
+    required this.steps,
+    required this.nodeSize,
+    required this.gridColor,
+    required this.lineColor,
+  });
+
+  final List<_PlanStep> steps;
+  final Size nodeSize;
+  final Color gridColor;
+  final Color lineColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint grid = Paint()
+      ..color = gridColor
+      ..strokeWidth = 1;
+    for (double x = 0; x <= size.width; x += 28) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
+    }
+    for (double y = 0; y <= size.height; y += 28) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    final Paint connector = Paint()
+      ..color = lineColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    for (int index = 0; index < steps.length - 1; index++) {
+      final Offset start =
+          steps[index].position +
+          Offset(nodeSize.width / 2, nodeSize.height / 2);
+      final Offset end =
+          steps[index + 1].position +
+          Offset(nodeSize.width / 2, nodeSize.height / 2);
+      final Offset direction = end - start;
+      final Offset startEdge =
+          start +
+          Offset(
+            direction.dx.sign * nodeSize.width * 0.48,
+            direction.dy.sign * min(nodeSize.height * 0.34, direction.dy.abs()),
+          );
+      final Offset endEdge =
+          end -
+          Offset(
+            direction.dx.sign * nodeSize.width * 0.48,
+            direction.dy.sign * min(nodeSize.height * 0.34, direction.dy.abs()),
+          );
+      final double bend = max(44, (endEdge.dx - startEdge.dx).abs() * 0.45);
+      final Path path = Path()
+        ..moveTo(startEdge.dx, startEdge.dy)
+        ..cubicTo(
+          startEdge.dx + direction.dx.sign * bend,
+          startEdge.dy,
+          endEdge.dx - direction.dx.sign * bend,
+          endEdge.dy,
+          endEdge.dx,
+          endEdge.dy,
+        );
+      canvas.drawPath(path, connector);
+      final double angle = atan2(
+        endEdge.dy - startEdge.dy,
+        endEdge.dx - startEdge.dx,
+      );
+      final Path arrow = Path()
+        ..moveTo(endEdge.dx, endEdge.dy)
+        ..lineTo(
+          endEdge.dx - 12 * cos(angle - pi / 6),
+          endEdge.dy - 12 * sin(angle - pi / 6),
+        )
+        ..moveTo(endEdge.dx, endEdge.dy)
+        ..lineTo(
+          endEdge.dx - 12 * cos(angle + pi / 6),
+          endEdge.dy - 12 * sin(angle + pi / 6),
+        );
+      canvas.drawPath(arrow, connector);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PlanCanvasPainter oldDelegate) => true;
+}
+
+class _SingleTaskView extends StatelessWidget {
+  const _SingleTaskView({
+    required this.todo,
+    required this.onCompleteStep,
+    required this.onCreatePlan,
+    required this.onMarkTaskComplete,
+  });
+
+  final _Todo todo;
+  final ValueChanged<_PlanStep> onCompleteStep;
+  final VoidCallback onCreatePlan;
+  final VoidCallback onMarkTaskComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    if (todo.planSteps.isEmpty) {
+      return _EmptySingleTask(onCreatePlan: onCreatePlan);
+    }
+    final int currentIndex = todo.planSteps.indexWhere(
+      (_PlanStep step) => !step.completed,
+    );
+    final int completed = todo.completedPlanSteps;
+    final double progress = completed / todo.planSteps.length;
+    final int previousCompletedIndex = currentIndex <= 0
+        ? -1
+        : todo.planSteps.lastIndexWhere(
+            (_PlanStep step) => step.completed,
+            currentIndex - 1,
+          );
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(22, 12, 22, 30),
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                currentIndex < 0
+                    ? 'Plan complete'
+                    : 'Step ${currentIndex + 1} of ${todo.planSteps.length}',
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w900),
+              ),
+            ),
+            Text(
+              '${(progress * 100).round()}%',
+              style: TextStyle(
+                color: scheme.primary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 9),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 9,
+            backgroundColor: scheme.surfaceContainerHighest,
+          ),
+        ),
+        const SizedBox(height: 28),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 240),
+          transitionBuilder: (Widget child, Animation<double> animation) =>
+              FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.08, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+          child: currentIndex < 0
+              ? _PlanCompleteCard(
+                  key: const ValueKey<String>('plan-complete'),
+                  taskCompleted: todo.completed,
+                  onMarkTaskComplete: onMarkTaskComplete,
+                )
+              : _CurrentPlanStepCard(
+                  key: ValueKey<int>(todo.planSteps[currentIndex].id),
+                  step: todo.planSteps[currentIndex],
+                  number: currentIndex + 1,
+                  remaining: todo.planSteps.length - completed - 1,
+                  onComplete: () =>
+                      onCompleteStep(todo.planSteps[currentIndex]),
+                ),
+        ),
+        if (previousCompletedIndex >= 0) ...<Widget>[
+          const SizedBox(height: 16),
+          TextButton.icon(
+            onPressed: () =>
+                onCompleteStep(todo.planSteps[previousCompletedIndex]),
+            icon: const Icon(Icons.undo_rounded),
+            label: const Text('Undo previous step'),
+          ),
+        ],
+        const SizedBox(height: 24),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.list_alt_rounded),
+          label: const Text('Back to task list'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CurrentPlanStepCard extends StatelessWidget {
+  const _CurrentPlanStepCard({
+    super.key,
+    required this.step,
+    required this.number,
+    required this.remaining,
+    required this.onComplete,
+  });
+
+  final _PlanStep step;
+  final int number;
+  final int remaining;
+  final VoidCallback onComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            scheme.primaryContainer,
+            scheme.tertiaryContainer.withValues(alpha: 0.72),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        children: <Widget>[
+          Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: 0.78),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$number',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: scheme.primary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            step.title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            remaining == 0
+                ? 'This is the final planned step.'
+                : '$remaining planned ${remaining == 1 ? 'step' : 'steps'} will stay out of sight until this is done.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            key: ValueKey<String>('complete-plan-step-${step.id}'),
+            onPressed: onComplete,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+            ),
+            icon: const Icon(Icons.check_rounded),
+            label: const Text('Complete this step'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanCompleteCard extends StatelessWidget {
+  const _PlanCompleteCard({
+    super.key,
+    required this.taskCompleted,
+    required this.onMarkTaskComplete,
+  });
+
+  final bool taskCompleted;
+  final VoidCallback onMarkTaskComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        children: <Widget>[
+          Icon(Icons.route_rounded, size: 58, color: scheme.primary),
+          const SizedBox(height: 14),
+          Text(
+            'Every planned step is done',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            taskCompleted
+                ? 'The task is complete too.'
+                : 'You can keep the plan as a record or finish the main task.',
+            textAlign: TextAlign.center,
+          ),
+          if (!taskCompleted) ...<Widget>[
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onMarkTaskComplete,
+              icon: const Icon(Icons.task_alt_rounded),
+              label: const Text('Mark task complete'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyPlan extends StatelessWidget {
+  const _EmptyPlan({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              Icons.account_tree_outlined,
+              size: 62,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Turn this task into a plan',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Add steps, arrange them on the canvas, then work through them one at a time.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add first step'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptySingleTask extends StatelessWidget {
+  const _EmptySingleTask({required this.onCreatePlan});
+
+  final VoidCallback onCreatePlan;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(Icons.center_focus_strong_rounded, size: 58),
+            const SizedBox(height: 15),
+            Text(
+              'No steps to focus on yet',
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Build the flowchart first, then Single Task will show one step at a time.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: onCreatePlan,
+              icon: const Icon(Icons.account_tree_outlined),
+              label: const Text('Create a plan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanStepDialog extends StatefulWidget {
+  const _PlanStepDialog({this.initialTitle = ''});
+
+  final String initialTitle;
+
+  @override
+  State<_PlanStepDialog> createState() => _PlanStepDialogState();
+}
+
+class _PlanStepDialogState extends State<_PlanStepDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialTitle,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool editing = widget.initialTitle.isNotEmpty;
+    return AlertDialog(
+      title: Text(editing ? 'Edit planned step' : 'Add planned step'),
+      content: TextField(
+        key: const ValueKey<String>('plan-step-title'),
+        controller: _controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          hintText: 'What happens at this step?',
+        ),
+        onSubmitted: (_) => Navigator.of(context).pop(_controller.text),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: Text(editing ? 'Save' : 'Add step'),
+        ),
+      ],
     );
   }
 }
