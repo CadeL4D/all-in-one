@@ -104,7 +104,7 @@ void main() {
       'maths',
       'focus',
       'noises',
-      'parking',
+      'afterimage',
       'workouts',
     ]);
 

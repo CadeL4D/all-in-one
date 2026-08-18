@@ -2,7 +2,7 @@ name: all_in_one
 description: "A fast cross-platform hub for a growing collection of focused apps."
 publish_to: 'none'
 
-version: 0.2.8+11
+version: 0.2.8-2+12
 
 environment:
   sdk: ^3.13.0
@@ -33,6 +33,7 @@ flutter:
     - assets/branding/
     - assets/audio/nature/
     - assets/audio/focus/
+    - assets/game/afterimage/
 
 flutter_launcher_icons:
   image_path: assets/branding/one_hub_icon.png

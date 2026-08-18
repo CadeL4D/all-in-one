@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_manifest.dart';
+import 'afterimage/afterimage_app.dart';
 import 'focus/focus_app.dart';
 import 'maths/maths_app.dart';
 import 'noises/noises_app.dart';
-import 'parking/parking_app.dart';
 import 'prompts/prompts_app.dart';
 import 'routines/routines_app.dart';
 import 'tasks/tasks_app.dart';
@@ -75,14 +75,14 @@ abstract final class AppRegistry {
       builder: _noisesBuilder,
     ),
     AppManifest(
-      id: 'parking',
-      name: 'Parkline',
-      tagline: 'Master every parking space',
-      description: 'Drive through procedural parking challenges with a touch steering wheel.',
-      icon: Icons.local_parking_rounded,
-      gradient: <Color>[Color(0xFF16A36D), Color(0xFF4DE1A8)],
+      id: 'afterimage',
+      name: 'Afterimage',
+      tagline: 'Outsmart your last move',
+      description: 'An endless time-heist where recorded echoes help you crack guarded vaults.',
+      icon: Icons.auto_awesome_motion_rounded,
+      gradient: <Color>[Color(0xFF171A2D), Color(0xFF7259ED)],
       category: AppCategory.games,
-      builder: _parkingBuilder,
+      builder: _afterimageBuilder,
     ),
     AppManifest(
       id: 'workouts',
@@ -112,7 +112,8 @@ abstract final class AppRegistry {
 
   static Widget _noisesBuilder(BuildContext context) => const NoisesApp();
 
-  static Widget _parkingBuilder(BuildContext context) => const ParkingApp();
+  static Widget _afterimageBuilder(BuildContext context) =>
+      const AfterimageApp();
 
   static Widget _workoutsBuilder(BuildContext context) => const WorkoutsApp();
 }

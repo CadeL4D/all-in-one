@@ -12,10 +12,10 @@ Flutter's single codebase.
 - **Routines** — repeatable routines with step-by-step daily progress and optional clock times for steps.
 - **Focus** — named focus/break timers with an optional extra check-in timer and background completion alerts.
 - **Noises** — colored-noise soundscapes with independently toggleable Creative Commons nature layers.
-- **Parkline** — an endless procedural parking game with touch steering and pedal controls.
+- **Afterimage** — an endless, procedural time-heist where each rewind records an echo that can distract guards, hold switches, and help crack the next vault.
 - **Workouts** — a private weekly strength planner with age-aware programming, active set logging, and Resolve-versus-Pressure ratings.
 
-Tasks, prompts, routines, workout plans/history, Maths/Parkline scores, and
+Tasks, prompts, routines, workout plans/history, Maths scores, and
 recently opened hub cards are saved locally with `shared_preferences`.
 
 ## Project structure
@@ -40,7 +40,7 @@ lib/
         ├── routines/          # Routines tracker module
         ├── focus/             # Focus timer module
         ├── noises/            # Colored noise and nature mix module
-        ├── parking/           # Procedural touch-controlled parking game
+        ├── afterimage/        # Procedural time-heist game and simulation
         └── workouts/          # Local workout planner and Resolve rating
 ```
 
