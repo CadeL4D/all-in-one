@@ -31,6 +31,8 @@ real-device profiling, authored media, or long-form balance testing.
 - A code-rendered isometric viewport with pan, 0.5×–2.5× zoom, day/night color
   grading, corruption treatment, health/construction feedback, thumb-zone
   controls, haptics, active pause, and versioned ten-second/lifecycle autosave.
+- Morale-driven productivity, consequential living-world encounters, rotating
+  Night Oaths, breakthrough casualties, and reactive ambient world motion.
 
 ## Design corrections made during implementation
 
@@ -59,6 +61,9 @@ real-device profiling, authored media, or long-form balance testing.
 
 - Deterministic seeds and save schema versioning.
 - A hard active-entity budget and fixed-step safety cap.
+- Independent simulation, 30 FPS world-paint, and 10 Hz HUD cadences; visible
+  tile culling; cached path validation; indexed buildings; 20 Hz defense scans;
+  and allocation-reduced Canvas painting for mobile frame stability.
 - Separate blueprint, power, clear, purify, inspect, and camera interaction
   states to prevent accidental spending.
 - Onboarding that explains autonomy, kinetic gestures, and maze rules before
@@ -73,9 +78,9 @@ real-device profiling, authored media, or long-form balance testing.
 - Citizen choices are autonomous physical agents, but individual five-unit
   backpacks and every production recipe are summarized into deterministic work
   rates to keep the opening loop readable.
-- Flow fields are recomputed synchronously. A 4,096-cell BFS is currently small,
-  but isolate migration should be driven by real-device traces rather than
-  added blindly.
+- Flow fields are recomputed synchronously only when topology changes, while
+  repeated placement validation is cached. A 4,096-cell BFS is currently
+  small, but isolate migration should still be driven by real-device traces.
 - Gates block and absorb enemies at night, though friendly gate-opening is
   represented by citizens sheltering before the siege rather than per-agent
   door animation.

@@ -13,29 +13,57 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test('Simon route starts adjacent and grows by one after a clear', () {
+  test('Simon starts with one square and extends the same sequence by one', () {
     final GridlockEngine engine = GridlockEngine(seed: 4)
       ..start(withDecoys: false);
     _advanceToInput(engine);
 
-    expect(engine.path, hasLength(3));
-    _expectAdjacent(engine.path);
-    final List<int> firstRoute = List<int>.of(engine.path);
-    for (final int tile in firstRoute) {
+    expect(engine.path, hasLength(1));
+    final List<int> firstSequence = List<int>.of(engine.path);
+    for (final int tile in firstSequence) {
       expect(engine.tapTile(tile), isTrue);
     }
     expect(engine.phase, GridlockPhase.roundWon);
     expect(engine.roundsCompleted, 1);
 
     _advance(engine, GridlockEngine.roundWonSeconds + 0.1);
-    expect(engine.path, hasLength(4));
-    expect(engine.path.take(3), firstRoute);
-    _expectAdjacent(engine.path);
+    expect(engine.path, hasLength(2));
+    expect(engine.path.take(1), firstSequence);
+  });
+
+  test('Simon allows non-adjacent squares and consecutive repeats', () {
+    bool sawNonAdjacent = false;
+    bool sawRepeat = false;
+    for (int seed = 0; seed < 12; seed++) {
+      final GridlockEngine engine = GridlockEngine(seed: seed)
+        ..start(withDecoys: false);
+      for (int round = 0; round < 10; round++) {
+        _advanceToInput(engine);
+        for (int index = 1; index < engine.path.length; index++) {
+          final int previous = engine.path[index - 1];
+          final int current = engine.path[index];
+          final int distance =
+              (previous ~/ 4 - current ~/ 4).abs() +
+              (previous % 4 - current % 4).abs();
+          sawRepeat = sawRepeat || previous == current;
+          sawNonAdjacent = sawNonAdjacent || distance > 1;
+        }
+        for (final int tile in List<int>.of(engine.path)) {
+          expect(engine.tapTile(tile), isTrue);
+        }
+        _advance(engine, GridlockEngine.roundWonSeconds + 0.05);
+      }
+    }
+    expect(sawNonAdjacent, isTrue);
+    expect(sawRepeat, isTrue);
   });
 
   test('the three-second clock resets after every correct tap', () {
     final GridlockEngine engine = GridlockEngine(seed: 7)
       ..start(withDecoys: false);
+    _advanceToInput(engine);
+    expect(engine.tapTile(engine.path.first), isTrue);
+    _advance(engine, GridlockEngine.roundWonSeconds + 0.05);
     _advanceToInput(engine);
 
     _advance(engine, 2.75);
@@ -209,11 +237,5 @@ void _advance(GridlockEngine engine, double seconds) {
   while (elapsed < seconds) {
     engine.tick(0.05);
     elapsed += 0.05;
-  }
-}
-
-void _expectAdjacent(List<int> path) {
-  for (int index = 1; index < path.length; index++) {
-    expect(GridlockEngine.neighborsOf(path[index - 1]), contains(path[index]));
   }
 }

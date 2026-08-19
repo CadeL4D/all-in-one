@@ -76,14 +76,14 @@ abstract final class AppRegistry {
       builder: _noisesBuilder,
     ),
     AppManifest(
-      id: 'gridlock',
-      name: 'Gridlock Rush',
+      id: 'simon',
+      name: 'Simon',
       tagline: 'Watch. Remember. Repeat.',
-      description: 'A Simon-style spatial memory game with growing routes and optional decoys.',
+      description: 'A pure sequence-memory game with unrestricted squares, repeats, and optional decoys.',
       icon: Icons.grid_view_rounded,
       gradient: <Color>[Color(0xFF17233B), Color(0xFF5AE6D3)],
       category: AppCategory.games,
-      builder: _gridlockBuilder,
+      builder: _simonBuilder,
     ),
     AppManifest(
       id: 'sanctuary',
@@ -123,7 +123,7 @@ abstract final class AppRegistry {
 
   static Widget _noisesBuilder(BuildContext context) => const NoisesApp();
 
-  static Widget _gridlockBuilder(BuildContext context) => const GridlockApp();
+  static Widget _simonBuilder(BuildContext context) => const GridlockApp();
 
   static Widget _sanctuaryBuilder(BuildContext context) => const SanctuaryApp();
 

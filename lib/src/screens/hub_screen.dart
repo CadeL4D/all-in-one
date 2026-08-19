@@ -92,9 +92,12 @@ class _HubScreenState extends State<HubScreen> {
     final Set<String> validIds = AppRegistry.apps
         .map((AppManifest app) => app.id)
         .toSet();
+    String migrateId(String id) => id == 'gridlock' ? 'simon' : id;
+    final List<String> migratedOrder = storedOrder.map(migrateId).toList();
+    final List<String> migratedRecents = storedRecents.map(migrateId).toList();
     final Set<String> seenOrderIds = <String>{};
     final List<String> normalizedOrder = <String>[
-      ...storedOrder.where(
+      ...migratedOrder.where(
         (String id) => validIds.contains(id) && seenOrderIds.add(id),
       ),
       ...validIds.where(seenOrderIds.add),
@@ -102,7 +105,7 @@ class _HubScreenState extends State<HubScreen> {
     setState(() {
       _recentIds
         ..clear()
-        ..addAll(storedRecents.where(validIds.contains).take(3));
+        ..addAll(migratedRecents.where(validIds.contains).take(3));
       _orderedIds
         ..clear()
         ..addAll(normalizedOrder);

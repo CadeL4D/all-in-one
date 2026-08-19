@@ -40,6 +40,15 @@ enum AncestralUpgrade {
   arcaneTurrets,
 }
 
+enum SanctuaryEncounterKind {
+  lostCaravan,
+  singingStones,
+  woundedStag,
+  emberWind,
+}
+
+enum NightOath { holdTheLine, divineRestraint, cinderHarvest }
+
 enum PlacementFailure {
   none,
   fog,
@@ -500,6 +509,68 @@ extension AncestralUpgradeData on AncestralUpgrade {
   };
 
   int get maxRank => 10;
+}
+
+extension SanctuaryEncounterData on SanctuaryEncounterKind {
+  String get title => switch (this) {
+    SanctuaryEncounterKind.lostCaravan => 'Lanterns at the boundary',
+    SanctuaryEncounterKind.singingStones => 'The quarry is singing',
+    SanctuaryEncounterKind.woundedStag => 'A white stag at the farms',
+    SanctuaryEncounterKind.emberWind => 'Warm ash on the wind',
+  };
+
+  String get story => switch (this) {
+    SanctuaryEncounterKind.lostCaravan =>
+      'A tired family has followed the Hearth-light through the corruption.',
+    SanctuaryEncounterKind.singingStones =>
+      'The granite hums with trapped essence. Acolytes gather to listen.',
+    SanctuaryEncounterKind.woundedStag =>
+      'The creature kneels without fear while the village waits for your sign.',
+    SanctuaryEncounterKind.emberWind =>
+      'Cinders drift from the coming rifts and settle across the ramparts.',
+  };
+
+  String get compassionateLabel => switch (this) {
+    SanctuaryEncounterKind.lostCaravan => 'Offer shelter',
+    SanctuaryEncounterKind.singingStones => 'Let acolytes listen',
+    SanctuaryEncounterKind.woundedStag => 'Tend its wounds',
+    SanctuaryEncounterKind.emberWind => 'Bless the ramparts',
+  };
+
+  String get pragmaticLabel => switch (this) {
+    SanctuaryEncounterKind.lostCaravan => 'Trade for supplies',
+    SanctuaryEncounterKind.singingStones => 'Break the seam',
+    SanctuaryEncounterKind.woundedStag => 'Fill the granary',
+    SanctuaryEncounterKind.emberWind => 'Gather the cinders',
+  };
+
+  String get compassionateCost => switch (this) {
+    SanctuaryEncounterKind.lostCaravan => '15 food · +2 people · +morale',
+    SanctuaryEncounterKind.singingStones => '18 mana · +4 crystals',
+    SanctuaryEncounterKind.woundedStag => '8 food · strong morale gain',
+    SanctuaryEncounterKind.emberWind => '20 mana · repair every structure',
+  };
+
+  String get pragmaticReward => switch (this) {
+    SanctuaryEncounterKind.lostCaravan => '+25 wood · +12 stone',
+    SanctuaryEncounterKind.singingStones => '+40 stone · morale falls',
+    SanctuaryEncounterKind.woundedStag => '+25 food · morale falls',
+    SanctuaryEncounterKind.emberWind => '+12 iron · morale falls',
+  };
+}
+
+extension NightOathData on NightOath {
+  String get label => switch (this) {
+    NightOath.holdTheLine => 'Hold the Line',
+    NightOath.divineRestraint => 'Divine Restraint',
+    NightOath.cinderHarvest => 'Cinder Harvest',
+  };
+
+  String detail(int target) => switch (this) {
+    NightOath.holdTheLine => 'Lose no structures before dawn',
+    NightOath.divineRestraint => 'Use at most one god power tonight',
+    NightOath.cinderHarvest => 'Defeat $target abyssals before dawn',
+  };
 }
 
 class SanctuaryEffect {

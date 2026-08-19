@@ -226,6 +226,57 @@ void main() {
     expect(restored.ancestralShards, 8);
   });
 
+  test('a new day brings a living-world encounter with a real tradeoff', () {
+    final SanctuaryEngine engine = SanctuaryEngine(
+      seed: 44,
+      config: const SanctuaryConfig(
+        mapSize: 16,
+        daySeconds: 0.1,
+        duskSeconds: 0.1,
+        nightSeconds: 0.1,
+        dawnSeconds: 0.1,
+      ),
+    );
+
+    _advance(engine, 0.5);
+    expect(engine.day, 2);
+    expect(engine.encounter, isNotNull);
+    final double moraleBefore = engine.morale;
+    expect(engine.resolveEncounter(compassionate: false), isTrue);
+    expect(engine.encounter, isNull);
+    expect(engine.morale, lessThan(moraleBefore));
+  });
+
+  test('night oaths reward a clean defense and persist in the save', () {
+    final SanctuaryEngine engine = SanctuaryEngine(
+      seed: 52,
+      config: const SanctuaryConfig(
+        mapSize: 16,
+        daySeconds: 0.1,
+        duskSeconds: 0.1,
+        nightSeconds: 0.5,
+        dawnSeconds: 0.1,
+      ),
+    );
+    _advance(engine, 0.25);
+    expect(engine.phase, SanctuaryPhase.night);
+    engine
+      ..nightOath = NightOath.holdTheLine
+      ..buildingsLostTonight = 0;
+    final int shardsBefore = engine.ancestralShards;
+
+    _advance(engine, 0.55);
+    expect(engine.phase, SanctuaryPhase.dawn);
+    expect(engine.ancestralShards, shardsBefore + 1);
+
+    final SanctuaryEngine restored = SanctuaryEngine.fromJson(
+      jsonDecode(jsonEncode(engine.toJson())) as Map<String, dynamic>,
+      config: const SanctuaryConfig(mapSize: 16),
+    );
+    expect(restored.morale, engine.morale);
+    expect(restored.nightOath, NightOath.holdTheLine);
+  });
+
   testWidgets('front page starts a responsive playable settlement', (
     WidgetTester tester,
   ) async {
@@ -278,6 +329,33 @@ void main() {
       find.byKey(const ValueKey<String>('sanctuary-resume')),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('living-world choice is usable on a narrow phone', (
+    WidgetTester tester,
+  ) async {
+    final SanctuaryEngine saved = SanctuaryEngine(
+      seed: 61,
+      config: const SanctuaryConfig(mapSize: 16),
+    )..encounter = SanctuaryEncounterKind.woundedStag;
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'sanctuary_cinder_v1': jsonEncode(saved.toJson()),
+    });
+    tester.view.physicalSize = const Size(360, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const MaterialApp(home: SanctuaryApp()));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byKey(const ValueKey<String>('sanctuary-resume')));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('A WHITE STAG AT THE FARMS'), findsOneWidget);
+    expect(find.text('Tend its wounds'), findsOneWidget);
+    expect(find.text('Fill the granary'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

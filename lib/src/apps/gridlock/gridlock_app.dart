@@ -339,7 +339,7 @@ class _LobbyHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  'GRIDLOCK RUSH',
+                  'SIMON',
                   style: TextStyle(
                     color: Color(0xFFF4F6FF),
                     fontSize: 16,
@@ -348,7 +348,7 @@ class _LobbyHeader extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'SPATIAL LOGIC & MEMORY',
+                  'PURE SEQUENCE MEMORY',
                   style: TextStyle(
                     color: Color(0xFF71798F),
                     fontSize: 8,
@@ -445,7 +445,7 @@ class _HeroPanel extends StatelessWidget {
                 ),
                 SizedBox(height: 9),
                 Text(
-                  'A Simon-style route that grows across adjacent tiles.',
+                  'Remember an unrestricted sequence that grows by one square every round. Squares can jump or repeat.',
                   style: TextStyle(
                     color: Color(0xFFAAB1C2),
                     fontSize: 11,
@@ -712,20 +712,20 @@ class _HowToPanel extends StatelessWidget {
         children: <Widget>[
           _HowToRow(
             number: '01',
-            title: 'Watch the route',
-            detail: 'Three adjacent tiles flash to begin.',
+            title: 'Watch the sequence',
+            detail: 'One square flashes in the first round.',
           ),
           _HowDivider(),
           _HowToRow(
             number: '02',
             title: 'Repeat every tile',
-            detail: 'Tap the same route in the exact order.',
+            detail: 'Tap the same squares in the exact order.',
           ),
           _HowDivider(),
           _HowToRow(
             number: '03',
             title: 'Add one more',
-            detail: 'Each clear extends the same route by one tile.',
+            detail: 'Each clear adds one completely independent square.',
           ),
           _HowDivider(),
           _HowToRow(
@@ -872,7 +872,7 @@ class _RecentRunCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${run.rounds} routes  •  path ${run.longestPath}  •  ${_formatDuration(run.durationSeconds)}',
+                  '${run.rounds} rounds  •  sequence ${run.longestPath}  •  ${_formatDuration(run.durationSeconds)}',
                   style: const TextStyle(color: Color(0xFF737B90), fontSize: 9),
                 ),
               ],
@@ -994,7 +994,7 @@ class _GameHeader extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           _GameStat(
-            label: 'ROUTE',
+            label: 'ROUND',
             value: '${engine.path.length}',
             color: const Color(0xFF5AE6D3),
           ),
@@ -1117,7 +1117,7 @@ class _TurnStatus extends StatelessWidget {
         Text(
           input
               ? '${engine.inputIndex + 1} OF ${engine.path.length}'
-              : 'ROUTE ${engine.level}',
+              : 'ROUND ${engine.level}',
           style: const TextStyle(
             color: Color(0xFFF1F3F9),
             fontSize: 22,
@@ -1152,36 +1152,31 @@ class _Board extends StatelessWidget {
           ),
         ],
       ),
-      child: Stack(
-        children: <Widget>[
-          Positioned.fill(child: CustomPaint(painter: _RoutePainter(engine))),
-          GridView.builder(
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-            ),
-            itemCount: GridlockEngine.tileCount,
-            itemBuilder: (BuildContext context, int index) {
-              final bool active = engine.activeTile == index;
-              final bool decoy = engine.decoyTile == index;
-              final bool entered =
-                  engine.phase == GridlockPhase.input &&
-                  engine.path.take(engine.inputIndex).contains(index);
-              final bool enabled = engine.phase == GridlockPhase.input;
-              return _GridTile(
-                key: ValueKey<String>('gridlock-tile-$index'),
-                active: active,
-                decoy: decoy,
-                entered: entered,
-                enabled: enabled,
-                onTap: () => onTile(index),
-              );
-            },
-          ),
-        ],
+      child: GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+        ),
+        itemCount: GridlockEngine.tileCount,
+        itemBuilder: (BuildContext context, int index) {
+          final bool active = engine.activeTile == index;
+          final bool decoy = engine.decoyTile == index;
+          final bool entered =
+              engine.phase == GridlockPhase.input &&
+              engine.path.take(engine.inputIndex).contains(index);
+          final bool enabled = engine.phase == GridlockPhase.input;
+          return _GridTile(
+            key: ValueKey<String>('gridlock-tile-$index'),
+            active: active,
+            decoy: decoy,
+            entered: entered,
+            enabled: enabled,
+            onTap: () => onTile(index),
+          );
+        },
       ),
     );
   }
@@ -1284,65 +1279,6 @@ class _GridTile extends StatelessWidget {
   }
 }
 
-class _RoutePainter extends CustomPainter {
-  const _RoutePainter(this.engine);
-
-  final GridlockEngine engine;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    List<int> visible = const <int>[];
-    if (engine.phase == GridlockPhase.showing &&
-        engine.activeTile != null &&
-        engine.showIndex > 0) {
-      visible = engine.path.sublist(engine.showIndex - 1, engine.showIndex + 1);
-    } else if (engine.phase == GridlockPhase.input && engine.inputIndex > 1) {
-      visible = engine.path.take(engine.inputIndex).toList();
-    }
-    if (visible.length < 2) {
-      return;
-    }
-    const double gap = 8;
-    final double tile = (size.width - gap * 3) / 4;
-    Offset center(int index) {
-      final int row = index ~/ 4;
-      final int column = index % 4;
-      return Offset(
-        column * (tile + gap) + tile / 2,
-        row * (tile + gap) + tile / 2,
-      );
-    }
-
-    final Path path = Path()
-      ..moveTo(center(visible.first).dx, center(visible.first).dy);
-    for (final int tileIndex in visible.skip(1)) {
-      final Offset point = center(tileIndex);
-      path.lineTo(point.dx, point.dy);
-    }
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 7
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..color = const Color(0xFF5AE6D3).withValues(alpha: 0.17),
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.2
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..color = const Color(0xFF7BFFEC).withValues(alpha: 0.68),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_RoutePainter oldDelegate) => true;
-}
-
 class _GameFooter extends StatelessWidget {
   const _GameFooter({required this.engine});
 
@@ -1372,7 +1308,7 @@ class _GameFooter extends StatelessWidget {
                   input
                       ? 'NEXT TAP'
                       : engine.phase == GridlockPhase.roundWon
-                      ? 'ROUTE COMPLETE'
+                      ? 'SEQUENCE COMPLETE'
                       : 'MEMORIZE ONLY',
                   style: const TextStyle(
                     color: Color(0xFF7B8398),
@@ -1458,7 +1394,7 @@ class _GameOver extends StatelessWidget {
                 child: Icon(
                   engine.endReason == GridlockEndReason.timeout
                       ? Icons.timer_off_rounded
-                      : Icons.route_rounded,
+                      : Icons.touch_app_rounded,
                   color: const Color(0xFFFF6B7A),
                   size: 25,
                 ),
@@ -1502,7 +1438,7 @@ class _GameOver extends StatelessWidget {
                   Expanded(
                     child: _ResultStat(
                       value: '${engine.roundsCompleted}',
-                      label: 'ROUTES',
+                      label: 'ROUNDS',
                     ),
                   ),
                   const SizedBox(width: 8),

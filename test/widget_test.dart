@@ -104,7 +104,7 @@ void main() {
       'maths',
       'focus',
       'noises',
-      'gridlock',
+      'simon',
       'sanctuary',
       'workouts',
     ]);

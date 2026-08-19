@@ -29,9 +29,12 @@ class _SanctuaryAppState extends State<SanctuaryApp>
 
   late final AnimationController _ticker;
   final TransformationController _camera = TransformationController();
+  final ValueNotifier<int> _worldRepaint = ValueNotifier<int>(0);
   SanctuaryEngine? _engine;
   Map<String, dynamic>? _savedWorld;
   Duration? _lastFrame;
+  Duration? _lastWorldFrame;
+  Duration? _lastUiFrame;
   Timer? _autosaveTimer;
   bool _loaded = false;
   bool _cameraInitialized = false;
@@ -98,7 +101,14 @@ class _SanctuaryAppState extends State<SanctuaryApp>
     for (final SanctuaryEvent event in engine.drainEvents()) {
       _handleEvent(event);
     }
-    if (mounted) {
+    final Duration lastWorld = _lastWorldFrame ?? Duration.zero;
+    if (!engine.paused && now - lastWorld >= const Duration(milliseconds: 33)) {
+      _lastWorldFrame = now;
+      _worldRepaint.value++;
+    }
+    final Duration lastUi = _lastUiFrame ?? Duration.zero;
+    if (mounted && now - lastUi >= const Duration(milliseconds: 100)) {
+      _lastUiFrame = now;
       setState(() {});
     }
   }
@@ -112,9 +122,7 @@ class _SanctuaryAppState extends State<SanctuaryApp>
         HapticFeedback.lightImpact();
         _showToast(event.message ?? 'Cannot build there');
       case SanctuaryEventKind.towerShot:
-        if ((_engine?.enemiesDefeatedTonight ?? 0) % 5 == 0) {
-          HapticFeedback.selectionClick();
-        }
+        HapticFeedback.selectionClick();
       case SanctuaryEventKind.powerCast:
         HapticFeedback.heavyImpact();
         SystemSound.play(SystemSoundType.click);
@@ -130,6 +138,14 @@ class _SanctuaryAppState extends State<SanctuaryApp>
         _showToast(event.message ?? 'Dawn secured');
       case SanctuaryEventKind.citizenLost:
         HapticFeedback.vibrate();
+        _showToast(event.message ?? 'A villager was lost');
+      case SanctuaryEventKind.encounterAvailable:
+        HapticFeedback.selectionClick();
+        _showToast(event.message ?? 'Something approaches the boundary');
+      case SanctuaryEventKind.encounterResolved ||
+          SanctuaryEventKind.oathResolved:
+        HapticFeedback.mediumImpact();
+        _showToast(event.message ?? 'The settlement remembers your choice');
       case SanctuaryEventKind.settlementFallen:
         HapticFeedback.vibrate();
         unawaited(_save());
@@ -224,6 +240,7 @@ class _SanctuaryAppState extends State<SanctuaryApp>
     _autosaveTimer?.cancel();
     _ticker.dispose();
     _camera.dispose();
+    _worldRepaint.dispose();
     super.dispose();
   }
 
@@ -270,7 +287,7 @@ class _SanctuaryAppState extends State<SanctuaryApp>
               onPause: () => setState(engine.togglePause),
               onSpeed: (double speed) => setState(() => engine.setSpeed(speed)),
             ),
-            _ResourceRail(resources: engine.resources),
+            _ResourceRail(resources: engine.resources, morale: engine.morale),
             Expanded(
               child: LayoutBuilder(
                 builder: (BuildContext context, BoxConstraints constraints) {
@@ -284,6 +301,7 @@ class _SanctuaryAppState extends State<SanctuaryApp>
                     selectedBuilding: _building,
                     selectedPower: _power,
                     tool: _tool,
+                    repaint: _worldRepaint,
                     onTap: _handleWorldTap,
                     onLongPressStart: (Offset local) {
                       final GridPoint tile = _tileAt(local, engine);
@@ -347,6 +365,43 @@ class _SanctuaryAppState extends State<SanctuaryApp>
             top: 118,
             child: IgnorePointer(child: _WorldToast(message: _toast!)),
           ),
+        if (engine.encounter case final SanctuaryEncounterKind encounter)
+          Positioned(
+            left: 12,
+            right: 12,
+            top: 108,
+            child: _EncounterCard(
+              encounter: encounter,
+              compassionateEnabled: engine.canResolveEncounter(
+                compassionate: true,
+              ),
+              onChoose: (bool compassionate) {
+                if (engine.resolveEncounter(compassionate: compassionate)) {
+                  setState(() {});
+                  unawaited(_save());
+                } else {
+                  _showToast('The settlement cannot afford that choice yet');
+                  setState(() {});
+                }
+              },
+            ),
+          ),
+        if (engine.encounter == null && engine.phase == SanctuaryPhase.night)
+          if (engine.nightOath case final NightOath oath)
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 108,
+              child: _NightOathChip(
+                oath: oath,
+                target: engine.oathTarget,
+                progress: switch (oath) {
+                  NightOath.holdTheLine => engine.buildingsLostTonight,
+                  NightOath.divineRestraint => engine.powersCastTonight,
+                  NightOath.cinderHarvest => engine.enemiesDefeatedTonight,
+                },
+              ),
+            ),
         if (engine.paused && engine.phase != SanctuaryPhase.fallen)
           Positioned.fill(
             child: _PauseScrim(onResume: () => setState(engine.togglePause)),
@@ -1369,9 +1424,10 @@ class _SpeedButton extends StatelessWidget {
 }
 
 class _ResourceRail extends StatelessWidget {
-  const _ResourceRail({required this.resources});
+  const _ResourceRail({required this.resources, required this.morale});
 
   final SanctuaryResources resources;
+  final double morale;
 
   @override
   Widget build(BuildContext context) {
@@ -1417,6 +1473,13 @@ class _ResourceRail extends StatelessWidget {
             value: resources.crystals.floor(),
             color: const Color(0xFFB57BEE),
           ),
+          _Resource(
+            icon: Icons.favorite_rounded,
+            value: morale.round(),
+            color: morale >= 60
+                ? const Color(0xFFFF8FA3)
+                : const Color(0xFFFF5C70),
+          ),
         ],
       ),
     );
@@ -1454,6 +1517,224 @@ class _Resource extends StatelessWidget {
   }
 }
 
+class _EncounterCard extends StatelessWidget {
+  const _EncounterCard({
+    required this.encounter,
+    required this.compassionateEnabled,
+    required this.onChoose,
+  });
+
+  final SanctuaryEncounterKind encounter;
+  final bool compassionateEnabled;
+  final ValueChanged<bool> onChoose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+        decoration: BoxDecoration(
+          color: const Color(0xF2181822),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFF66502F)),
+          boxShadow: const <BoxShadow>[
+            BoxShadow(color: Color(0x99000000), blurRadius: 22),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(
+                  Icons.auto_stories_rounded,
+                  color: Color(0xFFFFC86B),
+                  size: 17,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    encounter.title.toUpperCase(),
+                    style: const TextStyle(
+                      color: Color(0xFFFFD890),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.7,
+                    ),
+                  ),
+                ),
+                const Text(
+                  'A LIVING-WORLD MOMENT',
+                  style: TextStyle(
+                    color: Color(0xFF726B62),
+                    fontSize: 6,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              encounter.story,
+              style: const TextStyle(
+                color: Color(0xFFD6D1C8),
+                fontSize: 10,
+                height: 1.25,
+              ),
+            ),
+            const SizedBox(height: 9),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: _EncounterChoice(
+                    label: encounter.compassionateLabel,
+                    detail: encounter.compassionateCost,
+                    color: const Color(0xFF50D4AE),
+                    enabled: compassionateEnabled,
+                    onTap: () => onChoose(true),
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: _EncounterChoice(
+                    label: encounter.pragmaticLabel,
+                    detail: encounter.pragmaticReward,
+                    color: const Color(0xFFFF9E59),
+                    onTap: () => onChoose(false),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EncounterChoice extends StatelessWidget {
+  const _EncounterChoice({
+    required this.label,
+    required this.detail,
+    required this.color,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  final String label;
+  final String detail;
+  final Color color;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.38,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(11),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: color.withValues(alpha: 0.45)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Color(0xFF8D8990), fontSize: 7),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NightOathChip extends StatelessWidget {
+  const _NightOathChip({
+    required this.oath,
+    required this.target,
+    required this.progress,
+  });
+
+  final NightOath oath;
+  final int target;
+  final int progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final String counter = switch (oath) {
+      NightOath.holdTheLine => '$progress lost',
+      NightOath.divineRestraint => '$progress/1 powers',
+      NightOath.cinderHarvest => '$progress/$target defeated',
+    };
+    return IgnorePointer(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xE8171323),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: const Color(0xFF5E477B)),
+        ),
+        child: Row(
+          children: <Widget>[
+            const Icon(
+              Icons.shield_moon_rounded,
+              size: 15,
+              color: Color(0xFFB89AFF),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'NIGHT OATH · ${oath.label.toUpperCase()}',
+                    style: const TextStyle(
+                      color: Color(0xFFE4D8FF),
+                      fontSize: 8,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    '${oath.detail(target)} · $counter',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF8D82A0),
+                      fontSize: 7,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _WorldViewport extends StatelessWidget {
   const _WorldViewport({
     required this.engine,
@@ -1464,6 +1745,7 @@ class _WorldViewport extends StatelessWidget {
     required this.selectedBuilding,
     required this.selectedPower,
     required this.tool,
+    required this.repaint,
     required this.onTap,
     required this.onLongPressStart,
     required this.onLongPressEnd,
@@ -1477,6 +1759,7 @@ class _WorldViewport extends StatelessWidget {
   final BuildingKind? selectedBuilding;
   final GodPower? selectedPower;
   final _WorldTool tool;
+  final Listenable repaint;
   final ValueChanged<Offset> onTap;
   final ValueChanged<Offset> onLongPressStart;
   final void Function(Offset local, double velocity) onLongPressEnd;
@@ -1523,6 +1806,7 @@ class _WorldViewport extends StatelessWidget {
                   selectedBuilding: selectedBuilding,
                   selectedPower: selectedPower,
                   tool: tool,
+                  repaint: repaint,
                 ),
               ),
             ),
@@ -1541,7 +1825,8 @@ class _SanctuaryPainter extends CustomPainter {
     required this.selectedBuilding,
     required this.selectedPower,
     required this.tool,
-  });
+    required Listenable repaint,
+  }) : super(repaint: repaint);
 
   final SanctuaryEngine engine;
   final Offset origin;
@@ -1550,13 +1835,31 @@ class _SanctuaryPainter extends CustomPainter {
   final GodPower? selectedPower;
   final _WorldTool tool;
   final Path _diamond = Path();
+  final Path _shape = Path();
   final Paint _fill = Paint();
+  final Paint _detail = Paint();
   final Paint _stroke = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 0.75;
 
   Offset _iso(double x, double y) =>
       Offset((x - y) * 32 + origin.dx, (x + y) * 16 + origin.dy);
+
+  Offset _gridAt(Offset point) {
+    final double screenX = point.dx - origin.dx;
+    final double screenY = point.dy - origin.dy;
+    return Offset(screenX / 64 + screenY / 32, screenY / 32 - screenX / 64);
+  }
+
+  Paint _solid(Color color) => _detail
+    ..style = PaintingStyle.fill
+    ..strokeWidth = 1
+    ..color = color;
+
+  Paint _line(Color color, double width) => _detail
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = width
+    ..color = color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1568,21 +1871,55 @@ class _SanctuaryPainter extends CustomPainter {
       SanctuaryPhase.dawn => 0.28,
       SanctuaryPhase.fallen => 0.9,
     };
-    for (int sum = 0; sum <= (engine.mapSize - 1) * 2; sum++) {
-      final int minX = max(0, sum - engine.mapSize + 1);
-      final int maxX = min(engine.mapSize - 1, sum);
+    final List<Offset> corners = <Offset>[
+      _gridAt(clip.topLeft),
+      _gridAt(clip.topRight),
+      _gridAt(clip.bottomLeft),
+      _gridAt(clip.bottomRight),
+    ];
+    final int visibleMinX = max(
+      0,
+      corners.map((Offset value) => value.dx).reduce(min).floor() - 2,
+    );
+    final int visibleMaxX = min(
+      engine.mapSize - 1,
+      corners.map((Offset value) => value.dx).reduce(max).ceil() + 2,
+    );
+    final int visibleMinY = max(
+      0,
+      corners.map((Offset value) => value.dy).reduce(min).floor() - 2,
+    );
+    final int visibleMaxY = min(
+      engine.mapSize - 1,
+      corners.map((Offset value) => value.dy).reduce(max).ceil() + 2,
+    );
+    for (
+      int sum = visibleMinX + visibleMinY;
+      sum <= visibleMaxX + visibleMaxY;
+      sum++
+    ) {
+      final int minX = max(visibleMinX, sum - visibleMaxY);
+      final int maxX = min(visibleMaxX, sum - visibleMinY);
       for (int x = minX; x <= maxX; x++) {
         final int y = sum - x;
-        final GridPoint tile = GridPoint(x, y);
         final Offset center = _iso(x + 0.5, y + 0.5);
-        if (!clip.overlaps(
-          Rect.fromCenter(center: center, width: 68, height: 50),
-        )) {
+        if (center.dx < clip.left - 34 ||
+            center.dx > clip.right + 34 ||
+            center.dy < clip.top - 25 ||
+            center.dy > clip.bottom + 25) {
           continue;
         }
-        _paintTile(canvas, tile, center, night);
+        _paintTile(canvas, x, y, center, night);
       }
     }
+    _paintAmbient(
+      canvas,
+      clip,
+      visibleMinX,
+      visibleMaxX,
+      visibleMinY,
+      visibleMaxY,
+    );
     for (final SanctuaryBuilding building in engine.buildings) {
       final Offset point = _iso(building.tile.x + 0.5, building.tile.y + 0.5);
       if (clip.contains(point)) {
@@ -1615,9 +1952,15 @@ class _SanctuaryPainter extends CustomPainter {
     }
   }
 
-  void _paintTile(Canvas canvas, GridPoint tile, Offset center, double night) {
-    final bool revealed = engine.isRevealed(tile);
-    final TerrainKind terrain = engine.terrainAt(tile);
+  void _paintTile(
+    Canvas canvas,
+    int tileX,
+    int tileY,
+    Offset center,
+    double night,
+  ) {
+    final bool revealed = engine.isRevealedXY(tileX, tileY);
+    final TerrainKind terrain = engine.terrainAtXY(tileX, tileY);
     final Color dayColor = switch (terrain) {
       TerrainKind.grass => const Color(0xFF2D6A4F),
       TerrainKind.forest => const Color(0xFF1D513A),
@@ -1649,11 +1992,13 @@ class _SanctuaryPainter extends CustomPainter {
         : const Color(0x557209B7);
     canvas.drawPath(_diamond, _stroke);
     if (!revealed) {
-      if ((tile.x * 7 + tile.y * 11 + engine.seed) % 9 == 0) {
+      if ((tileX * 7 + tileY * 11 + engine.seed) % 9 == 0) {
         canvas.drawCircle(
           center,
           5,
-          Paint()..color = const Color(0xFF7209B7).withValues(alpha: 0.28),
+          _detail
+            ..style = PaintingStyle.fill
+            ..color = const Color(0xFF7209B7).withValues(alpha: 0.28),
         );
       }
       return;
@@ -1666,7 +2011,9 @@ class _SanctuaryPainter extends CustomPainter {
             width: 22,
             height: 9,
           ),
-          Paint()..color = const Color(0x66000000),
+          _detail
+            ..style = PaintingStyle.fill
+            ..color = const Color(0x66000000),
         );
         canvas.drawRect(
           Rect.fromCenter(
@@ -1674,12 +2021,15 @@ class _SanctuaryPainter extends CustomPainter {
             width: 4,
             height: 16,
           ),
-          Paint()..color = const Color(0xFF704735),
+          _detail
+            ..style = PaintingStyle.fill
+            ..color = const Color(0xFF704735),
         );
         canvas.drawCircle(
           center - const Offset(0, 14),
           11,
-          Paint()
+          _detail
+            ..style = PaintingStyle.fill
             ..color = Color.lerp(
               const Color(0xFF276749),
               const Color(0xFF13283B),
@@ -1687,17 +2037,24 @@ class _SanctuaryPainter extends CustomPainter {
             )!,
         );
       case TerrainKind.granite:
-        final Path rock = Path()
+        _shape
+          ..reset()
           ..moveTo(center.dx - 10, center.dy + 4)
           ..lineTo(center.dx - 6, center.dy - 10)
           ..lineTo(center.dx + 5, center.dy - 14)
           ..lineTo(center.dx + 12, center.dy + 3)
           ..close();
-        canvas.drawPath(rock, Paint()..color = const Color(0xFFAAA89E));
+        canvas.drawPath(
+          _shape,
+          _detail
+            ..style = PaintingStyle.fill
+            ..color = const Color(0xFFAAA89E),
+        );
         canvas.drawLine(
           center - const Offset(5, 8),
           center + const Offset(5, -5),
-          Paint()
+          _detail
+            ..style = PaintingStyle.stroke
             ..color = const Color(0xFFD5D1C5)
             ..strokeWidth = 1.5,
         );
@@ -1705,7 +2062,8 @@ class _SanctuaryPainter extends CustomPainter {
         canvas.drawLine(
           center - const Offset(19, 1),
           center + const Offset(18, 1),
-          Paint()
+          _detail
+            ..style = PaintingStyle.stroke
             ..color = const Color(0x8890E0EF)
             ..strokeWidth = 2,
         );
@@ -1713,7 +2071,7 @@ class _SanctuaryPainter extends CustomPainter {
         canvas.drawCircle(
           center,
           8,
-          Paint()
+          _detail
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2
             ..color = const Color(0xFF00F5D4),
@@ -1721,21 +2079,128 @@ class _SanctuaryPainter extends CustomPainter {
       case TerrainKind.grass || TerrainKind.chasm:
         break;
     }
-    if (engine.fissures.containsKey(tile.index(engine.mapSize))) {
+    if (engine.fissures.containsKey(tileY * engine.mapSize + tileX)) {
       canvas.drawLine(
         center - const Offset(18, 7),
         center + const Offset(18, 7),
-        Paint()
+        _detail
+          ..style = PaintingStyle.stroke
           ..color = const Color(0xFFFF5400)
           ..strokeWidth = 5,
       );
       canvas.drawLine(
         center - const Offset(18, 7),
         center + const Offset(18, 7),
-        Paint()
+        _detail
+          ..style = PaintingStyle.stroke
           ..color = const Color(0xFF2A0810)
           ..strokeWidth = 2,
       );
+    }
+  }
+
+  void _paintAmbient(
+    Canvas canvas,
+    Rect clip,
+    int minX,
+    int maxX,
+    int minY,
+    int maxY,
+  ) {
+    final double time = engine.worldTime;
+    final Offset hearth = _iso(
+      engine.hearthTile.x + 0.5,
+      engine.hearthTile.y + 0.5,
+    );
+    if (clip.contains(hearth)) {
+      for (int index = 0; index < 3; index++) {
+        final double age = (time * 0.22 + index / 3) % 1;
+        final Offset smoke =
+            hearth +
+            Offset(
+              sin(time * 1.3 + index * 2.1) * (3 + age * 5),
+              -31 - age * 42,
+            );
+        canvas.drawCircle(
+          smoke,
+          3 + age * 7,
+          _detail
+            ..style = PaintingStyle.fill
+            ..color = const Color(0xFFCBD0CF)
+                .withValues(alpha: (1 - age) * 0.16),
+        );
+      }
+    }
+    final bool dark =
+        engine.phase == SanctuaryPhase.night ||
+        engine.phase == SanctuaryPhase.dusk;
+    if (dark) {
+      final int center = engine.mapSize ~/ 2;
+      final int radius = min(13, center - 2);
+      final List<Offset> rifts = <Offset>[
+        _iso(center + 0.5, center - radius + 0.5),
+        _iso(center + radius + 0.5, center + 0.5),
+        _iso(center + 0.5, center + radius + 0.5),
+        _iso(center - radius + 0.5, center + 0.5),
+      ];
+      final double riftPulse = 0.55 + sin(time * 4).abs() * 0.45;
+      for (final Offset rift in rifts) {
+        if (!clip.contains(rift)) {
+          continue;
+        }
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: rift,
+            width: 30 + riftPulse * 12,
+            height: 13 + riftPulse * 5,
+          ),
+          _line(const Color(0xFFB43CFF).withValues(alpha: 0.65), 2.5),
+        );
+        canvas.drawCircle(
+          rift - const Offset(0, 6),
+          4 + riftPulse * 3,
+          _solid(const Color(0xFF6E1AA8).withValues(alpha: 0.34)),
+        );
+      }
+      for (int y = minY; y <= maxY; y += 2) {
+        for (int x = minX; x <= maxX; x += 2) {
+          final int hash = x * 37 + y * 61 + engine.seed;
+          if (hash % 47 != 0 || !engine.isRevealedXY(x, y)) {
+            continue;
+          }
+          final Offset base = _iso(x + 0.5, y + 0.5);
+          final Offset glow =
+              base +
+              Offset(
+                sin(time * 1.7 + hash) * 11,
+                -8 + cos(time * 1.2 + hash) * 6,
+              );
+          canvas.drawCircle(
+            glow,
+            1.4,
+            _detail
+              ..style = PaintingStyle.fill
+              ..color = const Color(0xFF90FFE8)
+                  .withValues(alpha: 0.45 + sin(time * 2 + hash).abs() * 0.45),
+          );
+        }
+      }
+    } else {
+      for (int index = 0; index < 4; index++) {
+        final double angle = time * (0.16 + index * 0.015) + index * 1.7;
+        final Offset bird =
+            hearth +
+            Offset(cos(angle) * (75 + index * 18), sin(angle) * 25 - 85);
+        if (!clip.contains(bird)) {
+          continue;
+        }
+        _detail
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.3
+          ..color = const Color(0xAAE4E1CF);
+        canvas.drawLine(bird - const Offset(5, 1), bird, _detail);
+        canvas.drawLine(bird, bird + const Offset(5, -1), _detail);
+      }
     }
   }
 
@@ -1752,7 +2217,7 @@ class _SanctuaryPainter extends CustomPainter {
         width: 38,
         height: 16,
       ),
-      Paint()..color = const Color(0x77000000),
+      _solid(const Color(0x77000000)),
     );
     switch (building.kind) {
       case BuildingKind.hearth:
@@ -1762,23 +2227,23 @@ class _SanctuaryPainter extends CustomPainter {
             width: 48,
             height: 25,
           ),
-          Paint()..color = const Color(0xFF8D5B4C),
+          _solid(const Color(0xFF8D5B4C)),
         );
         final double pulse = 0.5 + sin(engine.phaseRemaining * 4) * 0.5;
         canvas.drawCircle(
           point - const Offset(0, 10),
           25 + pulse * 3,
-          Paint()..color = const Color(0xFFFF5400).withValues(alpha: 0.13),
+          _solid(const Color(0xFFFF5400).withValues(alpha: 0.13)),
         );
         canvas.drawCircle(
           point - const Offset(0, 10),
           11,
-          Paint()..color = const Color(0xFFFF6A24),
+          _solid(const Color(0xFFFF6A24)),
         );
         canvas.drawCircle(
           point - const Offset(0, 15),
           6,
-          Paint()..color = const Color(0xFFFFE09C),
+          _solid(const Color(0xFFFFE09C)),
         );
       case BuildingKind.palisade || BuildingKind.rampart || BuildingKind.gate:
         final Color top = building.kind == BuildingKind.palisade
@@ -1790,7 +2255,7 @@ class _SanctuaryPainter extends CustomPainter {
             width: 48,
             height: 13,
           ),
-          Paint()..color = top.withValues(alpha: alpha),
+          _solid(top.withValues(alpha: alpha)),
         );
         canvas.drawRect(
           Rect.fromCenter(
@@ -1798,12 +2263,7 @@ class _SanctuaryPainter extends CustomPainter {
             width: 48,
             height: 8,
           ),
-          Paint()
-            ..color = Color.lerp(
-              top,
-              Colors.black,
-              0.42,
-            )!.withValues(alpha: alpha),
+          _solid(Color.lerp(top, Colors.black, 0.42)!.withValues(alpha: alpha)),
         );
         if (building.kind == BuildingKind.gate) {
           canvas.drawRect(
@@ -1812,7 +2272,7 @@ class _SanctuaryPainter extends CustomPainter {
               width: 12,
               height: 18,
             ),
-            Paint()..color = const Color(0xFF32333A),
+            _solid(const Color(0xFF32333A)),
           );
         }
       case BuildingKind.arrowTower ||
@@ -1832,30 +2292,28 @@ class _SanctuaryPainter extends CustomPainter {
             width: 20,
             height: 34,
           ),
-          Paint()
-            ..color = Color.lerp(
+          _solid(
+            Color.lerp(
               color,
               const Color(0xFF34313B),
               0.32,
             )!.withValues(alpha: alpha),
+          ),
         );
-        canvas.drawPath(
-          Path()
-            ..moveTo(point.dx - 15, point.dy - 23)
-            ..lineTo(point.dx, point.dy - 36)
-            ..lineTo(point.dx + 15, point.dy - 23)
-            ..close(),
-          Paint()..color = color.withValues(alpha: alpha),
-        );
+        _shape
+          ..reset()
+          ..moveTo(point.dx - 15, point.dy - 23)
+          ..lineTo(point.dx, point.dy - 36)
+          ..lineTo(point.dx + 15, point.dy - 23)
+          ..close();
+        canvas.drawPath(_shape, _solid(color.withValues(alpha: alpha)));
         if (building.kind == BuildingKind.arrowTower ||
             building.kind == BuildingKind.ballista ||
             building.kind == BuildingKind.catapult) {
           canvas.drawLine(
             point - const Offset(0, 29),
             point + const Offset(18, -29),
-            Paint()
-              ..color = const Color(0xFFFFD39A)
-              ..strokeWidth = 3,
+            _line(const Color(0xFFFFD39A), 3),
           );
         }
       case BuildingKind.cottage ||
@@ -1872,21 +2330,23 @@ class _SanctuaryPainter extends CustomPainter {
             width: 31,
             height: 23,
           ),
-          Paint()..color = wall.withValues(alpha: alpha),
+          _solid(wall.withValues(alpha: alpha)),
         );
+        _shape
+          ..reset()
+          ..moveTo(point.dx - 20, point.dy - 18)
+          ..lineTo(point.dx, point.dy - 32)
+          ..lineTo(point.dx + 20, point.dy - 18)
+          ..close();
         canvas.drawPath(
-          Path()
-            ..moveTo(point.dx - 20, point.dy - 18)
-            ..lineTo(point.dx, point.dy - 32)
-            ..lineTo(point.dx + 20, point.dy - 18)
-            ..close(),
-          Paint()..color = const Color(0xFF8D5B4C).withValues(alpha: alpha),
+          _shape,
+          _solid(const Color(0xFF8D5B4C).withValues(alpha: alpha)),
         );
       case BuildingKind.spikeTrench || BuildingKind.tarPit:
         if (building.kind == BuildingKind.tarPit) {
           canvas.drawOval(
             Rect.fromCenter(center: point, width: 44, height: 18),
-            Paint()..color = const Color(0xFF171014),
+            _solid(const Color(0xFF171014)),
           );
           if (building.cooldown > 0) {
             canvas.drawOval(
@@ -1895,7 +2355,7 @@ class _SanctuaryPainter extends CustomPainter {
                 width: 35,
                 height: 14,
               ),
-              Paint()..color = const Color(0xFFFF5400).withValues(alpha: 0.78),
+              _solid(const Color(0xFFFF5400).withValues(alpha: 0.78)),
             );
           }
           break;
@@ -1904,9 +2364,7 @@ class _SanctuaryPainter extends CustomPainter {
           canvas.drawLine(
             point + Offset(index * 7, 6),
             point + Offset(index * 7 + 3, -8),
-            Paint()
-              ..color = const Color(0xFFD6B181).withValues(alpha: alpha)
-              ..strokeWidth = 3,
+            _line(const Color(0xFFD6B181).withValues(alpha: alpha), 3),
           );
         }
     }
@@ -1917,7 +2375,7 @@ class _SanctuaryPainter extends CustomPainter {
           width: 36,
           height: 4,
         ),
-        Paint()..color = const Color(0xFF282935),
+        _solid(const Color(0xFF282935)),
       );
       canvas.drawRect(
         Rect.fromLTWH(
@@ -1926,7 +2384,7 @@ class _SanctuaryPainter extends CustomPainter {
           36 * building.buildRatio,
           4,
         ),
-        Paint()..color = const Color(0xFFFFC15A),
+        _solid(const Color(0xFFFFC15A)),
       );
     } else if (building.healthRatio < 0.72) {
       canvas.drawRect(
@@ -1935,7 +2393,7 @@ class _SanctuaryPainter extends CustomPainter {
           width: 31,
           height: 3,
         ),
-        Paint()..color = const Color(0xFF32151A),
+        _solid(const Color(0xFF32151A)),
       );
       canvas.drawRect(
         Rect.fromLTWH(
@@ -1944,7 +2402,7 @@ class _SanctuaryPainter extends CustomPainter {
           31 * building.healthRatio,
           3,
         ),
-        Paint()..color = const Color(0xFFFF566F),
+        _solid(const Color(0xFFFF566F)),
       );
     }
   }
@@ -1956,15 +2414,39 @@ class _SanctuaryPainter extends CustomPainter {
       CitizenRole.hauler => const Color(0xFF90E0EF),
       CitizenRole.acolyte => const Color(0xFFB981E8),
     };
+    final double bob = citizen.state == CitizenState.idle
+        ? 0
+        : sin(engine.worldTime * 8 + citizen.id * 0.9) * 1.4;
+    final Offset animated = point - Offset(0, bob);
     canvas.drawOval(
       Rect.fromCenter(center: point + const Offset(0, 4), width: 9, height: 5),
-      Paint()..color = const Color(0x77000000),
+      _solid(const Color(0x77000000)),
     );
-    canvas.drawCircle(point - const Offset(0, 5), 4, Paint()..color = color);
+    canvas.drawCircle(animated - const Offset(0, 5), 4, _solid(color));
     canvas.drawRect(
-      Rect.fromCenter(center: point + const Offset(0, 1), width: 6, height: 8),
-      Paint()..color = Color.lerp(color, Colors.black, 0.24)!,
+      Rect.fromCenter(
+        center: animated + const Offset(0, 1),
+        width: 6,
+        height: 8,
+      ),
+      _solid(Color.lerp(color, Colors.black, 0.24)!),
     );
+    if (citizen.state == CitizenState.carrying) {
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: animated + const Offset(5, -1),
+          width: 5,
+          height: 5,
+        ),
+        _solid(const Color(0xFFD9A56F)),
+      );
+    } else if (citizen.state == CitizenState.praying) {
+      canvas.drawCircle(
+        animated - const Offset(0, 13),
+        1.5 + sin(engine.worldTime * 4 + citizen.id).abs(),
+        _solid(const Color(0xFF8CFFE9).withValues(alpha: 0.75)),
+      );
+    }
   }
 
   void _paintEnemy(Canvas canvas, SanctuaryEnemy enemy, Offset point) {
@@ -1982,33 +2464,35 @@ class _SanctuaryPainter extends CustomPainter {
       EnemyKind.brute => 12,
       EnemyKind.devourer => 18,
     };
+    final double movement = sin(engine.worldTime * 9 + enemy.id) * 1.2;
     final Offset elevated = enemy.kind == EnemyKind.banshee
-        ? point - const Offset(0, 15)
-        : point;
+        ? point - Offset(0, 15 + movement * 2)
+        : point - Offset(0, movement);
     canvas.drawOval(
       Rect.fromCenter(
         center: point + const Offset(0, 5),
         width: radius * 2.2,
         height: radius,
       ),
-      Paint()..color = const Color(0x99000000),
+      _solid(const Color(0x99000000)),
     );
     canvas.drawCircle(
       elevated,
       radius + 5,
-      Paint()..color = color.withValues(alpha: 0.12),
+      _solid(color.withValues(alpha: 0.12)),
     );
-    final Path body = Path()
+    _shape
+      ..reset()
       ..moveTo(elevated.dx, elevated.dy - radius)
       ..lineTo(elevated.dx + radius, elevated.dy + radius * 0.7)
       ..lineTo(elevated.dx, elevated.dy + radius)
       ..lineTo(elevated.dx - radius, elevated.dy + radius * 0.7)
       ..close();
-    canvas.drawPath(body, Paint()..color = color);
+    canvas.drawPath(_shape, _solid(color));
     canvas.drawCircle(
       elevated + Offset(radius * 0.32, -radius * 0.15),
       max(1.7, radius * 0.18),
-      Paint()..color = const Color(0xFFFFD3A0),
+      _solid(const Color(0xFFFFD3A0)),
     );
   }
 
@@ -2023,18 +2507,13 @@ class _SanctuaryPainter extends CustomPainter {
     canvas.drawCircle(
       point,
       8 + p * 45,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = max(0.5, 4 * (1 - p))
-        ..color = color.withValues(alpha: 1 - p),
+      _line(color.withValues(alpha: 1 - p), max(0.5, 4 * (1 - p))),
     );
     if (effect.kind == 'lightning') {
       canvas.drawLine(
         point - const Offset(9, 90),
         point,
-        Paint()
-          ..color = color.withValues(alpha: 1 - p)
-          ..strokeWidth = 5,
+        _line(color.withValues(alpha: 1 - p), 5),
       );
     }
   }
@@ -2057,32 +2536,31 @@ class _SanctuaryPainter extends CustomPainter {
     } else if (tool == _WorldTool.clear) {
       color = const Color(0xFFFFC15A);
     }
-    final Path selection = Path()
+    _shape
+      ..reset()
       ..moveTo(center.dx, center.dy - 17)
       ..lineTo(center.dx + 34, center.dy)
       ..lineTo(center.dx, center.dy + 17)
       ..lineTo(center.dx - 34, center.dy)
       ..close();
-    canvas.drawPath(
-      selection,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = color,
-    );
+    canvas.drawPath(_shape, _line(color, 3));
   }
 
   void _paintRain(Canvas canvas, Rect clip) {
-    final Paint rain = Paint()
-      ..color = const Color(0x5590E0EF)
-      ..strokeWidth = 1.5;
+    final Paint rain = _line(const Color(0x5590E0EF), 1.5);
     for (double x = clip.left - 30; x < clip.right + 30; x += 28) {
       canvas.drawLine(Offset(x, clip.top), Offset(x - 35, clip.bottom), rain);
     }
   }
 
   @override
-  bool shouldRepaint(_SanctuaryPainter oldDelegate) => true;
+  bool shouldRepaint(_SanctuaryPainter oldDelegate) =>
+      oldDelegate.engine != engine ||
+      oldDelegate.origin != origin ||
+      oldDelegate.selectedTile != selectedTile ||
+      oldDelegate.selectedBuilding != selectedBuilding ||
+      oldDelegate.selectedPower != selectedPower ||
+      oldDelegate.tool != tool;
 }
 
 class _MacroDeck extends StatelessWidget {

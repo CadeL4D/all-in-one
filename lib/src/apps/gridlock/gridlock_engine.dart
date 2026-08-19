@@ -32,7 +32,7 @@ class GridlockEngine {
   double _phaseTime = 0;
   bool _flashOn = false;
 
-  int get level => max(1, path.length - 2);
+  int get level => max(1, path.length);
 
   double get responseProgress =>
       (responseRemaining / responseSeconds).clamp(0, 1);
@@ -40,11 +40,11 @@ class GridlockEngine {
   String get instruction => switch (phase) {
     GridlockPhase.idle => 'Ready when you are',
     GridlockPhase.getReady => 'Get ready',
-    GridlockPhase.showing => 'Watch the route',
+    GridlockPhase.showing => 'Watch the sequence',
     GridlockPhase.input => 'Repeat it',
-    GridlockPhase.roundWon => 'Route locked',
+    GridlockPhase.roundWon => 'Sequence complete',
     GridlockPhase.gameOver =>
-      endReason == GridlockEndReason.timeout ? 'Time expired' : 'Wrong turn',
+      endReason == GridlockEndReason.timeout ? 'Time expired' : 'Wrong square',
   };
 
   void start({required bool withDecoys}) {
@@ -52,8 +52,6 @@ class GridlockEngine {
     path
       ..clear()
       ..add(_random.nextInt(tileCount));
-    _appendStep();
-    _appendStep();
     score = 0;
     roundsCompleted = 0;
     elapsedSeconds = 0;
@@ -175,12 +173,9 @@ class GridlockEngine {
   }
 
   void _appendStep() {
-    final int current = path.last;
-    final List<int> choices = neighborsOf(current);
-    if (path.length > 1 && choices.length > 1) {
-      choices.remove(path[path.length - 2]);
-    }
-    path.add(choices[_random.nextInt(choices.length)]);
+    // Simon sequences are unrestricted: any square may follow any other
+    // square, including the same square twice in a row.
+    path.add(_random.nextInt(tileCount));
   }
 
   int _chooseDecoy(int correctTile) {
@@ -189,16 +184,5 @@ class GridlockEngine {
         if (tile != correctTile) tile,
     ];
     return choices[_random.nextInt(choices.length)];
-  }
-
-  static List<int> neighborsOf(int tile) {
-    final int row = tile ~/ gridSize;
-    final int column = tile % gridSize;
-    return <int>[
-      if (row > 0) tile - gridSize,
-      if (column < gridSize - 1) tile + 1,
-      if (row < gridSize - 1) tile + gridSize,
-      if (column > 0) tile - 1,
-    ];
   }
 }
