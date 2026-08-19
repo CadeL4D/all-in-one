@@ -8,8 +8,9 @@ import 'package:flutter/services.dart';
 import '../../core/local_store.dart';
 import 'sanctuary_engine.dart';
 import 'sanctuary_models.dart';
+import 'sanctuary_sfx.dart';
 
-enum _WorldTool { inspect, clear, purify }
+enum _WorldTool { inspect, clear, purify, repair }
 
 enum _DeckPage { build, directives, powers }
 
@@ -46,12 +47,17 @@ class _SanctuaryAppState extends State<SanctuaryApp>
   GridPoint? _flingSource;
   String? _toast;
   double _toastLife = 0;
+  bool _soundMuted = false;
+  Map<String, dynamic>? _bestRun;
+  List<Map<String, dynamic>> _pastRuns = <Map<String, dynamic>>[];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadSave();
+    unawaited(_loadHistory());
+    unawaited(_loadSoundState());
     _ticker = AnimationController.unbounded(vsync: this)
       ..addListener(_frame)
       ..repeat(min: 0, max: 100000, period: const Duration(days: 1));
@@ -59,6 +65,61 @@ class _SanctuaryAppState extends State<SanctuaryApp>
       const Duration(seconds: 10),
       (_) => unawaited(_save()),
     );
+  }
+
+  Future<void> _loadHistory() async {
+    final Map<String, dynamic>? best = await LocalStore.readJsonMap(
+      LocalStore.sanctuaryBestKey,
+    );
+    final List<Map<String, dynamic>>? runs = await LocalStore.readJsonList(
+      LocalStore.sanctuaryRunsKey,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _bestRun = best;
+      _pastRuns = runs ?? <Map<String, dynamic>>[];
+    });
+  }
+
+  Future<void> _loadSoundState() async {
+    await SanctuarySfx.instance.load();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _soundMuted = SanctuarySfx.instance.muted);
+  }
+
+  Future<void> _toggleSound() async {
+    final bool muted = !_soundMuted;
+    await SanctuarySfx.instance.setMuted(muted);
+    if (!muted) {
+      SanctuarySfx.instance.play('tap');
+    }
+    setState(() => _soundMuted = muted);
+  }
+
+  Future<void> _recordRun(SanctuaryEngine engine) async {
+    try {
+      final Map<String, dynamic> summary = engine.runSummary();
+      final List<Map<String, dynamic>> runs = <Map<String, dynamic>>[
+        summary,
+        ...?await LocalStore.readJsonList(LocalStore.sanctuaryRunsKey),
+      ].take(5).toList();
+      await LocalStore.writeJsonList(LocalStore.sanctuaryRunsKey, runs);
+      final Map<String, dynamic>? best = await LocalStore.readJsonMap(
+        LocalStore.sanctuaryBestKey,
+      );
+      final int bestNight = (best?['night'] as num?)?.toInt() ?? 0;
+      final int runNight = (summary['night'] as num?)?.toInt() ?? 0;
+      if (runNight > bestNight) {
+        await LocalStore.writeJsonMap(LocalStore.sanctuaryBestKey, summary);
+      }
+      await _loadHistory();
+    } catch (_) {
+      // Run history is a keepsake, never a blocker.
+    }
   }
 
   Future<void> _loadSave() async {
@@ -114,20 +175,29 @@ class _SanctuaryAppState extends State<SanctuaryApp>
   }
 
   void _handleEvent(SanctuaryEvent event) {
+    final SanctuarySfx sfx = SanctuarySfx.instance;
     switch (event.kind) {
       case SanctuaryEventKind.construction:
         HapticFeedback.selectionClick();
+        sfx.play('tap');
         _showToast(event.message ?? 'Blueprint placed');
+      case SanctuaryEventKind.constructionComplete:
+        HapticFeedback.mediumImpact();
+        sfx.play('chime');
+        _showToast(event.message ?? 'Structure complete');
       case SanctuaryEventKind.placementRejected:
         HapticFeedback.lightImpact();
+        sfx.play('tap');
         _showToast(event.message ?? 'Cannot build there');
       case SanctuaryEventKind.towerShot:
         HapticFeedback.selectionClick();
+        sfx.play('shot');
       case SanctuaryEventKind.powerCast:
         HapticFeedback.heavyImpact();
-        SystemSound.play(SystemSoundType.click);
+        sfx.play('boom');
       case SanctuaryEventKind.impact:
         HapticFeedback.heavyImpact();
+        sfx.play('thud');
         _showToast(event.message ?? 'Heavy impact');
       case SanctuaryEventKind.phaseChanged:
         HapticFeedback.mediumImpact();
@@ -135,20 +205,48 @@ class _SanctuaryAppState extends State<SanctuaryApp>
         unawaited(_save());
       case SanctuaryEventKind.dawn:
         HapticFeedback.mediumImpact();
+        sfx.play('chime');
         _showToast(event.message ?? 'Dawn secured');
       case SanctuaryEventKind.citizenLost:
         HapticFeedback.vibrate();
+        sfx.play('alarm');
         _showToast(event.message ?? 'A villager was lost');
       case SanctuaryEventKind.encounterAvailable:
         HapticFeedback.selectionClick();
+        sfx.play('tap');
         _showToast(event.message ?? 'Something approaches the boundary');
       case SanctuaryEventKind.encounterResolved ||
           SanctuaryEventKind.oathResolved:
         HapticFeedback.mediumImpact();
+        sfx.play('chime');
         _showToast(event.message ?? 'The settlement remembers your choice');
+      case SanctuaryEventKind.waveForecast:
+        HapticFeedback.mediumImpact();
+        sfx.play('alarm');
+        _showToast(event.message ?? 'The rifts stir');
+      case SanctuaryEventKind.milestoneSealed:
+        HapticFeedback.vibrate();
+        sfx.play('chime');
+        _toast = event.message ?? 'Milestone sealed';
+        _toastLife = 3.5;
+      case SanctuaryEventKind.musterCalled:
+        HapticFeedback.mediumImpact();
+        sfx.play('horn');
+        _showToast(event.message ?? 'Muster');
+      case SanctuaryEventKind.buildingRepaired:
+        HapticFeedback.lightImpact();
+        sfx.play('tap');
+      case SanctuaryEventKind.buildingDismantled:
+        HapticFeedback.selectionClick();
+        sfx.play('thud');
+        _showToast(event.message ?? 'Dismantled');
       case SanctuaryEventKind.settlementFallen:
         HapticFeedback.vibrate();
+        sfx.play('boom');
         unawaited(_save());
+        if (_engine != null) {
+          unawaited(_recordRun(_engine!));
+        }
     }
   }
 
@@ -263,6 +361,8 @@ class _SanctuaryAppState extends State<SanctuaryApp>
               ? _SanctuaryFront(
                   loaded: _loaded,
                   saved: _savedWorld,
+                  bestRun: _bestRun,
+                  pastRuns: _pastRuns,
                   onBack: () => Navigator.of(context).pop(),
                   onResume: _resumeSettlement,
                   onNew: _confirmNewSettlement,
@@ -280,6 +380,8 @@ class _SanctuaryAppState extends State<SanctuaryApp>
           children: <Widget>[
             _SanctuaryHud(
               engine: engine,
+              muted: _soundMuted,
+              onToggleSound: _toggleSound,
               onExit: () {
                 unawaited(_save());
                 setState(() => _engine = null);
@@ -386,22 +488,47 @@ class _SanctuaryAppState extends State<SanctuaryApp>
               },
             ),
           ),
-        if (engine.encounter == null && engine.phase == SanctuaryPhase.night)
-          if (engine.nightOath case final NightOath oath)
-            Positioned(
-              left: 12,
-              right: 12,
-              top: 108,
+        if (engine.phase == SanctuaryPhase.dusk ||
+            engine.phase == SanctuaryPhase.night)
+          Positioned(
+            left: 12,
+            right: 12,
+            top: 108,
+            child: IgnorePointer(child: _WaveForecastBanner(engine: engine)),
+          ),
+        if (engine.encounter == null &&
+            engine.phase == SanctuaryPhase.night &&
+            engine.nightOath != null)
+          Positioned(
+            left: 12,
+            right: 12,
+            top: 152,
+            child: IgnorePointer(
               child: _NightOathChip(
-                oath: oath,
+                oath: engine.nightOath!,
                 target: engine.oathTarget,
-                progress: switch (oath) {
+                progress: switch (engine.nightOath!) {
                   NightOath.holdTheLine => engine.buildingsLostTonight,
                   NightOath.divineRestraint => engine.powersCastTonight,
                   NightOath.cinderHarvest => engine.enemiesDefeatedTonight,
                 },
               ),
             ),
+          ),
+        if (engine.phase == SanctuaryPhase.night)
+          Positioned(
+            right: 12,
+            bottom: 172,
+            child: _MusterButton(
+              engine: engine,
+              onTap: () {
+                if (engine.activateMuster()) {
+                  HapticFeedback.heavyImpact();
+                  setState(() {});
+                }
+              },
+            ),
+          ),
         if (engine.paused && engine.phase != SanctuaryPhase.fallen)
           Positioned.fill(
             child: _PauseScrim(onResume: () => setState(engine.togglePause)),
@@ -410,6 +537,7 @@ class _SanctuaryAppState extends State<SanctuaryApp>
           Positioned.fill(
             child: _FallenOverlay(
               engine: engine,
+              bestNight: ( _bestRun?['night'] as num?)?.toInt() ?? 0,
               onConstellation: () => _showConstellation(engine),
               onNew: _newSettlement,
               onExit: () => setState(() => _engine = null),
@@ -467,6 +595,7 @@ class _SanctuaryAppState extends State<SanctuaryApp>
           _showToast('Select a forest or granite outcrop');
         } else {
           HapticFeedback.mediumImpact();
+          SanctuarySfx.instance.play('pop');
           _showToast('Materials recovered');
         }
       case _WorldTool.purify:
@@ -474,16 +603,202 @@ class _SanctuaryAppState extends State<SanctuaryApp>
           _showToast('Purify adjacent fog · 8 mana');
         } else {
           HapticFeedback.mediumImpact();
+          SanctuarySfx.instance.play('chime');
           _showToast('Corruption cleared');
+        }
+      case _WorldTool.repair:
+        final double healed = engine.repairBuilding(tile);
+        if (healed <= 0) {
+          _showToast('Tap a damaged structure · 1 wood per 25 repair');
+          HapticFeedback.lightImpact();
+        } else {
+          HapticFeedback.mediumImpact();
         }
       case _WorldTool.inspect:
         final SanctuaryBuilding? building = engine.buildingAt(tile);
         if (building != null) {
-          _showToast(
-            '${building.kind.label} · ${(building.healthRatio * 100).round()}% integrity',
-          );
+          _showBuildingSheet(engine, building);
         }
     }
+  }
+
+  Future<void> _showBuildingSheet(
+    SanctuaryEngine engine,
+    SanctuaryBuilding building,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF11131D),
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setSheetState) {
+          final bool damaged = building.hp < building.kind.maxHp - 0.5;
+          final double repairCost = damaged
+              ? ((building.kind.maxHp - building.hp) / 25).ceilToDouble()
+              : 0;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3E4251),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: _buildingColor(
+                            building.kind,
+                          ).withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: Icon(
+                          _buildingIcon(building.kind),
+                          color: _buildingColor(building.kind),
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              building.kind.label,
+                              style: const TextStyle(
+                                color: Color(0xFFF4F1DE),
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            Text(
+                              '${(building.healthRatio * 100).round()}% integrity'
+                              '${building.complete ? '' : ' · under construction'}',
+                              style: const TextStyle(
+                                color: Color(0xFF9296A6),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (building.isTower) ...<Widget>[
+                    Text(
+                      'Target stance · ${building.ammo} ammunition',
+                      style: const TextStyle(
+                        color: Color(0xFF7E8290),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: <Widget>[
+                        for (final TowerStance stance in TowerStance.values)
+                          Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                right: stance == TowerStance.values.last
+                                    ? 0
+                                    : 6,
+                              ),
+                              child: _StanceButton(
+                                stance: stance,
+                                selected: building.stance == stance,
+                                onTap: () {
+                                  engine.setStance(building.tile, stance);
+                                  HapticFeedback.selectionClick();
+                                  setSheetState(() {});
+                                },
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_isEconomyKind(building.kind))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        'Output ${(engine.efficiencyOf(building) * 100).round()}% · ${_efficiencyHint(building.kind)}',
+                        style: const TextStyle(
+                          color: Color(0xFF9FB8A4),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: damaged
+                              ? () {
+                                  final double healed = engine.repairBuilding(
+                                    building.tile,
+                                  );
+                                  if (healed > 0) {
+                                    HapticFeedback.mediumImpact();
+                                    setSheetState(() {});
+                                    setState(() {});
+                                  }
+                                }
+                              : null,
+                          icon: const Icon(Icons.build_rounded, size: 16),
+                          label: Text(
+                            damaged
+                                ? 'REPAIR · ${repairCost.round()} wood'
+                                : 'FULLY INTACT',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: engine.phase == SanctuaryPhase.day ||
+                                  engine.phase == SanctuaryPhase.dusk
+                              ? () {
+                                  if (engine.dismantleBuilding(
+                                    building.tile,
+                                  )) {
+                                    HapticFeedback.mediumImpact();
+                                    Navigator.of(context).pop();
+                                    setState(() {});
+                                  }
+                                }
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFFF8A7A),
+                          ),
+                          icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                          label: const Text('DISMANTLE · ½ back'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _showDirectives(SanctuaryEngine engine) async {
@@ -656,6 +971,8 @@ class _SanctuaryFront extends StatelessWidget {
   const _SanctuaryFront({
     required this.loaded,
     required this.saved,
+    required this.bestRun,
+    required this.pastRuns,
     required this.onBack,
     required this.onResume,
     required this.onNew,
@@ -663,6 +980,8 @@ class _SanctuaryFront extends StatelessWidget {
 
   final bool loaded;
   final Map<String, dynamic>? saved;
+  final Map<String, dynamic>? bestRun;
+  final List<Map<String, dynamic>> pastRuns;
   final VoidCallback onBack;
   final VoidCallback onResume;
   final VoidCallback onNew;
@@ -752,6 +1071,28 @@ class _SanctuaryFront extends StatelessWidget {
               const SizedBox(height: 10),
               const _CycleCards(),
               const SizedBox(height: 23),
+              if (bestRun != null || pastRuns.isNotEmpty) ...<Widget>[
+                const _FrontSectionTitle('PAST HEARTHS'),
+                const SizedBox(height: 10),
+                if (bestRun != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 9),
+                    child: _PillarCard(
+                      icon: Icons.emoji_events_rounded,
+                      color: Color(0xFFFFC15A),
+                      title:
+                          'Deepest night ${bestRun!['night']} · ${bestRun!['totalEnemiesDefeated']} abyssals',
+                      detail:
+                          'Every tenth night is a Devourer milestone. Seal one and the shards echo into every future hearth.',
+                    ),
+                  ),
+                for (int index = 0; index < min(3, pastRuns.length); index++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: _PastRunRow(run: pastRuns[index]),
+                  ),
+                const SizedBox(height: 14),
+              ],
               const _FrontSectionTitle('YOU SET PRIORITIES. THEY DO THE WORK.'),
               const SizedBox(height: 10),
               const _PillarCard(
@@ -778,6 +1119,51 @@ class _SanctuaryFront extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PastRunRow extends StatelessWidget {
+  const _PastRunRow({required this.run});
+
+  final Map<String, dynamic> run;
+
+  @override
+  Widget build(BuildContext context) {
+    final int night = (run['night'] as num?)?.toInt() ?? 0;
+    final int kills = (run['totalEnemiesDefeated'] as num?)?.toInt() ?? 0;
+    final int milestones = (run['milestonesSealed'] as num?)?.toInt() ?? 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF12141C),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFF262833)),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.local_fire_department_outlined, size: 15, color: Color(0xFF8A6A55)),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'Hearth fell on night $night',
+              style: const TextStyle(
+                color: Color(0xFFC9C4BC),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Text(
+            '$kills kills${milestones > 0 ? ' · $milestones✦' : ''}',
+            style: const TextStyle(
+              color: Color(0xFF7D8294),
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1189,12 +1575,16 @@ class _PillarCard extends StatelessWidget {
 class _SanctuaryHud extends StatelessWidget {
   const _SanctuaryHud({
     required this.engine,
+    required this.muted,
+    required this.onToggleSound,
     required this.onExit,
     required this.onPause,
     required this.onSpeed,
   });
 
   final SanctuaryEngine engine;
+  final bool muted;
+  final VoidCallback onToggleSound;
   final VoidCallback onExit;
   final VoidCallback onPause;
   final ValueChanged<double> onSpeed;
@@ -1277,7 +1667,7 @@ class _SanctuaryHud extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 _ThinGauge(
-                  value: engine.resources.mana / 200,
+                  value: engine.resources.mana / engine.manaCap,
                   color: const Color(0xFF00F5D4),
                   label: 'MANA ${engine.resources.mana.floor()}',
                 ),
@@ -1285,6 +1675,21 @@ class _SanctuaryHud extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 7),
+          IconButton(
+            onPressed: onToggleSound,
+            visualDensity: VisualDensity.compact,
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFF171720),
+            ),
+            icon: Icon(
+              muted
+                  ? Icons.volume_off_rounded
+                  : Icons.volume_up_rounded,
+              size: 17,
+              color: muted ? const Color(0xFF61656F) : const Color(0xFF4BE9D0),
+            ),
+          ),
+          const SizedBox(width: 2),
           _SpeedControl(engine: engine, onPause: onPause, onSpeed: onSpeed),
         ],
       ),
@@ -1735,6 +2140,218 @@ class _NightOathChip extends StatelessWidget {
   }
 }
 
+class _WaveForecastBanner extends StatelessWidget {
+  const _WaveForecastBanner({required this.engine});
+
+  final SanctuaryEngine engine;
+
+  String get _laneText {
+    final List<GridPoint> lanes = engine.waveLanes;
+    if (lanes.length >= 4) {
+      return 'EVERY RIFT';
+    }
+    final List<String> names = <String>[];
+    for (final GridPoint lane in lanes) {
+      final int dx = lane.x - engine.hearthTile.x;
+      final int dy = lane.y - engine.hearthTile.y;
+      if (dy < 0) {
+        names.add('N');
+      } else if (dy > 0) {
+        names.add('S');
+      } else if (dx > 0) {
+        names.add('E');
+      } else {
+        names.add('W');
+      }
+    }
+    return names.toSet().join('+');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final int bosses = engine.waveComposition[EnemyKind.devourer] ?? 0;
+    final int total = engine.pendingEnemies + engine.enemies.length;
+    final WaveModifier modifier = engine.waveModifier;
+    final bool milestone = engine.isMilestoneNight;
+    final Color accent = milestone
+        ? const Color(0xFFFF4D68)
+        : const Color(0xFFB43CFF);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xE60E0C16),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: accent.withValues(alpha: 0.55)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.radar_rounded, color: accent, size: 17),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  milestone
+                      ? 'MILESTONE NIGHT ${engine.day} · $_laneText · $total abyssals'
+                      : 'NIGHT ${engine.day} · $_laneText · $total abyssals',
+                  style: TextStyle(
+                    color: milestone
+                        ? const Color(0xFFFF8598)
+                        : const Color(0xFFE4DAF6),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                if (bosses > 0 || modifier.isActive)
+                  Text(
+                    <String>[
+                      if (bosses > 0) '$bosses× DEVOURER',
+                      if (modifier.isActive) modifier.detail,
+                    ].join(' · '),
+                    style: const TextStyle(
+                      color: Color(0xFFFF7085),
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MusterButton extends StatelessWidget {
+  const _MusterButton({required this.engine, required this.onTap});
+
+  final SanctuaryEngine engine;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool ready = engine.musterReady;
+    final bool active = engine.musterActive;
+    final Color color = active
+        ? const Color(0xFFFFC15A)
+        : ready
+        ? const Color(0xFFFF8A5C)
+        : const Color(0xFF4A4D57);
+    final String label = active
+        ? 'MUSTER ${engine.musterTime.ceil()}s'
+        : ready
+        ? 'MUSTER'
+        : '${engine.musterCooldown.ceil()}s';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: ready ? onTap : null,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(Icons.campaign_rounded, color: color, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StanceButton extends StatelessWidget {
+  const _StanceButton({
+    required this.stance,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final TowerStance stance;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = selected
+        ? const Color(0xFFFFB45D)
+        : const Color(0xFF6F7380);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFFFFB45D).withValues(alpha: 0.14)
+              : const Color(0xFF151722),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? color : const Color(0xFF282B36),
+          ),
+        ),
+        child: Column(
+          children: <Widget>[
+            Text(
+              stance.label.toUpperCase(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected ? const Color(0xFFFFE1B5) : color,
+                fontSize: 8,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              stance.detail,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF747A87), fontSize: 7),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+bool _isEconomyKind(BuildingKind kind) =>
+    kind == BuildingKind.farm ||
+    kind == BuildingKind.sawmill ||
+    kind == BuildingKind.masonryYard ||
+    kind == BuildingKind.shrine;
+
+String _efficiencyHint(BuildingKind kind) => switch (kind) {
+  BuildingKind.farm => 'thrives beside rivers',
+  BuildingKind.sawmill => 'keep standing forest nearby',
+  BuildingKind.masonryYard => 'wants granite neighbors',
+  BuildingKind.shrine => 'doubled on holy ground',
+  _ => '',
+};
+
 class _WorldViewport extends StatelessWidget {
   const _WorldViewport({
     required this.engine,
@@ -1817,6 +2434,12 @@ class _WorldViewport extends StatelessWidget {
   }
 }
 
+/// Combat text is laid out once per effect and reused across frames; entries
+/// vanish with the effect thanks to weak references.
+final Expando<TextPainter> _combatTextPainters = Expando<TextPainter>(
+  'sanctuary combat text',
+);
+
 class _SanctuaryPainter extends CustomPainter {
   _SanctuaryPainter({
     required this.engine,
@@ -1864,6 +2487,13 @@ class _SanctuaryPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final Rect clip = canvas.getLocalClipBounds().inflate(80);
+    if (engine.shake > 0.01) {
+      final double jitter = engine.shake * 6;
+      canvas.translate(
+        sin(engine.worldTime * 91.7) * jitter,
+        cos(engine.worldTime * 113.3) * jitter * 0.7,
+      );
+    }
     final double night = switch (engine.phase) {
       SanctuaryPhase.day => 0,
       SanctuaryPhase.dusk => 0.48,
@@ -1949,6 +2579,23 @@ class _SanctuaryPainter extends CustomPainter {
     }
     if (engine.rainActive) {
       _paintRain(canvas, clip);
+    }
+    if (engine.hearthUnderAttack) {
+      final double pulse = 0.25 + sin(engine.worldTime * 6).abs() * 0.3;
+      final Rect screen = canvas.getLocalClipBounds();
+      canvas.drawRect(
+        Rect.fromLTWH(screen.left, screen.top, screen.width, 6),
+        _solid(const Color(0xFFFF4D68).withValues(alpha: pulse)),
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          screen.left,
+          screen.bottom - 6,
+          screen.width,
+          6,
+        ),
+        _solid(const Color(0xFFFF4D68).withValues(alpha: pulse)),
+      );
     }
   }
 
@@ -2143,23 +2790,39 @@ class _SanctuaryPainter extends CustomPainter {
         _iso(center + 0.5, center + radius + 0.5),
         _iso(center - radius + 0.5, center + 0.5),
       ];
+      final List<GridPoint> riftTiles = <GridPoint>[
+        GridPoint(center, center - radius),
+        GridPoint(center + radius, center),
+        GridPoint(center, center + radius),
+        GridPoint(center - radius, center),
+      ];
       final double riftPulse = 0.55 + sin(time * 4).abs() * 0.45;
-      for (final Offset rift in rifts) {
+      for (int index = 0; index < rifts.length; index++) {
+        final Offset rift = rifts[index];
         if (!clip.contains(rift)) {
           continue;
         }
+        final bool active = engine.waveLanes.contains(riftTiles[index]);
+        final Color riftColor = active
+            ? const Color(0xFFFF4D68)
+            : const Color(0xFFB43CFF).withValues(alpha: 0.4);
+        final double intensity = active ? 1 : 0.55;
         canvas.drawOval(
           Rect.fromCenter(
             center: rift,
-            width: 30 + riftPulse * 12,
-            height: 13 + riftPulse * 5,
+            width: (30 + riftPulse * 12) * intensity,
+            height: (13 + riftPulse * 5) * intensity,
           ),
-          _line(const Color(0xFFB43CFF).withValues(alpha: 0.65), 2.5),
+          _line(riftColor.withValues(alpha: 0.65), 2.5),
         );
         canvas.drawCircle(
           rift - const Offset(0, 6),
-          4 + riftPulse * 3,
-          _solid(const Color(0xFF6E1AA8).withValues(alpha: 0.34)),
+          (4 + riftPulse * 3) * intensity,
+          _solid(
+            (active
+                ? const Color(0xFF8A1030)
+                : const Color(0xFF6E1AA8)).withValues(alpha: 0.34),
+          ),
         );
       }
       for (int y = minY; y <= maxY; y += 2) {
@@ -2418,6 +3081,15 @@ class _SanctuaryPainter extends CustomPainter {
         ? 0
         : sin(engine.worldTime * 8 + citizen.id * 0.9) * 1.4;
     final Offset animated = point - Offset(0, bob);
+    if (engine.musterActive &&
+        (engine.phase == SanctuaryPhase.night ||
+            engine.phase == SanctuaryPhase.dusk)) {
+      canvas.drawCircle(
+        animated - const Offset(0, 3),
+        9 + sin(engine.worldTime * 7 + citizen.id).abs() * 3,
+        _solid(const Color(0xFFFFC15A).withValues(alpha: 0.3)),
+      );
+    }
     canvas.drawOval(
       Rect.fromCenter(center: point + const Offset(0, 4), width: 9, height: 5),
       _solid(const Color(0x77000000)),
@@ -2494,10 +3166,139 @@ class _SanctuaryPainter extends CustomPainter {
       max(1.7, radius * 0.18),
       _solid(const Color(0xFFFFD3A0)),
     );
+    if (enemy.healthRatio < 0.999) {
+      final double barWidth = radius * 2;
+      final double barY = elevated.dy - radius - 7;
+      canvas.drawRect(
+        Rect.fromLTWH(elevated.dx - barWidth / 2, barY, barWidth, 3),
+        _solid(const Color(0x88000000)),
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          elevated.dx - barWidth / 2,
+          barY,
+          barWidth * enemy.healthRatio,
+          3,
+        ),
+        _solid(
+          enemy.healthRatio < 0.35
+              ? const Color(0xFFFF4D68)
+              : const Color(0xFF7DCB74),
+        ),
+      );
+    }
   }
 
   void _paintEffect(Canvas canvas, SanctuaryEffect effect, Offset point) {
     final double p = effect.progress;
+    switch (effect.kind) {
+      case 'projArrow' || 'projBallista':
+        final Offset? target = effect.x2 == null || effect.y2 == null
+            ? null
+            : _iso(effect.x2!, effect.y2!);
+        if (target != null) {
+          final Offset pos = Offset.lerp(point, target, p)!;
+          final Offset tail = Offset.lerp(
+            point,
+            target,
+            (p - 0.22).clamp(0, 1),
+          )!;
+          final bool heavy = effect.kind == 'projBallista';
+          canvas.drawLine(
+            tail,
+            pos,
+            _line(
+              heavy ? const Color(0xFFFFE36D) : const Color(0xFFE8DCC8),
+              heavy ? 3 : 1.6,
+            ),
+          );
+          canvas.drawCircle(pos, heavy ? 3 : 1.8, _solid(const Color(0xFFFFF3D6)));
+        }
+        return;
+      case 'projCatapult':
+        final Offset? target = effect.x2 == null || effect.y2 == null
+            ? null
+            : _iso(effect.x2!, effect.y2!);
+        if (target != null) {
+          final Offset ground = Offset.lerp(point, target, p)!;
+          final double arc = sin(pi * p) * 42;
+          canvas.drawCircle(ground, 2.4, _solid(const Color(0x66000000)));
+          canvas.drawCircle(
+            ground - Offset(0, arc),
+            5,
+            _solid(const Color(0xFFC9B8A0)),
+          );
+        }
+        return;
+      case 'dmg' || 'repair':
+        if (effect.text != null) {
+          final bool heal = effect.kind == 'repair';
+          TextPainter? painter = _combatTextPainters[effect];
+          if (painter == null) {
+            painter = TextPainter(
+              text: TextSpan(
+                text: effect.text,
+                style: TextStyle(
+                  color: heal
+                      ? const Color(0xFF8CE68C)
+                      : const Color(0xFFFFE8EA),
+                  fontSize: heal ? 10 : 9,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+            )..layout();
+            _combatTextPainters[effect] = painter;
+          }
+          painter.paint(
+            canvas,
+            Offset(
+              point.dx - painter.width / 2,
+              point.dy - 14 - p * 22,
+            ),
+          );
+        }
+        return;
+      case 'death' || 'deathBig':
+        final bool big = effect.kind == 'deathBig';
+        final Color shard = big
+            ? const Color(0xFFFF245F)
+            : const Color(0xFFB56BE2);
+        canvas.drawCircle(
+          point,
+          (big ? 14 : 8) + p * (big ? 46 : 20),
+          _line(shard.withValues(alpha: 1 - p), big ? 4 : 2),
+        );
+        for (int index = 0; index < (big ? 6 : 4); index++) {
+          final double angle = index * (pi / (big ? 3 : 2)) + 0.6;
+          final double dist = p * (big ? 34 : 16);
+          canvas.drawCircle(
+            point + Offset(cos(angle) * dist, sin(angle) * dist * 0.5 - p * 6),
+            (big ? 3 : 2) * (1 - p),
+            _solid(shard.withValues(alpha: 1 - p)),
+          );
+        }
+        return;
+      case 'collapse' || 'dismantle':
+        canvas.drawCircle(
+          point,
+          10 + p * 34,
+          _line(
+            const Color(0xFFB9AE9C).withValues(alpha: (1 - p) * 0.8),
+            3 * (1 - p) + 0.5,
+          ),
+        );
+        for (int index = 0; index < 5; index++) {
+          final double angle = index * 1.256 + 0.4;
+          final double dist = 6 + p * 22;
+          canvas.drawCircle(
+            point + Offset(cos(angle) * dist, sin(angle) * dist * 0.5),
+            2.5 * (1 - p),
+            _solid(const Color(0xFF8D8272).withValues(alpha: 1 - p)),
+          );
+        }
+        return;
+    }
     final Color color = switch (effect.kind) {
       'lightning' || 'frost' => const Color(0xFF90E0EF),
       'meteor' || 'fling' => const Color(0xFFFF5400),
@@ -2725,19 +3526,26 @@ class _ThreatPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool night = engine.phase == SanctuaryPhase.night;
+    final bool dusk = engine.phase == SanctuaryPhase.dusk;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(
-        color: (night ? const Color(0xFFFF4D68) : const Color(0xFF4C5260))
+        color: (night || dusk
+                ? const Color(0xFFFF4D68)
+                : const Color(0xFF4C5260))
             .withValues(alpha: 0.13),
         borderRadius: BorderRadius.circular(11),
       ),
       child: Text(
         night
             ? 'THREAT ${engine.activeThreat}'
+            : dusk
+            ? 'INCOMING ${engine.pendingEnemies + engine.enemies.length}'
             : 'POP ${engine.citizens.length}/${engine.populationCapacity}',
         style: TextStyle(
-          color: night ? const Color(0xFFFF7085) : const Color(0xFFA0A5AF),
+          color: night || dusk
+              ? const Color(0xFFFF7085)
+              : const Color(0xFFA0A5AF),
           fontSize: 8,
           fontWeight: FontWeight.w900,
         ),
@@ -2801,6 +3609,15 @@ class _BuildRail extends StatelessWidget {
           color: const Color(0xFFB76CF0),
           selected: selected == null && tool == _WorldTool.purify,
           onTap: () => onTool(_WorldTool.purify),
+        ),
+        const SizedBox(width: 6),
+        _ToolChip(
+          icon: Icons.build_circle_rounded,
+          label: 'Repair',
+          detail: '1 wood / 25',
+          color: const Color(0xFF7DCB74),
+          selected: selected == null && tool == _WorldTool.repair,
+          onTap: () => onTool(_WorldTool.repair),
         ),
         const SizedBox(width: 6),
         for (int index = 0; index < buildable.length; index++) ...<Widget>[
@@ -3053,18 +3870,21 @@ class _PauseScrim extends StatelessWidget {
 class _FallenOverlay extends StatelessWidget {
   const _FallenOverlay({
     required this.engine,
+    required this.bestNight,
     required this.onConstellation,
     required this.onNew,
     required this.onExit,
   });
 
   final SanctuaryEngine engine;
+  final int bestNight;
   final VoidCallback onConstellation;
   final VoidCallback onNew;
   final VoidCallback onExit;
 
   @override
   Widget build(BuildContext context) {
+    final bool newBest = engine.day > bestNight;
     return ColoredBox(
       color: const Color(0xEE08050D),
       child: Center(
@@ -3097,20 +3917,89 @@ class _FallenOverlay extends StatelessWidget {
               ),
               const SizedBox(height: 7),
               Text(
-                'Day ${engine.day}',
+                'Night ${engine.day}',
                 style: const TextStyle(
                   color: Color(0xFFF4F1DE),
                   fontSize: 32,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 5),
+              if (newBest)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFC15A).withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(color: const Color(0xFFFFC15A)),
+                    ),
+                    child: const Text(
+                      'NEW DEEPEST NIGHT',
+                      style: TextStyle(
+                        color: Color(0xFFFFE1B5),
+                        fontSize: 8,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B1520),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: const Color(0xFF3A2A3E)),
+                ),
+                child: Column(
+                  children: <Widget>[
+                    _RunStat(
+                      icon: Icons.nights_stay_rounded,
+                      label: 'Nights survived',
+                      value: '${engine.day}',
+                    ),
+                    _RunStat(
+                      icon: Icons.gps_fixed_rounded,
+                      label: 'Abyssals defeated',
+                      value: '${engine.totalEnemiesDefeated}',
+                    ),
+                    _RunStat(
+                      icon: Icons.auto_awesome_rounded,
+                      label: 'Oaths fulfilled',
+                      value: '${engine.oathsFulfilled}',
+                    ),
+                    _RunStat(
+                      icon: Icons.favorite_rounded,
+                      label: 'Merciful choices',
+                      value: '${engine.mercifulChoices}',
+                    ),
+                    _RunStat(
+                      icon: Icons.groups_rounded,
+                      label: 'Peak population',
+                      value: '${engine.peakPopulation}',
+                    ),
+                    _RunStat(
+                      icon: Icons.military_tech_rounded,
+                      label: 'Milestones sealed',
+                      value: '${engine.milestonesSealed}',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
               Text(
-                '${engine.totalEnemiesDefeated} abyssals defeated · ${engine.ancestralShards} shards held',
-                textAlign: TextAlign.center,
+                '${engine.ancestralShards} shards carried forward',
                 style: const TextStyle(color: Color(0xFF9A909C), fontSize: 11),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -3136,6 +4025,45 @@ class _FallenOverlay extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RunStat extends StatelessWidget {
+  const _RunStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 14, color: const Color(0xFF8A7F93)),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Color(0xFF9A909C), fontSize: 11),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Color(0xFFEAE6D9),
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }
