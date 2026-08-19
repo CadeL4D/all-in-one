@@ -1,0 +1,1622 @@
+import 'dart:collection';
+import 'dart:math';
+import 'dart:typed_data';
+
+import 'sanctuary_models.dart';
+
+enum SanctuaryEventKind {
+  phaseChanged,
+  construction,
+  placementRejected,
+  towerShot,
+  powerCast,
+  impact,
+  citizenLost,
+  settlementFallen,
+  dawn,
+}
+
+class SanctuaryEvent {
+  const SanctuaryEvent(this.kind, {this.tile, this.message});
+
+  final SanctuaryEventKind kind;
+  final GridPoint? tile;
+  final String? message;
+}
+
+class SanctuaryConfig {
+  const SanctuaryConfig({
+    this.mapSize = 64,
+    this.daySeconds = 75,
+    this.duskSeconds = 10,
+    this.nightSeconds = 70,
+    this.dawnSeconds = 5,
+  });
+
+  final int mapSize;
+  final double daySeconds;
+  final double duskSeconds;
+  final double nightSeconds;
+  final double dawnSeconds;
+}
+
+class SanctuaryEngine {
+  SanctuaryEngine({int? seed, this.config = const SanctuaryConfig()})
+    : seed = seed ?? DateTime.now().microsecondsSinceEpoch {
+    _random = Random(this.seed);
+    _terrain = Uint8List(config.mapSize * config.mapSize);
+    _revealed = Uint8List(config.mapSize * config.mapSize);
+    _flow = Int32List(config.mapSize * config.mapSize);
+    _generateWorld();
+    _createSettlement();
+    _recomputeFlow();
+  }
+
+  static const double fixedStep = 1 / 60;
+  static const int saveVersion = 1;
+
+  final int seed;
+  final SanctuaryConfig config;
+  late final Random _random;
+  late Uint8List _terrain;
+  late Uint8List _revealed;
+  late Int32List _flow;
+  final List<SanctuaryBuilding> buildings = <SanctuaryBuilding>[];
+  final List<SanctuaryCitizen> citizens = <SanctuaryCitizen>[];
+  final List<SanctuaryEnemy> enemies = <SanctuaryEnemy>[];
+  final List<SanctuaryEffect> effects = <SanctuaryEffect>[];
+  final List<SanctuaryEvent> _events = <SanctuaryEvent>[];
+  final Queue<EnemyKind> _spawnQueue = Queue<EnemyKind>();
+  final Map<int, double> fissures = <int, double>{};
+  final Map<CitizenRole, int> directives = <CitizenRole, int>{
+    CitizenRole.harvester: 40,
+    CitizenRole.builder: 20,
+    CitizenRole.hauler: 25,
+    CitizenRole.acolyte: 15,
+  };
+  final Map<AncestralUpgrade, int> upgrades = <AncestralUpgrade, int>{
+    for (final AncestralUpgrade upgrade in AncestralUpgrade.values) upgrade: 0,
+  };
+
+  SanctuaryResources resources = SanctuaryResources();
+  SanctuaryPhase phase = SanctuaryPhase.day;
+  int day = 1;
+  int ancestralShards = 0;
+  double phaseRemaining = 75;
+  double gameSpeed = 1;
+  bool paused = false;
+  bool rainActive = false;
+  double rainRemaining = 0;
+  int citizensLostTonight = 0;
+  int enemiesDefeatedTonight = 0;
+  int totalEnemiesDefeated = 0;
+  double _accumulator = 0;
+  double _citizenAccumulator = 0;
+  double _spawnAccumulator = 0;
+  double _directiveAccumulator = 0;
+  int _nextBuildingId = 1;
+  int _nextEnemyId = 1;
+  int _nextCitizenId = 1;
+  double _eliteMultiplier = 1;
+
+  int get mapSize => config.mapSize;
+  GridPoint get hearthTile => GridPoint(mapSize ~/ 2, mapSize ~/ 2);
+
+  SanctuaryBuilding get hearth => buildings.firstWhere(
+    (SanctuaryBuilding building) => building.kind == BuildingKind.hearth,
+  );
+
+  int get populationCapacity =>
+      12 +
+      buildings
+              .where(
+                (SanctuaryBuilding building) =>
+                    building.complete && building.kind == BuildingKind.cottage,
+              )
+              .length *
+          4;
+
+  double get storageCapacity =>
+      300.0 *
+      (1 +
+          buildings
+              .where(
+                (SanctuaryBuilding building) =>
+                    building.complete &&
+                    building.kind == BuildingKind.stockpile,
+              )
+              .length);
+
+  double get phaseDuration => switch (phase) {
+    SanctuaryPhase.day => config.daySeconds,
+    SanctuaryPhase.dusk => config.duskSeconds,
+    SanctuaryPhase.night => config.nightSeconds,
+    SanctuaryPhase.dawn => config.dawnSeconds,
+    SanctuaryPhase.fallen => 1,
+  };
+
+  double get phaseProgress => phase == SanctuaryPhase.fallen
+      ? 0
+      : (phaseRemaining / phaseDuration).clamp(0, 1);
+
+  int get pendingEnemies => _spawnQueue.length;
+  int get activeThreat => enemies.length + pendingEnemies;
+  bool get hasSaveableProgress =>
+      day > 1 || buildings.length > 1 || totalEnemiesDefeated > 0;
+
+  int upgradeCost(AncestralUpgrade upgrade) => 2 + (upgrades[upgrade] ?? 0) * 2;
+
+  bool purchaseUpgrade(AncestralUpgrade upgrade) {
+    final int rank = upgrades[upgrade] ?? 0;
+    final int cost = upgradeCost(upgrade);
+    if (rank >= upgrade.maxRank || ancestralShards < cost) {
+      return false;
+    }
+    ancestralShards -= cost;
+    upgrades[upgrade] = rank + 1;
+    return true;
+  }
+
+  TerrainKind terrainAt(GridPoint tile) {
+    if (!inBounds(tile)) {
+      return TerrainKind.chasm;
+    }
+    return TerrainKind.values[_terrain[tile.index(mapSize)]];
+  }
+
+  bool isRevealed(GridPoint tile) =>
+      inBounds(tile) && _revealed[tile.index(mapSize)] == 1;
+
+  bool inBounds(GridPoint tile) =>
+      tile.x >= 0 && tile.y >= 0 && tile.x < mapSize && tile.y < mapSize;
+
+  SanctuaryBuilding? buildingAt(GridPoint tile) {
+    for (final SanctuaryBuilding building in buildings) {
+      if (building.tile == tile && building.hp > 0) {
+        return building;
+      }
+    }
+    return null;
+  }
+
+  void tick(double realDeltaSeconds) {
+    if (paused || phase == SanctuaryPhase.fallen) {
+      return;
+    }
+    _accumulator += realDeltaSeconds.clamp(0, 0.1) * gameSpeed;
+    int safety = 0;
+    while (_accumulator >= fixedStep && safety < 8) {
+      _step(fixedStep);
+      _accumulator -= fixedStep;
+      safety++;
+    }
+  }
+
+  void setSpeed(double value) {
+    gameSpeed = value.clamp(0.5, 2);
+    paused = false;
+  }
+
+  void togglePause() => paused = !paused;
+
+  List<SanctuaryEvent> drainEvents() {
+    final List<SanctuaryEvent> result = List<SanctuaryEvent>.of(_events);
+    _events.clear();
+    return result;
+  }
+
+  PlacementFailure validatePlacement(BuildingKind kind, GridPoint tile) {
+    if (!inBounds(tile) || !isRevealed(tile)) {
+      return PlacementFailure.fog;
+    }
+    if (buildingAt(tile) != null || fissures.containsKey(tile.index(mapSize))) {
+      return PlacementFailure.occupied;
+    }
+    final TerrainKind terrain = terrainAt(tile);
+    final bool terrainAllowed = switch (kind) {
+      BuildingKind.spikeTrench =>
+        terrain == TerrainKind.grass || terrain == TerrainKind.holyGround,
+      _ => terrain == TerrainKind.grass || terrain == TerrainKind.holyGround,
+    };
+    if (!terrainAllowed) {
+      return PlacementFailure.terrain;
+    }
+    if (tile.distanceTo(hearthTile) < 2.2) {
+      return PlacementFailure.tooCloseToHearth;
+    }
+    if (!resources.canAfford(kind.cost)) {
+      return PlacementFailure.resources;
+    }
+    if (kind.blocksGround && !_pathsRemainOpen(tile)) {
+      return PlacementFailure.blocksAllPaths;
+    }
+    return PlacementFailure.none;
+  }
+
+  PlacementResult placeBuilding(BuildingKind kind, GridPoint tile) {
+    final PlacementFailure failure = validatePlacement(kind, tile);
+    if (failure != PlacementFailure.none) {
+      _events.add(
+        SanctuaryEvent(
+          SanctuaryEventKind.placementRejected,
+          tile: tile,
+          message: placementFailureMessage(failure),
+        ),
+      );
+      return PlacementResult(failure);
+    }
+    resources.spend(kind.cost);
+    final SanctuaryBuilding building = SanctuaryBuilding(
+      id: 'b${_nextBuildingId++}',
+      kind: kind,
+      tile: tile,
+      hp: _maxHpFor(kind) * 0.35,
+      ammo: kind == BuildingKind.ballista
+          ? 8
+          : kind == BuildingKind.catapult
+          ? 4
+          : 20,
+    );
+    buildings.add(building);
+    _recomputeFlow();
+    _events.add(
+      SanctuaryEvent(
+        SanctuaryEventKind.construction,
+        tile: tile,
+        message: '${kind.label} blueprint placed',
+      ),
+    );
+    return PlacementResult(PlacementFailure.none, building: building);
+  }
+
+  bool clearTerrain(GridPoint tile) {
+    if (!isRevealed(tile) || buildingAt(tile) != null) {
+      return false;
+    }
+    final TerrainKind terrain = terrainAt(tile);
+    switch (terrain) {
+      case TerrainKind.forest:
+        resources.timber += 15;
+      case TerrainKind.granite:
+        resources.stone += 25;
+        resources.iron += 5;
+      case TerrainKind.grass ||
+          TerrainKind.river ||
+          TerrainKind.chasm ||
+          TerrainKind.holyGround:
+        return false;
+    }
+    _terrain[tile.index(mapSize)] = TerrainKind.grass.index;
+    effects.add(
+      SanctuaryEffect(kind: 'harvest', x: tile.x + 0.5, y: tile.y + 0.5),
+    );
+    _recomputeFlow();
+    return true;
+  }
+
+  bool purifyFog(GridPoint tile) {
+    if (!inBounds(tile) || isRevealed(tile) || resources.mana < 8) {
+      return false;
+    }
+    final bool touchesSanctuary = _neighbors(tile).any(isRevealed);
+    if (!touchesSanctuary) {
+      return false;
+    }
+    resources.mana -= 8;
+    _revealCircle(tile, 3.6);
+    effects.add(
+      SanctuaryEffect(
+        kind: 'purify',
+        x: tile.x + 0.5,
+        y: tile.y + 0.5,
+        life: 1.2,
+      ),
+    );
+    return true;
+  }
+
+  void setDirectives(Map<CitizenRole, int> values) {
+    final int total = values.values.fold<int>(
+      0,
+      (int sum, int value) => sum + value,
+    );
+    if (total <= 0) {
+      return;
+    }
+    int assigned = 0;
+    for (int index = 0; index < CitizenRole.values.length; index++) {
+      final CitizenRole role = CitizenRole.values[index];
+      final int normalized = index == CitizenRole.values.length - 1
+          ? 100 - assigned
+          : ((values[role] ?? 0) * 100 / total).round();
+      directives[role] = normalized.clamp(0, 100);
+      assigned += directives[role]!;
+    }
+    _assignRoles();
+  }
+
+  bool castPower(GodPower power, GridPoint target) {
+    final double cost = switch (power) {
+      GodPower.lightning => 15,
+      GodPower.rain => 25,
+      GodPower.fissure => 50,
+      GodPower.meteor => 80,
+    };
+    if (!inBounds(target) || !isRevealed(target) || resources.mana < cost) {
+      return false;
+    }
+    resources.mana -= cost;
+    switch (power) {
+      case GodPower.lightning:
+        _damageEnemies(target, radius: 1.5, damage: 150, stun: 1.5);
+        for (final SanctuaryBuilding building in buildings) {
+          if (building.kind == BuildingKind.tarPit &&
+              building.tile.distanceTo(target) <= 1.5) {
+            building.cooldown = 8;
+          }
+        }
+        effects.add(
+          SanctuaryEffect(
+            kind: 'lightning',
+            x: target.x + 0.5,
+            y: target.y + 0.5,
+          ),
+        );
+      case GodPower.rain:
+        rainActive = true;
+        rainRemaining = 4;
+        for (final SanctuaryBuilding building in buildings) {
+          building.hp = min(building.kind.maxHp, building.hp + 35);
+        }
+        for (final SanctuaryEnemy enemy in enemies) {
+          enemy.slowTime = max(enemy.slowTime, 4);
+        }
+        resources.food += 8;
+        effects.add(
+          SanctuaryEffect(
+            kind: 'rain',
+            x: target.x + 0.5,
+            y: target.y + 0.5,
+            life: 4,
+          ),
+        );
+      case GodPower.fissure:
+        for (int offset = -1; offset <= 1; offset++) {
+          final GridPoint tile = GridPoint(target.x + offset, target.y);
+          if (inBounds(tile) &&
+              tile != hearthTile &&
+              buildingAt(tile) == null) {
+            fissures[tile.index(mapSize)] = 12;
+          }
+        }
+        _recomputeFlow();
+        effects.add(
+          SanctuaryEffect(
+            kind: 'fissure',
+            x: target.x + 0.5,
+            y: target.y + 0.5,
+            life: 1.1,
+          ),
+        );
+      case GodPower.meteor:
+        _damageEnemies(target, radius: 2.5, damage: 750);
+        effects.add(
+          SanctuaryEffect(
+            kind: 'meteor',
+            x: target.x + 0.5,
+            y: target.y + 0.5,
+            life: 1.4,
+          ),
+        );
+    }
+    _events.add(
+      SanctuaryEvent(
+        SanctuaryEventKind.powerCast,
+        tile: target,
+        message: power.label,
+      ),
+    );
+    return true;
+  }
+
+  bool fling(GridPoint source, GridPoint target, double velocity) {
+    final TerrainKind terrain = terrainAt(source);
+    if (!isRevealed(source) ||
+        !isRevealed(target) ||
+        (terrain != TerrainKind.granite && terrain != TerrainKind.forest)) {
+      return false;
+    }
+    final double mass = terrain == TerrainKind.granite ? 50 : 25;
+    final double maxDamage = terrain == TerrainKind.granite ? 450 : 220;
+    final double might =
+        1 + (upgrades[AncestralUpgrade.divineMight] ?? 0) * 0.05;
+    final double damage = (0.085 * 0.5 * mass * velocity * velocity * might)
+        .clamp(25, maxDamage * might);
+    _terrain[source.index(mapSize)] = TerrainKind.grass.index;
+    final double sx = source.x + 0.5;
+    final double sy = source.y + 0.5;
+    final double tx = target.x + 0.5;
+    final double ty = target.y + 0.5;
+    final double lineLengthSquared =
+        pow(tx - sx, 2).toDouble() + pow(ty - sy, 2).toDouble();
+    for (final SanctuaryEnemy enemy in enemies) {
+      final double projection = lineLengthSquared == 0
+          ? 0
+          : (((enemy.x - sx) * (tx - sx) + (enemy.y - sy) * (ty - sy)) /
+                    lineLengthSquared)
+                .clamp(0, 1);
+      final double px = sx + (tx - sx) * projection;
+      final double py = sy + (ty - sy) * projection;
+      if (sqrt(pow(enemy.x - px, 2) + pow(enemy.y - py, 2)) < 0.7) {
+        enemy.hp -= damage;
+      }
+    }
+    effects.add(
+      SanctuaryEffect(kind: 'fling', x: target.x + 0.5, y: target.y + 0.5),
+    );
+    _removeDefeatedEnemies();
+    return true;
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'version': saveVersion,
+    'seed': seed,
+    'mapSize': mapSize,
+    'day': day,
+    'phase': phase.name,
+    'phaseRemaining': phaseRemaining,
+    'resources': resources.toJson(),
+    'buildings': buildings
+        .map((SanctuaryBuilding value) => value.toJson())
+        .toList(),
+    'citizens': citizens
+        .map((SanctuaryCitizen value) => value.toJson())
+        .toList(),
+    'enemies': enemies.map((SanctuaryEnemy value) => value.toJson()).toList(),
+    'revealed': <int>[
+      for (int index = 0; index < _revealed.length; index++)
+        if (_revealed[index] == 1) index,
+    ],
+    'fissures': fissures.map(
+      (int key, double value) => MapEntry<String, dynamic>('$key', value),
+    ),
+    'directives': directives.map(
+      (CitizenRole key, int value) =>
+          MapEntry<String, dynamic>(key.name, value),
+    ),
+    'upgrades': upgrades.map(
+      (AncestralUpgrade key, int value) =>
+          MapEntry<String, dynamic>(key.name, value),
+    ),
+    'ancestralShards': ancestralShards,
+    'totalEnemiesDefeated': totalEnemiesDefeated,
+    'nextBuildingId': _nextBuildingId,
+    'nextCitizenId': _nextCitizenId,
+    'nextEnemyId': _nextEnemyId,
+    'savedAt': DateTime.now().toIso8601String(),
+  };
+
+  factory SanctuaryEngine.fromJson(
+    Map<String, dynamic> json, {
+    SanctuaryConfig? config,
+  }) {
+    final int size =
+        (json['mapSize'] as num?)?.toInt() ?? config?.mapSize ?? 64;
+    final SanctuaryConfig resolved = config ?? SanctuaryConfig(mapSize: size);
+    final SanctuaryEngine engine = SanctuaryEngine(
+      seed: (json['seed'] as num?)?.toInt(),
+      config: resolved,
+    );
+    engine
+      ..day = (json['day'] as num?)?.toInt() ?? 1
+      ..phase = SanctuaryPhase.values.firstWhere(
+        (SanctuaryPhase value) => value.name == json['phase'],
+        orElse: () => SanctuaryPhase.day,
+      )
+      ..phaseRemaining =
+          (json['phaseRemaining'] as num?)?.toDouble() ?? resolved.daySeconds
+      ..resources = SanctuaryResources.fromJson(_map(json['resources']))
+      ..ancestralShards = (json['ancestralShards'] as num?)?.toInt() ?? 0
+      ..totalEnemiesDefeated =
+          (json['totalEnemiesDefeated'] as num?)?.toInt() ?? 0
+      .._nextBuildingId = (json['nextBuildingId'] as num?)?.toInt() ?? 1
+      .._nextCitizenId = (json['nextCitizenId'] as num?)?.toInt() ?? 1
+      .._nextEnemyId = (json['nextEnemyId'] as num?)?.toInt() ?? 1;
+
+    engine.buildings
+      ..clear()
+      ..addAll(_mapList(json['buildings']).map(SanctuaryBuilding.fromJson));
+    if (engine.buildings.every(
+      (SanctuaryBuilding value) => value.kind != BuildingKind.hearth,
+    )) {
+      engine.buildings.add(
+        SanctuaryBuilding(
+          id: 'hearth',
+          kind: BuildingKind.hearth,
+          tile: engine.hearthTile,
+        ),
+      );
+    }
+    engine.citizens
+      ..clear()
+      ..addAll(_mapList(json['citizens']).map(SanctuaryCitizen.fromJson));
+    engine.enemies
+      ..clear()
+      ..addAll(_mapList(json['enemies']).map(SanctuaryEnemy.fromJson));
+    engine._revealed.fillRange(0, engine._revealed.length, 0);
+    final Object? rawRevealed = json['revealed'];
+    if (rawRevealed is List) {
+      for (final int index in rawRevealed.whereType<num>().map(
+        (num value) => value.toInt(),
+      )) {
+        if (index >= 0 && index < engine._revealed.length) {
+          engine._revealed[index] = 1;
+        }
+      }
+    } else {
+      engine._revealCircle(engine.hearthTile, 10);
+    }
+    final Map<String, dynamic> rawFissures = _map(json['fissures']);
+    engine.fissures
+      ..clear()
+      ..addAll(
+        rawFissures.map(
+          (String key, dynamic value) => MapEntry<int, double>(
+            int.tryParse(key) ?? 0,
+            (value as num?)?.toDouble() ?? 0,
+          ),
+        ),
+      );
+    final Map<String, dynamic> rawDirectives = _map(json['directives']);
+    for (final CitizenRole role in CitizenRole.values) {
+      engine.directives[role] =
+          (rawDirectives[role.name] as num?)?.toInt() ??
+          engine.directives[role]!;
+    }
+    final Map<String, dynamic> rawUpgrades = _map(json['upgrades']);
+    for (final AncestralUpgrade upgrade in AncestralUpgrade.values) {
+      engine.upgrades[upgrade] =
+          (rawUpgrades[upgrade.name] as num?)?.toInt() ?? 0;
+    }
+    engine._recomputeFlow();
+    return engine;
+  }
+
+  static String placementFailureMessage(PlacementFailure failure) =>
+      switch (failure) {
+        PlacementFailure.none => 'Ready',
+        PlacementFailure.fog => 'Purify this ground first',
+        PlacementFailure.occupied => 'That tile is occupied',
+        PlacementFailure.terrain => 'Clear the terrain before building',
+        PlacementFailure.resources => 'Not enough resources',
+        PlacementFailure.blocksAllPaths =>
+          'A route to the Hearth must remain open',
+        PlacementFailure.tooCloseToHearth => 'Leave space around the Hearth',
+      };
+
+  void _step(double dt) {
+    phaseRemaining -= dt;
+    for (final SanctuaryEffect effect in effects) {
+      effect.age += dt;
+    }
+    effects.removeWhere((SanctuaryEffect effect) => effect.age >= effect.life);
+    _tickFissures(dt);
+    if (rainActive) {
+      rainRemaining -= dt;
+      if (rainRemaining <= 0) {
+        rainActive = false;
+      }
+    }
+
+    _directiveAccumulator += dt;
+    if (_directiveAccumulator >= 1) {
+      _directiveAccumulator -= 1;
+      _assignRoles();
+    }
+    _citizenAccumulator += dt;
+    if (_citizenAccumulator >= 0.2) {
+      _citizenAccumulator -= 0.2;
+      _updateCitizens(0.2);
+    }
+
+    if (phase == SanctuaryPhase.night) {
+      _spawnAccumulator += dt;
+      if (_spawnAccumulator >= 0.38 &&
+          _spawnQueue.isNotEmpty &&
+          enemies.length < 180) {
+        _spawnAccumulator = 0;
+        _spawnEnemy(_spawnQueue.removeFirst());
+      }
+      _updateDefenses(dt);
+      _updateEnemies(dt);
+    }
+
+    if (phaseRemaining <= 0) {
+      _advancePhase();
+    }
+  }
+
+  void _advancePhase() {
+    switch (phase) {
+      case SanctuaryPhase.day:
+        phase = SanctuaryPhase.dusk;
+        phaseRemaining = config.duskSeconds;
+      case SanctuaryPhase.dusk:
+        phase = SanctuaryPhase.night;
+        phaseRemaining = config.nightSeconds;
+        citizensLostTonight = 0;
+        enemiesDefeatedTonight = 0;
+        _prepareWave();
+        _recomputeFlow();
+      case SanctuaryPhase.night:
+        phase = SanctuaryPhase.dawn;
+        phaseRemaining = config.dawnSeconds;
+        _resolveDawn();
+      case SanctuaryPhase.dawn:
+        day++;
+        phase = SanctuaryPhase.day;
+        phaseRemaining = config.daySeconds;
+        _beginDay();
+      case SanctuaryPhase.fallen:
+        return;
+    }
+    _events.add(
+      SanctuaryEvent(SanctuaryEventKind.phaseChanged, message: phase.name),
+    );
+  }
+
+  void _generateWorld() {
+    final int center = mapSize ~/ 2;
+    final Random terrainRandom = Random(seed);
+    for (int y = 0; y < mapSize; y++) {
+      final int riverCenter = center + (sin(y * 0.24 + seed % 7) * 7).round();
+      for (int x = 0; x < mapSize; x++) {
+        TerrainKind kind = TerrainKind.grass;
+        final double centerDistance = sqrt(
+          pow(x - center, 2) + pow(y - center, 2),
+        );
+        final double roll = terrainRandom.nextDouble();
+        if ((x - riverCenter).abs() <= 1 && centerDistance > 6) {
+          kind = TerrainKind.river;
+        } else if (roll < 0.13) {
+          kind = TerrainKind.forest;
+        } else if (roll < 0.185) {
+          kind = TerrainKind.granite;
+        } else if (roll < 0.198 && centerDistance > 10) {
+          kind = TerrainKind.chasm;
+        }
+        if (centerDistance < 5.5 || x == center || y == center) {
+          kind = TerrainKind.grass;
+        }
+        _terrain[y * mapSize + x] = kind.index;
+      }
+    }
+    final List<GridPoint> shrines = <GridPoint>[
+      GridPoint(center - 9, center - 7),
+      GridPoint(center + 10, center - 6),
+      GridPoint(center - 8, center + 9),
+      GridPoint(center + 9, center + 8),
+    ];
+    for (final GridPoint shrine in shrines) {
+      if (inBounds(shrine)) {
+        _terrain[shrine.index(mapSize)] = TerrainKind.holyGround.index;
+      }
+    }
+    _revealCircle(hearthTile, 10);
+  }
+
+  void _createSettlement() {
+    phaseRemaining = config.daySeconds;
+    buildings.add(
+      SanctuaryBuilding(
+        id: 'hearth',
+        kind: BuildingKind.hearth,
+        tile: hearthTile,
+        buildProgress: 1,
+      ),
+    );
+    for (int index = 0; index < 12; index++) {
+      citizens.add(
+        SanctuaryCitizen(
+          id: _nextCitizenId++,
+          role: CitizenRole.values[index % CitizenRole.values.length],
+          x: hearthTile.x + 0.1 + _random.nextDouble() * 1.8,
+          y: hearthTile.y + 0.1 + _random.nextDouble() * 1.8,
+        ),
+      );
+    }
+    _assignRoles();
+  }
+
+  void _revealCircle(GridPoint center, double radius) {
+    final int minX = max(0, (center.x - radius).floor());
+    final int maxX = min(mapSize - 1, (center.x + radius).ceil());
+    final int minY = max(0, (center.y - radius).floor());
+    final int maxY = min(mapSize - 1, (center.y + radius).ceil());
+    for (int y = minY; y <= maxY; y++) {
+      for (int x = minX; x <= maxX; x++) {
+        if (sqrt(pow(x - center.x, 2) + pow(y - center.y, 2)) <= radius) {
+          _revealed[y * mapSize + x] = 1;
+        }
+      }
+    }
+  }
+
+  void _assignRoles() {
+    int cursor = 0;
+    for (
+      int roleIndex = 0;
+      roleIndex < CitizenRole.values.length;
+      roleIndex++
+    ) {
+      final CitizenRole role = CitizenRole.values[roleIndex];
+      final int desired = roleIndex == CitizenRole.values.length - 1
+          ? citizens.length - cursor
+          : (citizens.length * (directives[role] ?? 0) / 100).round();
+      for (
+        int count = 0;
+        count < desired && cursor < citizens.length;
+        count++
+      ) {
+        citizens[cursor++].role = role;
+      }
+    }
+    while (cursor < citizens.length) {
+      citizens[cursor++].role = CitizenRole.harvester;
+    }
+  }
+
+  void _updateCitizens(double dt) {
+    if (citizens.isEmpty) {
+      return;
+    }
+    if (phase == SanctuaryPhase.night || phase == SanctuaryPhase.dusk) {
+      for (final SanctuaryCitizen citizen in citizens) {
+        citizen.state = CitizenState.sheltering;
+        _moveCitizenToward(citizen, hearthTile, dt * 4.2);
+      }
+      return;
+    }
+
+    final List<SanctuaryBuilding> blueprints = buildings
+        .where((SanctuaryBuilding building) => !building.complete)
+        .toList();
+    for (final SanctuaryCitizen citizen in citizens) {
+      citizen.hunger = min(100, citizen.hunger + dt * 0.16);
+      switch (citizen.role) {
+        case CitizenRole.harvester:
+          citizen.state = CitizenState.working;
+          final int choice = (citizen.id + day) % 10;
+          if (choice < 5) {
+            resources.timber += 0.13;
+          } else if (choice < 8) {
+            resources.stone += 0.09;
+          } else {
+            resources.food += 0.1;
+          }
+          _wanderCitizen(citizen, dt);
+        case CitizenRole.builder:
+          if (blueprints.isNotEmpty) {
+            final SanctuaryBuilding target =
+                blueprints[citizen.id % blueprints.length];
+            final bool wasComplete = target.complete;
+            citizen
+              ..state = CitizenState.working
+              ..taskTile = target.tile;
+            _moveCitizenToward(citizen, target.tile, dt * 3.7);
+            if (_citizenDistance(citizen, target.tile) < 1.3) {
+              target.buildProgress += dt * 5.2;
+              final double maxHp = _maxHpFor(target.kind);
+              target.hp = min(maxHp, target.hp + dt * maxHp * 0.12);
+              if (target.complete) {
+                target.hp = max(target.hp, maxHp * 0.72);
+                if (!wasComplete) {
+                  _recomputeFlow();
+                }
+              }
+            }
+          } else {
+            final SanctuaryBuilding? repair = buildings
+                .where(
+                  (SanctuaryBuilding value) =>
+                      value.hp < value.kind.maxHp * 0.9,
+                )
+                .firstOrNull;
+            if (repair != null && resources.timber >= 0.02) {
+              citizen.state = CitizenState.working;
+              _moveCitizenToward(citizen, repair.tile, dt * 3.7);
+              if (_citizenDistance(citizen, repair.tile) < 1.3) {
+                repair.hp = min(_maxHpFor(repair.kind), repair.hp + dt * 18);
+                resources.timber -= dt * 0.1;
+              }
+            } else {
+              citizen.state = CitizenState.idle;
+              _wanderCitizen(citizen, dt);
+            }
+          }
+        case CitizenRole.hauler:
+          final SanctuaryBuilding? tower = buildings
+              .where(
+                (SanctuaryBuilding building) =>
+                    building.complete &&
+                    (building.kind == BuildingKind.arrowTower ||
+                        building.kind == BuildingKind.ballista ||
+                        building.kind == BuildingKind.catapult) &&
+                    building.ammo < 10,
+              )
+              .firstOrNull;
+          final bool catapult = tower?.kind == BuildingKind.catapult;
+          final bool hasAmmoResource = catapult
+              ? resources.stone >= 5
+              : resources.timber >= 1;
+          if (tower != null && hasAmmoResource) {
+            citizen.state = CitizenState.carrying;
+            _moveCitizenToward(citizen, tower.tile, dt * 4);
+            if (_citizenDistance(citizen, tower.tile) < 1.2) {
+              if (catapult) {
+                tower.ammo += 3;
+                resources.stone -= 5;
+              } else {
+                tower.ammo += 10;
+                resources.timber -= 1;
+              }
+            }
+          } else {
+            citizen.state = CitizenState.idle;
+            _wanderCitizen(citizen, dt);
+          }
+        case CitizenRole.acolyte:
+          citizen.state = CitizenState.praying;
+          final SanctuaryBuilding target = buildings.firstWhere(
+            (SanctuaryBuilding building) =>
+                building.complete && building.kind == BuildingKind.shrine,
+            orElse: () => hearth,
+          );
+          _moveCitizenToward(citizen, target.tile, dt * 3.2);
+          resources.mana = min(200, resources.mana + dt * 0.48);
+      }
+    }
+    final int farms = buildings
+        .where(
+          (SanctuaryBuilding building) =>
+              building.complete && building.kind == BuildingKind.farm,
+        )
+        .length;
+    resources.food += farms * dt * (rainActive ? 1.2 : 0.32);
+    final int sawmills = buildings
+        .where(
+          (SanctuaryBuilding building) =>
+              building.complete && building.kind == BuildingKind.sawmill,
+        )
+        .length;
+    final double plankWork = min(resources.timber, sawmills * dt * 0.42);
+    resources
+      ..timber -= plankWork
+      ..planks += plankWork * 0.5;
+    final int masonryYards = buildings
+        .where(
+          (SanctuaryBuilding building) =>
+              building.complete && building.kind == BuildingKind.masonryYard,
+        )
+        .length;
+    final double masonryWork = min(resources.stone, masonryYards * dt * 0.32);
+    resources
+      ..stone -= masonryWork
+      ..masonry += masonryWork * 0.5;
+    final int shrines = buildings
+        .where(
+          (SanctuaryBuilding building) =>
+              building.complete && building.kind == BuildingKind.shrine,
+        )
+        .length;
+    final double shrineBoost =
+        1 + (upgrades[AncestralUpgrade.overchargedShrines] ?? 0) * 0.10;
+    resources.mana = min(
+      200,
+      resources.mana + shrines * dt * 0.2 * shrineBoost,
+    );
+    if (shrines > 0 && resources.mana > 20) {
+      final double infusion = min(resources.mana - 20, shrines * dt * 0.035);
+      resources
+        ..mana -= infusion
+        ..crystals += infusion;
+    }
+    _enforceStorageCaps();
+  }
+
+  void _wanderCitizen(SanctuaryCitizen citizen, double dt) {
+    final double angle = citizen.id * 1.7 + day * 0.2;
+    final GridPoint target = GridPoint(
+      (hearthTile.x + cos(angle) * (3 + citizen.id % 4)).round(),
+      (hearthTile.y + sin(angle) * (3 + citizen.id % 4)).round(),
+    );
+    _moveCitizenToward(citizen, target, dt * 1.4);
+  }
+
+  void _moveCitizenToward(
+    SanctuaryCitizen citizen,
+    GridPoint tile,
+    double distance,
+  ) {
+    distance *= 1 + (upgrades[AncestralUpgrade.swiftSettlers] ?? 0) * 0.04;
+    final double tx = tile.x + 0.5;
+    final double ty = tile.y + 0.5;
+    final double dx = tx - citizen.x;
+    final double dy = ty - citizen.y;
+    final double length = sqrt(dx * dx + dy * dy);
+    if (length > 0.05) {
+      citizen.x += dx / length * min(distance, length);
+      citizen.y += dy / length * min(distance, length);
+    }
+  }
+
+  double _citizenDistance(SanctuaryCitizen citizen, GridPoint tile) =>
+      sqrt(pow(citizen.x - tile.x - 0.5, 2) + pow(citizen.y - tile.y - 0.5, 2));
+
+  void _prepareWave() {
+    _spawnQueue.clear();
+    final int rawBudget = (15 * pow(day, 1.45) + 5 * pow(1.12, day)).floor();
+    int budget = rawBudget;
+    if (day % 10 == 0) {
+      _spawnQueue.add(EnemyKind.devourer);
+      budget = max(0, budget - EnemyKind.devourer.budget);
+    }
+    final int targetCap = min(180, max(10, budget ~/ 2));
+    int unitCount = _spawnQueue.length;
+    while (budget >= 2 && unitCount < targetCap) {
+      EnemyKind kind;
+      final double roll = _random.nextDouble();
+      if (day >= 5 && roll < 0.08 && budget >= EnemyKind.banshee.budget) {
+        kind = EnemyKind.banshee;
+      } else if (day >= 3 && roll < 0.18 && budget >= EnemyKind.brute.budget) {
+        kind = EnemyKind.brute;
+      } else if (day >= 2 &&
+          roll < 0.36 &&
+          budget >= EnemyKind.spitter.budget) {
+        kind = EnemyKind.spitter;
+      } else {
+        kind = EnemyKind.crawler;
+      }
+      _spawnQueue.add(kind);
+      budget -= kind.budget;
+      unitCount++;
+    }
+    final int representedBudget = _spawnQueue.fold<int>(
+      0,
+      (int total, EnemyKind kind) => total + kind.budget,
+    );
+    _eliteMultiplier = max(1, rawBudget / max(1, representedBudget));
+  }
+
+  void _spawnEnemy(EnemyKind kind) {
+    final List<GridPoint> points = _spawnPoints;
+    final GridPoint spawn = points[_random.nextInt(points.length)];
+    enemies.add(
+      SanctuaryEnemy(
+        id: _nextEnemyId++,
+        kind: kind,
+        x: spawn.x + 0.5,
+        y: spawn.y + 0.5,
+        hp: kind.maxHp * _eliteMultiplier,
+      ),
+    );
+    if (kind == EnemyKind.brute || kind == EnemyKind.devourer) {
+      _events.add(
+        SanctuaryEvent(
+          SanctuaryEventKind.impact,
+          tile: spawn,
+          message: kind == EnemyKind.devourer
+              ? 'The Devourer has come'
+              : 'Brute breach warning',
+        ),
+      );
+    }
+  }
+
+  List<GridPoint> get _spawnPoints {
+    final int c = mapSize ~/ 2;
+    final int radius = min(13, c - 2);
+    return <GridPoint>[
+      GridPoint(c, c - radius),
+      GridPoint(c + radius, c),
+      GridPoint(c, c + radius),
+      GridPoint(c - radius, c),
+    ];
+  }
+
+  void _updateDefenses(double dt) {
+    for (final SanctuaryBuilding building in buildings) {
+      if (!building.complete || building.hp <= 0) {
+        continue;
+      }
+      building.cooldown = max(0, building.cooldown - dt);
+      if (building.kind == BuildingKind.frostSpire) {
+        for (final SanctuaryEnemy enemy in enemies) {
+          if (_distanceBuildingEnemy(building, enemy) <= 4.5) {
+            enemy
+              ..slowTime = max(enemy.slowTime, 0.25)
+              ..hp -= 15 * dt;
+          }
+        }
+        continue;
+      }
+      if (building.kind == BuildingKind.solarBeacon) {
+        for (final SanctuaryEnemy enemy in enemies) {
+          if (_distanceBuildingEnemy(building, enemy) <= 6) {
+            enemy.hp -= (enemy.kind == EnemyKind.banshee ? 28 : 8) * dt;
+          }
+        }
+        continue;
+      }
+      final bool arrow = building.kind == BuildingKind.arrowTower;
+      final bool ballista = building.kind == BuildingKind.ballista;
+      final bool catapult = building.kind == BuildingKind.catapult;
+      if ((!arrow && !ballista && !catapult) ||
+          building.cooldown > 0 ||
+          enemies.isEmpty) {
+        continue;
+      }
+      final double range = arrow
+          ? 5.5
+          : ballista
+          ? 7.5
+          : 9;
+      SanctuaryEnemy? target;
+      double nearest = double.infinity;
+      for (final SanctuaryEnemy enemy in enemies) {
+        final double distance = _distanceBuildingEnemy(building, enemy);
+        if (distance <= range &&
+            (!catapult || distance >= 3) &&
+            distance < nearest) {
+          target = enemy;
+          nearest = distance;
+        }
+      }
+      if (target == null) {
+        continue;
+      }
+      final bool supplied = building.ammo > 0;
+      if (catapult && supplied) {
+        _damageEnemies(
+          GridPoint(target.x.floor(), target.y.floor()),
+          radius: 2.5,
+          damage: 110,
+        );
+      } else {
+        target.hp -= supplied ? (arrow ? 18 : 95) : 4;
+      }
+      if (supplied) {
+        building.ammo--;
+      }
+      final double attackSpeed =
+          1 + (upgrades[AncestralUpgrade.arcaneTurrets] ?? 0) * 0.05;
+      building.cooldown =
+          (arrow
+              ? 0.64
+              : catapult
+              ? 2.2
+              : 1.45) /
+          attackSpeed;
+      effects.add(
+        SanctuaryEffect(
+          kind: arrow
+              ? 'arrow'
+              : catapult
+              ? 'catapult'
+              : 'ballista',
+          x: target.x,
+          y: target.y,
+          life: 0.3,
+        ),
+      );
+      _events.add(
+        SanctuaryEvent(SanctuaryEventKind.towerShot, tile: building.tile),
+      );
+    }
+    _removeDefeatedEnemies();
+  }
+
+  void _updateEnemies(double dt) {
+    for (final SanctuaryEnemy enemy in enemies) {
+      enemy.attackCooldown = max(0, enemy.attackCooldown - dt);
+      if (enemy.slowTime > 0) {
+        enemy.slowTime -= dt;
+      }
+      final double dxHearth = hearthTile.x + 0.5 - enemy.x;
+      final double dyHearth = hearthTile.y + 0.5 - enemy.y;
+      final double hearthDistance = sqrt(
+        dxHearth * dxHearth + dyHearth * dyHearth,
+      );
+      if (hearthDistance < 0.85) {
+        _damageBuilding(hearth, enemy.kind.hearthDamage * dt);
+        continue;
+      }
+
+      if (enemy.kind == EnemyKind.spitter) {
+        final SanctuaryBuilding? target = _nearestDefensiveBuilding(
+          enemy,
+          maxRange: 6.5,
+        );
+        if (target != null && enemy.attackCooldown <= 0) {
+          _damageBuilding(target, 35);
+          enemy.attackCooldown = 2.2;
+          effects.add(
+            SanctuaryEffect(
+              kind: 'acid',
+              x: target.tile.x + 0.5,
+              y: target.tile.y + 0.5,
+            ),
+          );
+          continue;
+        }
+      }
+
+      if (enemy.kind == EnemyKind.brute || enemy.kind == EnemyKind.devourer) {
+        final SanctuaryBuilding? blocker = _buildingTowardHearth(enemy);
+        if (blocker != null && blocker.kind != BuildingKind.hearth) {
+          _damageBuilding(
+            blocker,
+            enemy.kind.hearthDamage *
+                (enemy.kind == EnemyKind.brute ? 3 : 1) *
+                dt,
+          );
+          continue;
+        }
+      }
+
+      final GridPoint terrainCell = GridPoint(
+        enemy.x.floor().clamp(0, mapSize - 1),
+        enemy.y.floor().clamp(0, mapSize - 1),
+      );
+      final double terrainScale = terrainAt(terrainCell) == TerrainKind.river
+          ? 0.35
+          : 1;
+      final double speedScale = (enemy.slowTime > 0 ? 0.45 : 1) * terrainScale;
+      final double speed = enemy.kind.speed * speedScale * dt;
+      if (enemy.kind == EnemyKind.banshee) {
+        _moveEnemyToward(enemy, hearthTile.x + 0.5, hearthTile.y + 0.5, speed);
+      } else {
+        final GridPoint current = GridPoint(
+          enemy.x.floor().clamp(0, mapSize - 1),
+          enemy.y.floor().clamp(0, mapSize - 1),
+        );
+        final GridPoint? next = _lowestFlowNeighbor(current);
+        if (next == null) {
+          final SanctuaryBuilding? blocker = _nearestBlockingBuilding(
+            enemy,
+            1.6,
+          );
+          if (blocker != null) {
+            _damageBuilding(blocker, enemy.kind.hearthDamage * dt);
+          }
+        } else {
+          final SanctuaryBuilding? gate = buildingAt(next);
+          if (gate != null && gate.kind == BuildingKind.gate) {
+            _damageBuilding(gate, enemy.kind.hearthDamage * dt);
+          } else {
+            _moveEnemyToward(enemy, next.x + 0.5, next.y + 0.5, speed);
+          }
+        }
+      }
+
+      final GridPoint cell = GridPoint(
+        enemy.x.floor().clamp(0, mapSize - 1),
+        enemy.y.floor().clamp(0, mapSize - 1),
+      );
+      final SanctuaryBuilding? trap = buildingAt(cell);
+      if (trap != null &&
+          trap.kind == BuildingKind.spikeTrench &&
+          trap.triggers > 0) {
+        enemy.hp -= 45;
+        enemy.slowTime = max(enemy.slowTime, 2);
+        trap.triggers--;
+        if (trap.triggers <= 0) {
+          trap.hp = 0;
+        }
+      }
+      if (trap != null && trap.kind == BuildingKind.tarPit) {
+        enemy.slowTime = max(enemy.slowTime, 0.3);
+        if (trap.cooldown > 0) {
+          enemy.hp -= 120 * dt;
+        }
+      }
+    }
+    final int buildingCount = buildings.length;
+    final List<SanctuaryBuilding> destroyedStores = buildings
+        .where(
+          (SanctuaryBuilding building) =>
+              building.hp <= 0 && building.kind == BuildingKind.stockpile,
+        )
+        .toList();
+    buildings.removeWhere(
+      (SanctuaryBuilding building) =>
+          building.hp <= 0 && building.kind != BuildingKind.hearth,
+    );
+    if (buildings.length != buildingCount) {
+      if (destroyedStores.isNotEmpty) {
+        final double spill = pow(0.8, destroyedStores.length).toDouble();
+        resources
+          ..timber *= spill
+          ..stone *= spill
+          ..food *= spill;
+        for (final SanctuaryBuilding store in destroyedStores) {
+          effects.add(
+            SanctuaryEffect(
+              kind: 'spill',
+              x: store.tile.x + 0.5,
+              y: store.tile.y + 0.5,
+            ),
+          );
+        }
+      }
+      _recomputeFlow();
+    }
+    _removeDefeatedEnemies();
+    if (hearth.hp <= 0) {
+      _fallSettlement();
+    }
+  }
+
+  void _moveEnemyToward(
+    SanctuaryEnemy enemy,
+    double targetX,
+    double targetY,
+    double distance,
+  ) {
+    final double dx = targetX - enemy.x;
+    final double dy = targetY - enemy.y;
+    final double length = sqrt(dx * dx + dy * dy);
+    if (length > 0.02) {
+      enemy.x += dx / length * min(length, distance);
+      enemy.y += dy / length * min(length, distance);
+    }
+  }
+
+  SanctuaryBuilding? _buildingTowardHearth(SanctuaryEnemy enemy) {
+    final double dx = hearthTile.x + 0.5 - enemy.x;
+    final double dy = hearthTile.y + 0.5 - enemy.y;
+    final double length = sqrt(dx * dx + dy * dy);
+    if (length == 0) {
+      return hearth;
+    }
+    final GridPoint ahead = GridPoint(
+      (enemy.x + dx / length * 0.8).floor().clamp(0, mapSize - 1),
+      (enemy.y + dy / length * 0.8).floor().clamp(0, mapSize - 1),
+    );
+    return buildingAt(ahead);
+  }
+
+  SanctuaryBuilding? _nearestDefensiveBuilding(
+    SanctuaryEnemy enemy, {
+    required double maxRange,
+  }) {
+    SanctuaryBuilding? result;
+    double best = maxRange;
+    for (final SanctuaryBuilding building in buildings) {
+      if (!building.kind.defensive || !building.complete) {
+        continue;
+      }
+      final double distance = _distanceBuildingEnemy(building, enemy);
+      if (distance < best) {
+        best = distance;
+        result = building;
+      }
+    }
+    return result;
+  }
+
+  SanctuaryBuilding? _nearestBlockingBuilding(
+    SanctuaryEnemy enemy,
+    double range,
+  ) {
+    SanctuaryBuilding? result;
+    double best = range;
+    for (final SanctuaryBuilding building in buildings) {
+      if (!building.complete || !building.kind.blocksGround) {
+        continue;
+      }
+      final double distance = _distanceBuildingEnemy(building, enemy);
+      if (distance < best) {
+        best = distance;
+        result = building;
+      }
+    }
+    return result;
+  }
+
+  double _distanceBuildingEnemy(
+    SanctuaryBuilding building,
+    SanctuaryEnemy enemy,
+  ) => sqrt(
+    pow(building.tile.x + 0.5 - enemy.x, 2) +
+        pow(building.tile.y + 0.5 - enemy.y, 2),
+  );
+
+  void _damageBuilding(SanctuaryBuilding building, double amount) {
+    building.hp -= amount;
+    if (amount > 25) {
+      _events.add(
+        SanctuaryEvent(SanctuaryEventKind.impact, tile: building.tile),
+      );
+    }
+  }
+
+  void _damageEnemies(
+    GridPoint center, {
+    required double radius,
+    required double damage,
+    double stun = 0,
+  }) {
+    for (final SanctuaryEnemy enemy in enemies) {
+      final double distance = sqrt(
+        pow(enemy.x - center.x - 0.5, 2) + pow(enemy.y - center.y - 0.5, 2),
+      );
+      if (distance <= radius) {
+        enemy.hp -= damage;
+        enemy.slowTime = max(enemy.slowTime, stun);
+      }
+    }
+    _removeDefeatedEnemies();
+  }
+
+  void _removeDefeatedEnemies() {
+    final int before = enemies.length;
+    enemies.removeWhere((SanctuaryEnemy enemy) => enemy.hp <= 0);
+    final int defeated = before - enemies.length;
+    if (defeated > 0) {
+      enemiesDefeatedTonight += defeated;
+      totalEnemiesDefeated += defeated;
+      resources.mana = min(200, resources.mana + defeated * 1.5);
+    }
+  }
+
+  void _tickFissures(double dt) {
+    bool changed = false;
+    final List<int> expired = <int>[];
+    for (final MapEntry<int, double> entry in fissures.entries) {
+      final double remaining = entry.value - dt;
+      if (remaining <= 0) {
+        expired.add(entry.key);
+      } else {
+        fissures[entry.key] = remaining;
+      }
+    }
+    for (final int index in expired) {
+      fissures.remove(index);
+      changed = true;
+    }
+    if (changed) {
+      _recomputeFlow();
+    }
+  }
+
+  void _resolveDawn() {
+    resources.mana = min(200, resources.mana + enemies.length * 0.6);
+    totalEnemiesDefeated += enemies.length;
+    enemiesDefeatedTonight += enemies.length;
+    enemies.clear();
+    _spawnQueue.clear();
+    final double integrity = buildings.isEmpty
+        ? 0
+        : buildings
+                  .map((SanctuaryBuilding value) => value.healthRatio)
+                  .reduce((double a, double b) => a + b) /
+              buildings.length;
+    final double bonus =
+        8 + integrity * 12 + (citizensLostTonight == 0 ? 15 : 0);
+    resources.mana = min(200, resources.mana + bonus);
+    _events.add(
+      SanctuaryEvent(
+        SanctuaryEventKind.dawn,
+        message: 'Dawn secured · +${bonus.round()} mana',
+      ),
+    );
+  }
+
+  void _beginDay() {
+    final double foodRequired = citizens.length.toDouble();
+    if (resources.food >= foodRequired) {
+      resources.food -= foodRequired;
+      for (final SanctuaryCitizen citizen in citizens) {
+        citizen.hunger = max(0, citizen.hunger - 45);
+      }
+    } else {
+      final int losses = min(
+        citizens.length,
+        ((foodRequired - resources.food) / 4).ceil(),
+      );
+      resources.food = 0;
+      if (losses > 0) {
+        citizens.removeRange(max(0, citizens.length - losses), citizens.length);
+      }
+    }
+    final int openHomes = populationCapacity - citizens.length;
+    if (resources.food > 20 && openHomes > 0) {
+      final int arrivals = min(openHomes, 1 + day % 3);
+      for (int index = 0; index < arrivals; index++) {
+        citizens.add(
+          SanctuaryCitizen(
+            id: _nextCitizenId++,
+            role: CitizenRole.harvester,
+            x: hearthTile.x + 0.5,
+            y: hearthTile.y + 1.5,
+          ),
+        );
+      }
+    }
+    _assignRoles();
+  }
+
+  void _fallSettlement() {
+    phase = SanctuaryPhase.fallen;
+    paused = false;
+    final int earned = max(1, (day * 2 + totalEnemiesDefeated / 12).floor());
+    ancestralShards += earned;
+    _events.add(
+      SanctuaryEvent(
+        SanctuaryEventKind.settlementFallen,
+        tile: hearthTile,
+        message: '+$earned Ancestral Shards',
+      ),
+    );
+  }
+
+  bool _pathsRemainOpen(GridPoint tentativeBlock) {
+    final Set<int> visited = <int>{hearthTile.index(mapSize)};
+    final Queue<GridPoint> queue = Queue<GridPoint>()..add(hearthTile);
+    while (queue.isNotEmpty) {
+      final GridPoint current = queue.removeFirst();
+      for (final GridPoint neighbor in _neighbors(current)) {
+        final int index = neighbor.index(mapSize);
+        if (visited.contains(index) ||
+            neighbor == tentativeBlock ||
+            !_placementPathPassable(neighbor)) {
+          continue;
+        }
+        visited.add(index);
+        queue.add(neighbor);
+      }
+    }
+    return _spawnPoints.every(
+      (GridPoint point) => visited.contains(point.index(mapSize)),
+    );
+  }
+
+  void _recomputeFlow() {
+    _flow.fillRange(0, _flow.length, -1);
+    final Queue<GridPoint> queue = Queue<GridPoint>()..add(hearthTile);
+    _flow[hearthTile.index(mapSize)] = 0;
+    while (queue.isNotEmpty) {
+      final GridPoint current = queue.removeFirst();
+      final int nextCost = _flow[current.index(mapSize)] + 1;
+      for (final GridPoint neighbor in _neighbors(current)) {
+        final int index = neighbor.index(mapSize);
+        if (_flow[index] >= 0 ||
+            !_groundPassable(neighbor, allowHearth: true)) {
+          continue;
+        }
+        _flow[index] = nextCost;
+        queue.add(neighbor);
+      }
+    }
+  }
+
+  GridPoint? _lowestFlowNeighbor(GridPoint current) {
+    GridPoint? best;
+    int bestCost = _flow[current.index(mapSize)];
+    if (bestCost < 0) {
+      bestCost = 1 << 30;
+    }
+    for (final GridPoint neighbor in _neighbors(current)) {
+      final int cost = _flow[neighbor.index(mapSize)];
+      if (cost >= 0 && cost < bestCost) {
+        best = neighbor;
+        bestCost = cost;
+      }
+    }
+    return best;
+  }
+
+  bool _groundPassable(GridPoint tile, {bool allowHearth = false}) {
+    if (!inBounds(tile) || fissures.containsKey(tile.index(mapSize))) {
+      return false;
+    }
+    final TerrainKind terrain = terrainAt(tile);
+    if (terrain == TerrainKind.chasm || terrain == TerrainKind.granite) {
+      return false;
+    }
+    final SanctuaryBuilding? building = buildingAt(tile);
+    if (building == null || !building.complete) {
+      return true;
+    }
+    if (allowHearth && building.kind == BuildingKind.hearth) {
+      return true;
+    }
+    if (building.kind == BuildingKind.gate ||
+        building.kind == BuildingKind.spikeTrench ||
+        building.kind == BuildingKind.tarPit) {
+      return true;
+    }
+    return !building.kind.blocksGround;
+  }
+
+  bool _placementPathPassable(GridPoint tile) {
+    if (!inBounds(tile) || fissures.containsKey(tile.index(mapSize))) {
+      return false;
+    }
+    final TerrainKind terrain = terrainAt(tile);
+    if (terrain == TerrainKind.chasm || terrain == TerrainKind.granite) {
+      return false;
+    }
+    final SanctuaryBuilding? building = buildingAt(tile);
+    if (building == null || building.kind == BuildingKind.hearth) {
+      return true;
+    }
+    return building.kind == BuildingKind.gate ||
+        building.kind == BuildingKind.spikeTrench ||
+        building.kind == BuildingKind.tarPit ||
+        !building.kind.blocksGround;
+  }
+
+  double _maxHpFor(BuildingKind kind) {
+    final bool masonryApplies =
+        kind == BuildingKind.palisade ||
+        kind == BuildingKind.rampart ||
+        kind == BuildingKind.gate;
+    if (!masonryApplies) {
+      return kind.maxHp;
+    }
+    return kind.maxHp *
+        (1 + (upgrades[AncestralUpgrade.masterMasonry] ?? 0) * 0.08);
+  }
+
+  void _enforceStorageCaps() {
+    final double capacity = storageCapacity;
+    resources
+      ..timber = min(resources.timber, capacity)
+      ..stone = min(resources.stone, capacity)
+      ..food = min(resources.food, capacity)
+      ..planks = min(resources.planks, capacity)
+      ..masonry = min(resources.masonry, capacity);
+  }
+
+  List<GridPoint> _neighbors(GridPoint tile) => <GridPoint>[
+    if (tile.y > 0) GridPoint(tile.x, tile.y - 1),
+    if (tile.x < mapSize - 1) GridPoint(tile.x + 1, tile.y),
+    if (tile.y < mapSize - 1) GridPoint(tile.x, tile.y + 1),
+    if (tile.x > 0) GridPoint(tile.x - 1, tile.y),
+  ];
+}
+
+extension GodPowerData on GodPower {
+  String get label => switch (this) {
+    GodPower.lightning => 'Divine Lightning',
+    GodPower.rain => 'Cleansing Rain',
+    GodPower.fissure => 'Seismic Fissure',
+    GodPower.meteor => 'Celestial Meteor',
+  };
+
+  int get manaCost => switch (this) {
+    GodPower.lightning => 15,
+    GodPower.rain => 25,
+    GodPower.fissure => 50,
+    GodPower.meteor => 80,
+  };
+}
+
+Map<String, dynamic> _map(Object? value) {
+  if (value is! Map) {
+    return <String, dynamic>{};
+  }
+  return value.map(
+    (dynamic key, dynamic item) =>
+        MapEntry<String, dynamic>(key.toString(), item),
+  );
+}
+
+List<Map<String, dynamic>> _mapList(Object? value) {
+  if (value is! List) {
+    return <Map<String, dynamic>>[];
+  }
+  return value.whereType<Map>().map(_map).toList();
+}

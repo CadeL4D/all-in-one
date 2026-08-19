@@ -12,11 +12,13 @@ Flutter's single codebase.
 - **Routines** — repeatable routines with step-by-step daily progress and optional clock times for steps.
 - **Focus** — named focus/break timers with an optional extra check-in timer and background completion alerts.
 - **Noises** — colored-noise soundscapes with independently toggleable Creative Commons nature layers.
-- **Afterimage** — an endless, procedural time-heist where each rewind records an echo that can distract guards, hold switches, and help crack the next vault.
+- **Gridlock Rush** — a Simon-style 4×4 spatial memory game with growing adjacent routes, optional visual decoys, recent runs, and persistent high scores.
+- **Sanctuary & Cinder** — an offline isometric god-survival builder with autonomous citizens, path-safe fortifications, divine powers, and a complete day/night siege loop.
 - **Workouts** — a private weekly strength planner with age-aware programming, active set logging, and Resolve-versus-Pressure ratings.
 
-Tasks, prompts, routines, workout plans/history, Maths scores, and
-recently opened hub cards are saved locally with `shared_preferences`.
+Tasks, prompts, routines, workout plans/history, Maths scores, Gridlock Rush
+records/history, Sanctuary & Cinder worlds, and recently opened hub cards are
+saved locally with `shared_preferences`.
 
 ## Project structure
 
@@ -40,7 +42,8 @@ lib/
         ├── routines/          # Routines tracker module
         ├── focus/             # Focus timer module
         ├── noises/            # Colored noise and nature mix module
-        ├── afterimage/        # Procedural time-heist game and simulation
+        ├── gridlock/          # Simon-style spatial memory game
+        ├── sanctuary/         # Isometric god-survival simulation
         └── workouts/          # Local workout planner and Resolve rating
 ```
 

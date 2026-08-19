@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_manifest.dart';
-import 'afterimage/afterimage_app.dart';
 import 'focus/focus_app.dart';
+import 'gridlock/gridlock_app.dart';
 import 'maths/maths_app.dart';
 import 'noises/noises_app.dart';
 import 'prompts/prompts_app.dart';
 import 'routines/routines_app.dart';
+import 'sanctuary/sanctuary_app.dart';
 import 'tasks/tasks_app.dart';
 import 'workouts/workouts_app.dart';
 
@@ -75,14 +76,24 @@ abstract final class AppRegistry {
       builder: _noisesBuilder,
     ),
     AppManifest(
-      id: 'afterimage',
-      name: 'Afterimage',
-      tagline: 'Outsmart your last move',
-      description: 'An endless time-heist where recorded echoes help you crack guarded vaults.',
-      icon: Icons.auto_awesome_motion_rounded,
-      gradient: <Color>[Color(0xFF171A2D), Color(0xFF7259ED)],
+      id: 'gridlock',
+      name: 'Gridlock Rush',
+      tagline: 'Watch. Remember. Repeat.',
+      description: 'A Simon-style spatial memory game with growing routes and optional decoys.',
+      icon: Icons.grid_view_rounded,
+      gradient: <Color>[Color(0xFF17233B), Color(0xFF5AE6D3)],
       category: AppCategory.games,
-      builder: _afterimageBuilder,
+      builder: _gridlockBuilder,
+    ),
+    AppManifest(
+      id: 'sanctuary',
+      name: 'Sanctuary & Cinder',
+      tagline: 'Build by day. Endure by night.',
+      description: 'Guide an autonomous settlement, shape defensive paths, and wield divine powers against the abyss.',
+      icon: Icons.local_fire_department_rounded,
+      gradient: <Color>[Color(0xFF2D6A4F), Color(0xFFFF5400)],
+      category: AppCategory.games,
+      builder: _sanctuaryBuilder,
     ),
     AppManifest(
       id: 'workouts',
@@ -112,8 +123,9 @@ abstract final class AppRegistry {
 
   static Widget _noisesBuilder(BuildContext context) => const NoisesApp();
 
-  static Widget _afterimageBuilder(BuildContext context) =>
-      const AfterimageApp();
+  static Widget _gridlockBuilder(BuildContext context) => const GridlockApp();
+
+  static Widget _sanctuaryBuilder(BuildContext context) => const SanctuaryApp();
 
   static Widget _workoutsBuilder(BuildContext context) => const WorkoutsApp();
 }

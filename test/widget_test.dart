@@ -104,7 +104,8 @@ void main() {
       'maths',
       'focus',
       'noises',
-      'afterimage',
+      'gridlock',
+      'sanctuary',
       'workouts',
     ]);
 
