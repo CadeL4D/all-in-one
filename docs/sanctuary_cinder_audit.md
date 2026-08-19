@@ -33,6 +33,23 @@ real-device profiling, authored media, or long-form balance testing.
   controls, haptics, active pause, and versioned ten-second/lifecycle autosave.
 - Morale-driven productivity, consequential living-world encounters, rotating
   Night Oaths, breakthrough casualties, and reactive ambient world motion.
+- Dusk wave telegraphy: active rift lanes, wave composition, a rotating
+  modifier (swift, armored, horde, eclipse), milestone boss forecasts, and
+  lane-restricted spawning.
+- Active night verbs: per-tower target stances, any-hour timber-funded
+  emergency repairs, daytime dismantle with half materials back, and a
+  once-per-night muster that rouses citizens through the siege.
+- Placement-sensitive economy: adjacency bonuses for farms, sawmills, masonry
+  yards, and doubled shrines on holy ground, surfaced in a building inspect
+  sheet with repair and dismantle actions.
+- Combat feedback: traveling projectiles with arcing catapult shots, floating
+  damage and repair text, enemy health pips, death and collapse effects,
+  screen shake, a Hearth-under-attack vignette, and active rift tinting.
+- Code-synthesized sound effects via the existing audioplayers dependency
+  (no audio assets), with a HUD mute toggle and silent failure where audio is
+  unavailable.
+- Run memory: a full run summary on the fallen screen, deepest-night tracking,
+  and a past-hearths chronicle on the title screen.
 
 ## Design corrections made during implementation
 

@@ -22,15 +22,39 @@ to one another while the game maintains a stable mobile frame budget.
   Ancestral Shard for clean execution.
 - Make an enemy breakthrough at the Hearth capable of costing citizens, so a
   breached defense has a visible consequence beyond a shrinking health bar.
+- Telegraph every wave at dusk: active rift lanes, composition, and a rotating
+  modifier (swift, armored, horde, eclipse) are announced before nightfall and
+  spawns only leave the forecast rifts. Milestone nights every tenth day open
+  every rift with escalating Devourer counts and seal bonus shards at dawn.
+- Give the night active verbs: per-tower target stances (nearest, vanguard,
+  strongest), a repair tool that spends timber at any hour, daytime dismantle
+  with half materials back, and a once-per-night muster that rouses the whole
+  village to work through the siege.
+- Make placement matter to the economy: farms gain output beside rivers,
+  sawmills beside standing forest, masonry yards beside granite, and shrines
+  are doubled on holy ground, shown live in a building inspect sheet.
+- Add combat readability and juice: projectiles with origins and flight paths
+  (catapults arc), floating damage and repair text, enemy health pips, death
+  bursts, collapse dust, screen shake, a Hearth-under-attack vignette, and
+  active rifts glowing red on telegraphed lanes.
+- Add code-synthesized sound effects (towers, deaths, collapses, meteors,
+  dawns, alarms, musters) with no audio assets, a HUD mute toggle, and silent
+  failure on any platform without audio.
+- Record every run: a fallen settlement summarizes nights, kills, oaths,
+  merciful choices, peak population, and milestones sealed, tracks a deepest
+  night, and lists past hearths on the title screen.
 
 ## Phase 1 — Make actions readable
 
-1. Give every tower a visible projectile origin, flight path, hit reaction, and
-   distinct impact silhouette.
+1. ~~Give every tower a visible projectile origin, flight path, hit reaction,
+   and distinct impact silhouette.~~ Shipped: arrows, ballista bolts, and
+   arcing catapult shots now travel from the tower to the target.
 2. Telegraph brute charges, spitter targets, banshee disruption, and boss phases
-   early enough for an intentional response.
-3. Add compact damage, repair, harvest, delivery, and morale callouts near the
-   affected object instead of routing all information through the HUD.
+   early enough for an intentional response. Dusk wave forecasts (lanes,
+   composition, modifiers, bosses) ship; per-enemy ability telegraphs remain.
+3. ~~Add compact damage, repair, harvest, and delivery callouts near the
+   affected object instead of routing all information through the HUD.~~
+   Shipped for damage and repair; harvest and delivery callouts remain.
 4. Add a reduced-effects option and device quality tiers before increasing
    particle density.
 
@@ -56,10 +80,13 @@ from a settlement after a ten-minute session.
 
 ## Phase 3 — Deepen the tactical loop
 
-1. Add pre-night reconnaissance that reveals two likely lanes and one uncertain
-   modifier, preserving surprise without making losses feel random.
-2. Add active tower stances such as nearest, strongest, and breach priority,
-   changed per tower type rather than per individual shot.
+1. ~~Add pre-night reconnaissance that reveals two likely lanes and one uncertain
+   modifier, preserving surprise without making losses feel random.~~ Shipped
+   as the dusk wave forecast: exact lanes and modifier, boss warnings on
+   milestone nights.
+2. ~~Add active tower stances such as nearest, strongest, and breach priority,
+   changed per tower type rather than per individual shot.~~ Shipped per tower
+   through the inspect sheet.
 3. Add limited daytime expeditions that trade labor for a short, readable risk
    and return with maps, survivors, or rare materials.
 4. Add enemy synergies and counters: crawlers screen spitters, banshees disable

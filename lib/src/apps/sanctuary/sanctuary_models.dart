@@ -32,6 +32,10 @@ enum BuildingKind {
 
 enum GodPower { lightning, rain, fissure, meteor }
 
+enum TowerStance { nearest, vanguard, strongest }
+
+enum WaveModifier { none, swift, armored, horde, eclipse }
+
 enum AncestralUpgrade {
   divineMight,
   masterMasonry,
@@ -316,6 +320,7 @@ class SanctuaryBuilding {
     this.ammo = 20,
     this.cooldown = 0,
     this.triggers = 10,
+    this.stance = TowerStance.nearest,
   }) : hp = hp ?? kind.maxHp;
 
   final String id;
@@ -326,12 +331,17 @@ class SanctuaryBuilding {
   int ammo;
   double cooldown;
   int triggers;
+  TowerStance stance;
 
   bool get complete =>
       kind == BuildingKind.hearth || buildProgress >= kind.buildWork;
   double get healthRatio => (hp / kind.maxHp).clamp(0, 1);
   double get buildRatio =>
       kind.buildWork <= 0 ? 1 : (buildProgress / kind.buildWork).clamp(0, 1);
+  bool get isTower =>
+      kind == BuildingKind.arrowTower ||
+      kind == BuildingKind.ballista ||
+      kind == BuildingKind.catapult;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'id': id,
@@ -342,6 +352,7 @@ class SanctuaryBuilding {
     'ammo': ammo,
     'cooldown': cooldown,
     'triggers': triggers,
+    if (isTower) 'stance': stance.name,
   };
 
   factory SanctuaryBuilding.fromJson(Map<String, dynamic> json) {
@@ -358,6 +369,10 @@ class SanctuaryBuilding {
       ammo: (json['ammo'] as num?)?.toInt() ?? 20,
       cooldown: (json['cooldown'] as num?)?.toDouble() ?? 0,
       triggers: (json['triggers'] as num?)?.toInt() ?? 10,
+      stance: TowerStance.values.firstWhere(
+        (TowerStance value) => value.name == json['stance'],
+        orElse: () => TowerStance.nearest,
+      ),
     );
   }
 }
@@ -418,17 +433,22 @@ class SanctuaryEnemy {
     required this.x,
     required this.y,
     double? hp,
+    double? maxHp,
     this.attackCooldown = 0,
     this.slowTime = 0,
-  }) : hp = hp ?? kind.maxHp;
+  }) : hp = hp ?? maxHp ?? kind.maxHp,
+       maxHp = maxHp ?? hp ?? kind.maxHp;
 
   final int id;
   final EnemyKind kind;
   double x;
   double y;
   double hp;
+  double maxHp;
   double attackCooldown;
   double slowTime;
+
+  double get healthRatio => (hp / maxHp).clamp(0, 1);
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'id': id,
@@ -436,6 +456,7 @@ class SanctuaryEnemy {
     'x': x,
     'y': y,
     'hp': hp,
+    'maxHp': maxHp,
     'attackCooldown': attackCooldown,
     'slowTime': slowTime,
   };
@@ -445,12 +466,14 @@ class SanctuaryEnemy {
       (EnemyKind value) => value.name == json['kind'],
       orElse: () => EnemyKind.crawler,
     );
+    final double? hp = (json['hp'] as num?)?.toDouble();
     return SanctuaryEnemy(
       id: (json['id'] as num?)?.toInt() ?? 0,
       kind: kind,
       x: (json['x'] as num?)?.toDouble() ?? 0,
       y: (json['y'] as num?)?.toDouble() ?? 0,
-      hp: (json['hp'] as num?)?.toDouble(),
+      hp: hp,
+      maxHp: (json['maxHp'] as num?)?.toDouble() ?? hp ?? kind.maxHp,
       attackCooldown: (json['attackCooldown'] as num?)?.toDouble() ?? 0,
       slowTime: (json['slowTime'] as num?)?.toDouble() ?? 0,
     );
@@ -578,16 +601,56 @@ class SanctuaryEffect {
     required this.kind,
     required this.x,
     required this.y,
+    this.x2,
+    this.y2,
+    this.text,
     this.life = 0.8,
   });
 
   final String kind;
   final double x;
   final double y;
+  final double? x2;
+  final double? y2;
+  final String? text;
   final double life;
   double age = 0;
 
   double get progress => (age / life).clamp(0, 1);
+}
+
+extension TowerStanceData on TowerStance {
+  String get label => switch (this) {
+    TowerStance.nearest => 'Nearest',
+    TowerStance.vanguard => 'Vanguard',
+    TowerStance.strongest => 'Strongest',
+  };
+
+  String get detail => switch (this) {
+    TowerStance.nearest => 'Fire at the closest abyssal',
+    TowerStance.vanguard => 'Fire at whoever is deepest inside the sanctuary',
+    TowerStance.strongest => 'Fire at the toughest abyssal in range',
+  };
+}
+
+extension WaveModifierData on WaveModifier {
+  String get label => switch (this) {
+    WaveModifier.none => 'Still Air',
+    WaveModifier.swift => 'Swift Darkness',
+    WaveModifier.armored => 'Armored Tide',
+    WaveModifier.horde => 'Endless Horde',
+    WaveModifier.eclipse => 'Eclipse',
+  };
+
+  String get detail => switch (this) {
+    WaveModifier.none => 'No alteration tonight',
+    WaveModifier.swift => 'Abyssals move 30% faster',
+    WaveModifier.armored => 'Abyssals arrive with 40% more health',
+    WaveModifier.horde => '35% more abyssals, each 25% weaker',
+    WaveModifier.eclipse => 'Shrines and acolytes gather half as much mana',
+  };
+
+  bool get isActive => this != WaveModifier.none;
 }
 
 class PlacementResult {
