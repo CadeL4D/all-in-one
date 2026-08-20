@@ -10,10 +10,6 @@ abstract final class LocalStore {
   static const String appOrderKey = 'app_order_v1';
   static const String workoutsKey = 'workouts_v1';
   static const String gridlockKey = 'gridlock_v1';
-  static const String sanctuaryKey = 'sanctuary_cinder_v1';
-  static const String sanctuaryRunsKey = 'sanctuary_runs_v1';
-  static const String sanctuaryBestKey = 'sanctuary_best_v1';
-  static const String sanctuarySoundKey = 'sanctuary_sound_v1';
 
   static Future<String?> readString(String key) async {
     final SharedPreferences preferences = await SharedPreferences.getInstance();

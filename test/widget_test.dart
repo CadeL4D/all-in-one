@@ -105,7 +105,6 @@ void main() {
       'focus',
       'noises',
       'simon',
-      'sanctuary',
       'workouts',
     ]);
 

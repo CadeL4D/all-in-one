@@ -13,12 +13,11 @@ Flutter's single codebase.
 - **Focus** — named focus/break timers with an optional extra check-in timer and background completion alerts.
 - **Noises** — colored-noise soundscapes with independently toggleable Creative Commons nature layers.
 - **Simon** — a pure 4×4 sequence-memory game where any square can follow or repeat, with optional visual decoys, recent runs, and persistent high scores.
-- **Sanctuary & Cinder** — an offline isometric god-survival builder with autonomous citizens, path-safe fortifications, divine powers, and a complete day/night siege loop.
 - **Workouts** — a private weekly strength planner with age-aware programming, active set logging, and Resolve-versus-Pressure ratings.
 
 Tasks, prompts, routines, workout plans/history, Maths scores, Simon
-records/history, Sanctuary & Cinder worlds, and recently opened hub cards are
-saved locally with `shared_preferences`.
+records/history, and recently opened hub cards are saved locally with
+`shared_preferences`.
 
 ## Project structure
 
@@ -43,7 +42,6 @@ lib/
         ├── focus/             # Focus timer module
         ├── noises/            # Colored noise and nature mix module
         ├── gridlock/          # Simon sequence-memory game
-        ├── sanctuary/         # Isometric god-survival simulation
         └── workouts/          # Local workout planner and Resolve rating
 ```
 

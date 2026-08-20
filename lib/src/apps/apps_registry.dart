@@ -7,7 +7,6 @@ import 'maths/maths_app.dart';
 import 'noises/noises_app.dart';
 import 'prompts/prompts_app.dart';
 import 'routines/routines_app.dart';
-import 'sanctuary/sanctuary_app.dart';
 import 'tasks/tasks_app.dart';
 import 'workouts/workouts_app.dart';
 
@@ -86,16 +85,6 @@ abstract final class AppRegistry {
       builder: _simonBuilder,
     ),
     AppManifest(
-      id: 'sanctuary',
-      name: 'Sanctuary & Cinder',
-      tagline: 'Build by day. Endure by night.',
-      description: 'Guide an autonomous settlement, shape defensive paths, and wield divine powers against the abyss.',
-      icon: Icons.local_fire_department_rounded,
-      gradient: <Color>[Color(0xFF2D6A4F), Color(0xFFFF5400)],
-      category: AppCategory.games,
-      builder: _sanctuaryBuilder,
-    ),
-    AppManifest(
       id: 'workouts',
       name: 'Workouts',
       tagline: 'Meet the pressure. Build resolve.',
@@ -124,8 +113,6 @@ abstract final class AppRegistry {
   static Widget _noisesBuilder(BuildContext context) => const NoisesApp();
 
   static Widget _simonBuilder(BuildContext context) => const GridlockApp();
-
-  static Widget _sanctuaryBuilder(BuildContext context) => const SanctuaryApp();
 
   static Widget _workoutsBuilder(BuildContext context) => const WorkoutsApp();
 }
