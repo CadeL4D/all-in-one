@@ -8,7 +8,211 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Dawnhold — Colony Survival</title>
-<link rel="stylesheet" href="css/style.css">
+<style>
+/* ============ Dawnhold UI ============ */
+:root{
+  --bg:#14161c; --panel:#1e222b; --panel2:#262b36; --line:#3a4152;
+  --ink:#e8e4d8; --dim:#9aa3b5; --amber:#e8a94b; --amber2:#ffc46b;
+  --red:#e05555; --green:#7dc95e; --blue:#6fb3e0; --purple:#b48ae0;
+  --sat: env(safe-area-inset-top,0px);
+  --sab: env(safe-area-inset-bottom,0px);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+html,body{height:100%;overflow:hidden;background:var(--bg);touch-action:none;overscroll-behavior:none}
+body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);user-select:none;-webkit-user-select:none}
+#app{position:fixed;inset:0;overflow:hidden}
+canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
+#game{position:absolute;inset:0;width:100%;height:100%;background:#0c0e14}
+.hidden{display:none!important}
+
+/* ---------- top HUD ---------- */
+#hud{position:absolute;top:0;left:0;right:0;padding:calc(var(--sat) + 4px) 6px 4px;pointer-events:none;z-index:20}
+#hudTop{display:flex;align-items:center;justify-content:space-between;gap:6px;pointer-events:auto}
+#clockWrap{display:flex;align-items:center;gap:7px;background:rgba(20,22,28,.82);border:2px solid var(--line);
+  border-radius:10px;padding:4px 9px;min-width:150px}
+#phaseIcon{width:18px;height:18px}
+#dayLabel{font-weight:700;font-size:14px;letter-spacing:.4px;white-space:nowrap}
+#clockBar{flex:1;height:6px;background:#0d0f15;border-radius:3px;overflow:hidden;min-width:40px}
+#clockFill{height:100%;width:0%;background:var(--amber);border-radius:3px;transition:width .3s linear}
+#clockBar.night #clockFill{background:var(--purple)}
+#hudBtns{display:flex;gap:4px}
+.hbtn{width:40px;height:40px;border:2px solid var(--line);border-radius:10px;background:rgba(30,34,43,.9);
+  color:var(--ink);font-size:12px;font-weight:700;cursor:pointer}
+.hbtn.active{background:var(--amber);border-color:var(--amber2);color:#241a08}
+#resRow{display:flex;gap:5px;margin-top:5px;overflow-x:auto;pointer-events:auto;scrollbar-width:none;padding:2px 0}
+#resRow::-webkit-scrollbar{display:none}
+.chip{display:flex;align-items:center;gap:5px;background:rgba(20,22,28,.85);border:2px solid var(--line);
+  border-radius:9px;padding:3px 8px;font-size:13px;font-weight:700;white-space:nowrap}
+.chip canvas{width:16px;height:16px}
+.chip.low{border-color:var(--red);color:var(--red);animation:pulse 1.2s infinite}
+.chip.flash{animation:flashRed .5s}
+@keyframes pulse{50%{opacity:.55}}
+@keyframes flashRed{0%,100%{filter:none}50%{filter:brightness(2)}}
+#essChip{position:relative;min-width:74px}
+#essBar{position:absolute;left:24px;right:6px;bottom:1px;height:3px;background:#0d0f15;border-radius:2px;overflow:hidden}
+#essFill{height:100%;width:40%;background:var(--purple);border-radius:2px}
+
+/* ---------- boss bar ---------- */
+#bossBar{position:absolute;top:calc(var(--sat) + 74px);left:50%;transform:translateX(-50%);z-index:21;
+  background:rgba(20,10,18,.88);border:2px solid #6b2436;border-radius:10px;padding:4px 12px;min-width:230px;text-align:center}
+#bossName{font-size:12px;font-weight:800;letter-spacing:2px;color:#ff9a9a;text-transform:uppercase}
+#bossHp{height:8px;background:#17080c;border-radius:4px;margin-top:3px;overflow:hidden}
+#bossHpFill{height:100%;width:100%;background:linear-gradient(90deg,#a02440,#e0455e)}
+
+/* ---------- toasts ---------- */
+#toasts{position:absolute;top:calc(var(--sat) + 66px);left:50%;transform:translateX(-50%);z-index:30;
+  display:flex;flex-direction:column;gap:5px;align-items:center;pointer-events:none;width:min(92vw,420px)}
+.toast{background:rgba(24,26,34,.94);border:2px solid var(--line);border-left:4px solid var(--amber);
+  border-radius:9px;padding:7px 12px;font-size:13px;max-width:100%;animation:toastIn .25s ease-out;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.toast.bad{border-left-color:var(--red)}
+.toast.good{border-left-color:var(--green)}
+.toast.magic{border-left-color:var(--purple)}
+.toast.fadeout{opacity:0;transition:opacity .6s}
+@keyframes toastIn{from{transform:translateY(-8px);opacity:0}}
+
+/* ---------- tutorial ---------- */
+#tut{position:absolute;top:calc(var(--sat) + 66px);left:50%;transform:translateX(-50%);z-index:29;width:min(92vw,400px);
+  background:rgba(33,30,52,.95);border:2px solid var(--purple);border-radius:12px;padding:10px 12px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+#tutText{font-size:13px;line-height:1.45}
+#tutBtns{display:flex;gap:8px;margin-top:8px;justify-content:flex-end}
+.tbtn,.tbtn2{border:2px solid var(--purple);background:var(--purple);color:#fff;border-radius:8px;padding:5px 14px;font-size:12px;font-weight:700}
+.tbtn2{background:transparent;color:var(--dim);border-color:var(--line)}
+
+/* ---------- selection card ---------- */
+#selCard{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--sab) + 76px);z-index:25;
+  width:min(94vw,380px);background:rgba(24,26,34,.95);border:2px solid var(--line);border-radius:12px;padding:9px 11px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+#selCard h3{font-size:14px;display:flex;align-items:center;gap:8px}
+#selCard .sub{color:var(--dim);font-size:11px;margin-top:1px}
+#selCard .row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.meter{flex:1;height:8px;background:#0d0f15;border-radius:4px;overflow:hidden}
+.meter>div{height:100%;border-radius:4px}
+.mHP>div{background:var(--green)} .mHun>div{background:var(--amber)} .mProg>div{background:var(--blue)} .mGrow>div{background:#c9a036}
+.mLbl{font-size:10px;color:var(--dim);width:40px}
+.jobArrows{display:flex;align-items:center;gap:8px}
+.jobArrows button{width:34px;height:34px;font-size:16px;font-weight:800;border:2px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink)}
+.selActs{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.selActs button{border:2px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700}
+.selActs button.warn{border-color:#7c3030;color:#ff9a9a}
+#selPortrait{width:48px;height:48px;background:#101218;border:2px solid var(--line);border-radius:8px;flex:none}
+
+/* ---------- mode chip ---------- */
+#modeChip{position:absolute;top:calc(var(--sat) + 66px);left:50%;transform:translateX(-50%);z-index:31;
+  display:flex;align-items:center;gap:8px;background:rgba(50,42,20,.95);border:2px solid var(--amber);border-radius:20px;padding:5px 7px 5px 14px;font-size:13px;font-weight:700}
+#modeChipX{width:30px;height:30px;border-radius:50%;border:2px solid var(--amber);background:transparent;color:var(--amber);font-size:13px}
+
+/* ---------- bottom dock ---------- */
+#dock{position:absolute;left:0;right:0;bottom:0;z-index:26;display:flex;gap:5px;justify-content:center;
+  padding:6px 8px calc(var(--sab) + 7px);background:linear-gradient(transparent,rgba(10,11,16,.88) 40%)}
+.dbtn{flex:1;max-width:110px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 5px;
+  background:rgba(30,34,43,.94);border:2px solid var(--line);border-radius:12px;color:var(--ink);font-size:11px;font-weight:700;cursor:pointer}
+.dbtn:active{background:var(--panel2)}
+.dico{width:26px;height:26px;display:block}
+.dico canvas{width:26px;height:26px}
+
+/* ---------- panel ---------- */
+#panelBack{position:absolute;inset:0;z-index:34;background:transparent}
+#panel{position:absolute;left:0;right:0;bottom:0;z-index:35;max-height:56vh;background:var(--panel);
+  border-top:3px solid var(--line);border-radius:16px 16px 0 0;display:flex;flex-direction:column;
+  padding-bottom:calc(var(--sab) + 8px);animation:panelUp .18s ease-out}
+@keyframes panelUp{from{transform:translateY(30px);opacity:.4}}
+#panelTitle{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;font-size:15px;font-weight:800;letter-spacing:.5px}
+#panelTitle .x{width:34px;height:34px;border:2px solid var(--line);border-radius:50%;background:var(--panel2);color:var(--ink);font-size:14px}
+#panelBody{overflow-y:auto;padding:2px 12px 12px;-webkit-overflow-scrolling:touch}
+
+/* build grid */
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.bcard{display:flex;gap:9px;align-items:center;background:var(--panel2);border:2px solid var(--line);border-radius:11px;padding:8px;cursor:pointer;text-align:left}
+.bcard:active{border-color:var(--amber)}
+.bcard.sel{border-color:var(--amber);background:#33301f}
+.bcard.locked{opacity:.45}
+.bcard canvas{width:38px;height:38px;flex:none}
+.bcard .bn{font-size:13px;font-weight:700}
+.bcard .bc{font-size:11px;color:var(--dim);margin-top:2px;display:flex;gap:8px}
+.bcard .bd{font-size:10.5px;color:var(--dim);margin-top:2px;line-height:1.3}
+.bcard .costNo{color:var(--red)}
+.catTabs{display:flex;gap:6px;margin:2px 0 10px;flex-wrap:wrap}
+.catTab{border:2px solid var(--line);background:var(--panel2);color:var(--dim);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700}
+.catTab.on{color:#241a08;background:var(--amber);border-color:var(--amber2)}
+
+/* jobs rows */
+.jrow{display:flex;align-items:center;gap:10px;background:var(--panel2);border:2px solid var(--line);border-radius:11px;padding:8px 10px;margin-bottom:7px}
+.jrow canvas{width:34px;height:34px;flex:none}
+.jrow .jn{font-size:13px;font-weight:700}
+.jrow .jd{font-size:10.5px;color:var(--dim);line-height:1.3;margin-top:1px}
+.jrow .cnt{margin-left:auto;font-size:18px;font-weight:800;min-width:26px;text-align:center}
+.jrow button{width:38px;height:38px;font-size:19px;font-weight:800;border:2px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);flex:none}
+.jnote{font-size:11.5px;color:var(--dim);padding:6px 2px;line-height:1.4}
+
+/* powers */
+.pcard{display:flex;gap:10px;align-items:center;background:var(--panel2);border:2px solid #4a3f66;border-radius:11px;padding:9px;margin-bottom:8px;cursor:pointer}
+.pcard.sel{border-color:var(--purple);background:#2c2440}
+.pcard.locked{opacity:.45}
+.pcard canvas{width:36px;height:36px;flex:none}
+.pcard .pn{font-size:13px;font-weight:700}
+.pcard .pd{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.35}
+.pcard .cost{color:var(--purple);font-weight:800}
+
+/* menu list */
+.mbtn{display:block;width:100%;text-align:left;background:var(--panel2);border:2px solid var(--line);color:var(--ink);
+  border-radius:10px;padding:11px 14px;font-size:14px;font-weight:700;margin-bottom:7px;cursor:pointer}
+.mbtn.warn{border-color:#7c3030;color:#ff9a9a}
+.mbtn small{display:block;font-weight:400;color:var(--dim);font-size:11px;margin-top:2px}
+.slotRow{display:flex;gap:7px;align-items:center;background:var(--panel2);border:2px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:12px}
+.slotRow .info{flex:1;line-height:1.35}
+.slotRow button{border:2px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700}
+.chron{font-size:12px;line-height:1.5;padding:7px 4px;border-bottom:1px solid #2a2f3a}
+.chron b{color:var(--amber)}
+.chron.bad{color:#ff9a9a}.chron.good{color:#9fe08a}.chron.magic{color:#cdaef5}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0}
+.stat{background:var(--panel2);border:2px solid var(--line);border-radius:10px;padding:8px;text-align:center}
+.stat .v{font-size:19px;font-weight:800;color:var(--amber)}
+.stat .l{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.toggleRow{display:flex;justify-content:space-between;align-items:center;padding:10px 4px;font-size:13px;border-bottom:1px solid #2a2f3a}
+.togBtn{width:52px;height:28px;border-radius:14px;border:2px solid var(--line);background:var(--panel2);position:relative}
+.togBtn::after{content:'';position:absolute;top:2px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--dim);transition:all .15s}
+.togBtn.on{background:#3d5a2e;border-color:var(--green)}
+.togBtn.on::after{left:26px;background:var(--green)}
+
+/* zoom buttons */
+#zoomBtns{position:absolute;right:8px;bottom:calc(var(--sab) + 84px);z-index:24;display:flex;flex-direction:column;gap:6px}
+#zoomBtns button{width:42px;height:42px;font-size:22px;font-weight:800;border:2px solid var(--line);border-radius:10px;
+  background:rgba(30,34,43,.9);color:var(--ink)}
+
+/* minimap */
+#mmWrap{position:absolute;top:calc(var(--sat) + 66px);right:8px;z-index:23;border:2px solid var(--line);border-radius:8px;
+  overflow:hidden;background:#0c0e14;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+#minimap{width:132px;height:132px}
+
+/* ---------- screens ---------- */
+.screen{position:absolute;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;overflow-y:auto}
+#titleArt{width:100%;max-width:480px;height:auto;margin-top:calc(var(--sat) + 10px)}
+.titleInner{display:flex;flex-direction:column;align-items:center;gap:9px;padding:10px 20px calc(var(--sab) + 24px);max-width:430px;width:100%}
+h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-shadow:0 3px 0 #6b4310,0 6px 18px rgba(232,169,75,.4);margin-top:4px}
+.subtitle{letter-spacing:4px;color:var(--dim);font-size:12px;text-transform:uppercase;margin-top:-8px}
+.tagline{color:var(--dim);font-size:13px;text-align:center;line-height:1.5;margin:4px 0 8px}
+.bigbtn{width:100%;max-width:320px;padding:13px;background:var(--amber);border:none;border-radius:12px;color:#241a08;
+  font-size:16px;font-weight:800;letter-spacing:.5px;cursor:pointer;box-shadow:0 3px 0 #8a5f1e}
+.bigbtn:active{transform:translateY(2px);box-shadow:none}
+.bigbtn.ghost{background:var(--panel2);color:var(--ink);border:2px solid var(--line);box-shadow:none}
+.bigbtn.diff{display:flex;flex-direction:column;gap:2px;padding:10px}
+.bigbtn.diff span{font-size:11.5px;font-weight:400;opacity:.85}
+.diffTitle{font-size:13px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+.verText{font-size:10.5px;color:#565d6e;margin-top:6px}
+.helpInner{max-width:520px;width:100%;padding:16px 18px calc(var(--sab) + 20px);overflow-y:auto}
+.helpInner h2{color:var(--amber);font-size:17px;margin:16px 0 6px;letter-spacing:.5px}
+.helpInner p,.helpInner li{font-size:13.5px;line-height:1.6;color:var(--ink)}
+.helpInner ul{padding-left:20px}
+.helpInner b{color:var(--amber2)}
+.endInner{max-width:440px;width:100%;padding:40px 22px calc(var(--sab) + 30px);text-align:center;display:flex;flex-direction:column;gap:9px;align-items:center}
+.endInner h1{font-size:34px;letter-spacing:6px;text-shadow:none;margin:0}
+.endInner .sub2{color:var(--dim);font-size:14px;line-height:1.6}
+.endInner canvas{width:180px;height:180px}
+@media (min-height:520px){ .endInner{padding-top:70px} }
+@media (orientation:landscape) and (max-height:480px){
+  #titleArt{display:none} h1{font-size:30px;letter-spacing:6px;margin-top:calc(var(--sat) + 8px)}
+  .titleInner{gap:6px}
+}
+</style>
 </head>
 <body>
 <div id="app">
@@ -101,17 +305,4315 @@
   </div>
 </div>
 <noscript><div style="color:#fff;font-family:monospace;padding:2em">Dawnhold needs JavaScript enabled.</div></noscript>
-<script src="js/core.js"></script>
-<script src="js/art.js"></script>
-<script src="js/world.js"></script>
-<script src="js/path.js"></script>
-<script src="js/buildings.js"></script>
-<script src="js/entities.js"></script>
-<script src="js/game.js"></script>
-<script src="js/powers.js"></script>
-<script src="js/save.js"></script>
-<script src="js/render.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/main.js"></script>
+<script>
+/* ===== Bundled from js/core.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — core.js
+   CONFIG: every balance number lives here so the game can be
+   tuned from one place. U: utilities. G: live game state.
+   ============================================================ */
+
+const CONFIG = {
+  MAP_W: 72, MAP_H: 72, TILE: 16,
+
+  // --- day cycle (seconds at 1x speed) ---
+  DAY_LEN: 210, NIGHT_LEN: 95, TRANS: 22,   // TRANS = dusk/dawn fade
+
+  START: { wood: 26, stone: 0, food: 48, essence: 40 },
+  VIL_START: 6,
+
+  // --- hunger / food ---
+  HUNGER: { rate: 0.355, mealAt: 66, mealRestore: 54, mealCost: 3, starveDps: 0.9 },
+
+  // --- work ---
+  CARRY: 8,                       // units hauled per trip
+  WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0 },
+  FARM: { grow: 95, yield: 15, tendBoost: 1.2 },
+  REPAIR: { rate: 22, cost: 24 }, // hp/s while repairing, hp per 1 resource
+
+  // --- villagers / combat ---
+  V: { hp: 60, spd: 2.3, dmg: 3, atkT: 0.85, dayHeal: 0.28 },
+  GUARD: { dmg: 7.5, atkT: 0.72, leash: 16, aggro: 13 },
+
+  // --- towers ---
+  TOWER:    { dmg: 8,  rate: 1.1, range: 5.5 },
+  BALLISTA: { dmg: 27, rate: 2.3, range: 7.5 },
+
+  // --- essence / powers ---
+  ESSENCE: { max: 120, regenDay: 0.105, regenNight: 0.05, perKill: 2 },
+  POWERS: {
+    mend:    { cost: 12, heal: 45, cd: 1.0 },
+    smite:   { cost: 22, dmg: 32, r: 1.7, cd: 1.2 },
+    meteor:  { cost: 65, dmg: 130, r: 2.8, cd: 3.0, unlockDay: 6 },
+  },
+
+  // --- waves ---
+  WAVE: { base: 1.4, per: 1.75, cap: 30, spawnWindow: 30, hpScaleDay: 9, hpScale: 0.055, final: 2.1 },
+
+  MONS: {
+    shade:   { name: 'Shade',   hp: 28,  dmg: 4,  spd: 1.75, atkT: 0.9,  ess: 2, r: 0.5 },
+    runner:  { name: 'Runner',  hp: 17,  dmg: 3,  spd: 2.9,  atkT: 0.65, ess: 2, from: 3, w: 0.22 },
+    brute:   { name: 'Brute',   hp: 95,  dmg: 12, spd: 1.15, atkT: 1.4,  ess: 5, from: 6, w: 0.15, bld: 2.4 },
+    stalker: { name: 'Stalker', hp: 34,  dmg: 7,  spd: 2.45, atkT: 0.8,  ess: 3, from: 9, w: 0.16 },
+    lord:    { name: 'Night Lord', hp: 900, dmg: 24, spd: 1.0, atkT: 1.6, ess: 40, bld: 2.6, r: 0.7 },
+  },
+
+  // --- population growth ---
+  ARRIVE: { chance: 0.65, foodNeed: 14, everyN: 3, n: 2, maxPop: 44 },
+
+  // --- difficulty presets ---
+  DIFF: {
+    peaceful: { wave: 0,    hp: 1,    night: 0.8,  regen: 1.25, label: 'Peaceful' },
+    easy:     { wave: 0.68, hp: 0.88, night: 0.88, regen: 1.1,  label: 'Easy' },
+    normal:   { wave: 1,    hp: 1,    night: 1,    regen: 1,    label: 'Normal' },
+    hard:     { wave: 1.38, hp: 1.22, night: 1.15, regen: 0.9,  label: 'Hard' },
+  },
+
+  ZOOM: { min: 1.35, max: 4.2, start: 2.6 },
+  SAVE_V: 1,
+};
+
+// ---- terrain tile ids ----
+const T = { GRASS: 0, DIRT: 1, WATER: 2, ROAD: 3 };
+
+// ---- map object ids (things standing on terrain) ----
+const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7 };
+
+// object yields (units per full source)
+const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10 };
+
+// ---- jobs ----
+const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'builder', 'guard'];
+const JOB_INFO = {
+  idle:    { name: 'Resting',  cloth: '#e8e0d0', desc: 'No duty. They haul nothing and stay near camp. Idle folk will emergency-forage if food runs dry.' },
+  forager: { name: 'Forager',  cloth: '#4a8f3c', desc: 'Pick berries from bushes. Fast food early on; bushes regrow each day.' },
+  lumber:  { name: 'Lumberjack', cloth: '#8a5a2b', desc: 'Fell trees for wood. Stumps slowly regrow into new trees.' },
+  miner:   { name: 'Miner',    cloth: '#7d7d85', desc: 'Mine stone from rocky outcrops. Stone is finite — the best lodes lie far from camp.' },
+  farmer:  { name: 'Farmer',   cloth: '#d9a036', desc: 'Tend and harvest wheat plots. The reliable food engine for a growing village.' },
+  builder: { name: 'Builder',  cloth: '#e07030', desc: 'Raises new buildings and repairs damaged walls and towers.' },
+  guard:   { name: 'Guard',    cloth: '#c03030', desc: 'Patrols the village and fights the shades. Keep at least one after night one.' },
+};
+
+// ---- utilities ----
+const U = {
+  clamp: (v, a, b) => v < a ? a : v > b ? b : v,
+  lerp: (a, b, t) => a + (b - a) * t,
+  irnd: (a, b) => a + Math.floor(Math.random() * (b - a + 1)),
+  choice: arr => arr[Math.floor(Math.random() * arr.length)],
+  dst: (ax, ay, bx, by) => Math.hypot(bx - ax, by - ay),
+  dst2: (ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay; return dx * dx + dy * dy; },
+  mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  },
+  hash2(x, y) { // cheap deterministic per-tile hash 0..1
+    let h = (x * 374761393 + y * 668265263) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  },
+  fmt(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : '' + Math.floor(n); },
+  esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); },
+};
+
+let _id = 1;
+const NID = () => _id++;
+
+// ---- live game state (reset by Sim.newGame / SaveSys.load) ----
+const G = {
+  state: 'title',          // title | playing | defeat | victory
+  seed: 1, day: 1,
+  time: 0,                 // seconds into current phase
+  phase: 'day',            // day | dusk | night | dawn
+  speed: 1, paused: false,
+  diff: 'normal', diffM: CONFIG.DIFF.normal,
+  res: { wood: 0, stone: 0, food: 0, essence: 0 },
+  villagers: [], monsters: [], buildings: [],
+  effects: [], floaters: [],
+  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, builder: 1, guard: 0 },
+  regrow: new Map(),       // tileIdx -> {t, kind}
+  unlocks: {},             // buildKey -> true (granted)
+  stats: { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: 6 },
+  chronicle: [],           // {d, txt, k}
+  wave: null,              // pending spawn state for the night
+  finalNight: false, beaconLit: false, boss: null,
+  tut: 0, tutOn: true,
+  shake: 0,
+  cam: { x: 0, y: 0, z: CONFIG.ZOOM.start },
+  sel: null,               // {kind:'v'|'m'|'b', ref}
+  follow: null,
+  settings: { fx: true, autosave: true },
+  lastEssenceSpent: 0,
+};
+
+// phase helpers -------------------------------------------------
+function cycleLen() {
+  return CONFIG.DAY_LEN + CONFIG.NIGHT_LEN + CONFIG.TRANS * 2;
+}
+function isNightLike() { return G.phase === 'night' || G.phase === 'dusk'; }
+function isDayLike() { return G.phase === 'day' || G.phase === 'dawn'; }
+function isWorkTime() { return G.phase === 'day' || G.phase === 'dawn'; }
+// 0 = bright noon, 1 = deep night
+function darknessLevel() {
+  const C = CONFIG;
+  switch (G.phase) {
+    case 'day': return 0;
+    case 'dusk': return U.clamp(G.time / C.TRANS, 0, 1) * 0.80;
+    case 'night': return 0.80;
+    case 'dawn': return (1 - U.clamp(G.time / C.TRANS, 0, 1)) * 0.80;
+  }
+  return 0;
+}
+;
+
+/* ===== Bundled from js/art.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — art.js
+   All pixel art is painted procedurally into offscreen canvases.
+   16px tiles. Art.init() bakes static sprites; villager sprites
+   are generated per-look on demand (unique little people).
+   ============================================================ */
+
+function mkc(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = false;
+  return { c, x };
+}
+function R(x, px, py, w, h, col) { x.fillStyle = col; x.fillRect(px, py, w, h); }
+// darken/lighten hex
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  if (f < 0) { r *= 1 + f; g *= 1 + f; b *= 1 + f; }
+  else { r += (255 - r) * f; g += (255 - g) * f; b += (255 - b) * f; }
+  return `rgb(${r | 0},${g | 0},${b | 0})`;
+}
+
+const PAL = {
+  grass: ['#5a8a4a', '#54834544', '#65935566'], dirt: ['#8a6d4e', '#7a5f42'], road: ['#b09a6a', '#9a855a', '#c4ae7c'],
+  water: ['#3b6ea8', '#33619a', '#a8cbe8'], waterDeep: '#2c5288',
+  trunk: '#6b4a2b', trunkD: '#553a20', pine: '#2e5d3a', pineD: '#254c30', pineL: '#3a6e46',
+  oak: '#418a3c', oakL: '#529e49', oakD: '#337030',
+  stump: '#7a5a38', bush: '#3a7a3c', bushD: '#2e6230', berry: '#d84a6a', berryL: '#f07090',
+  rock: '#8d8d95', rockD: '#6e6e78', rockL: '#a5a5ae',
+  wood: '#a07840', woodD: '#7c5a2e', woodL: '#c09455', plank: '#8a5f37', plankD: '#6e4a28',
+  thatch: '#c9a050', thatchD: '#a37f38', stoneB: '#8b8b95', stoneD: '#6c6c76', stoneL: '#a3a3ad',
+  door: '#5f4022', win: '#ffd977', tentC: '#cbb27e', tentD: '#a8935f',
+  cloth: '#b0524a', metal: '#c9ced9', metalD: '#8f95a3',
+  soil: '#6e5136', soilD: '#5c4229', wheat: '#d9b24a', wheatD: '#b8912f', sprout: '#7ec850',
+  shade: '#2a2440', shadeO: '#191430', shadeEye: '#c46bff',
+  crystal: '#6fe0e8',
+};
+
+const Art = {
+  s: {},            // static sprite canvases by name
+  _vcache: new Map(), // villager look sprites
+  MM: { water: '#33619a', grass: '#4e7a40', tree: '#2e5d3a', road: '#b09a6a', rock: '#8d8d95', dirt: '#8a6d4e', bld: '#e8a94b', vil: '#ffffff', mon: '#e05555' },
+
+  init() {
+    this.terrain();
+    this.objects();
+    this.buildings();
+    this.monsters();
+    this.fx();
+    this.icons();
+  },
+
+  /* ================= TERRAIN ================= */
+  terrain() {
+    const S = this.s;
+    // grass — 4 variants with speckle
+    for (let v = 0; v < 4; v++) {
+      const { c, x } = mkc(16, 16);
+      const rng = U.mulberry32(v * 77 + 3);
+      R(x, 0, 0, 16, 16, PAL.grass[0]);
+      for (let i = 0; i < 14; i++) {
+        const px = (rng() * 16) | 0, py = (rng() * 16) | 0;
+        R(x, px, py, 1, 1, rng() < 0.5 ? '#4e7a40' : '#659355');
+      }
+      if (v === 3) R(x, 7, 9, 1, 2, '#4e7a40'), R(x, 8, 10, 1, 1, '#4e7a40');
+      S['g' + v] = c;
+    }
+    // dirt
+    {
+      const { c, x } = mkc(16, 16);
+      const rng = U.mulberry32(99);
+      R(x, 0, 0, 16, 16, PAL.dirt[0]);
+      for (let i = 0; i < 12; i++) R(x, (rng() * 16) | 0, (rng() * 16) | 0, 1, 1, PAL.dirt[1]);
+      S.dirt = c;
+    }
+    // road — 2 variants
+    for (let v = 0; v < 2; v++) {
+      const { c, x } = mkc(16, 16);
+      const rng = U.mulberry32(v * 31 + 7);
+      R(x, 0, 0, 16, 16, PAL.road[0]);
+      for (let i = 0; i < 8; i++) R(x, (rng() * 15) | 0, (rng() * 15) | 0, 2, 1, rng() < .5 ? PAL.road[1] : PAL.road[2]);
+      S['road' + v] = c;
+    }
+    // water base (still frame; sparkle overlay is live)
+    {
+      const { c, x } = mkc(16, 16);
+      R(x, 0, 0, 16, 16, PAL.water[0]);
+      for (let i = 0; i < 10; i++) R(x, (U.hash2(i, 4) * 16) | 0, (U.hash2(i, 9) * 16) | 0, 2, 1, PAL.water[1]);
+      S.water = c;
+    }
+  },
+
+  /* ================= OBJECTS ================= */
+  objects() {
+    const S = this.s;
+    // oak trees (2 variants)
+    for (let v = 0; v < 2; v++) {
+      const { c, x } = mkc(16, 16);
+      const ox = v ? 1 : -1;
+      R(x, 7, 10, 2, 5, PAL.trunk); R(x, 7, 14, 1, 1, PAL.trunkD);
+      // canopy blob
+      const rows = [[5, 6], [4, 8], [3, 10], [3, 10], [4, 8]];
+      rows.forEach((r, i) => R(x, r[0] + (ox > 0 ? 0 : 0), 1 + i, r[1] - r[0], 1, i < 2 ? PAL.oakL : PAL.oak));
+      R(x, 4 + (v ? 1 : 0), 3, 2, 1, PAL.oakL); R(x, 9, 5, 1, 1, PAL.oakD); R(x, 6, 6, 2, 1, PAL.oakD);
+      if (v) R(x, 3, 4, 1, 1, PAL.oakD);
+      S['tree' + v] = c;
+    }
+    // pines (2)
+    for (let v = 0; v < 2; v++) {
+      const { c, x } = mkc(16, 16);
+      R(x, 7, 12, 2, 3, PAL.trunk);
+      const tiers = [[7, 2], [6, 4], [5, 6], [4, 8], [3, 10]];
+      tiers.forEach((t, i) => R(x, t[0], 1 + i * 2 + (v ? 1 : 0), t[1] - t[0] + 2, 2, i % 2 ? PAL.pineD : PAL.pine));
+      R(x, 7, 0, 2, 2, PAL.pineL); if (v) R(x, 5, 6, 1, 1, PAL.pineL);
+      S['pine' + v] = c;
+    }
+    // stump
+    { const { c, x } = mkc(16, 16); R(x, 5, 9, 6, 3, PAL.stump); R(x, 5, 9, 6, 1, '#9a7448'); R(x, 6, 10, 4, 1, '#684a2c'); S.stump = c; }
+    // sapling
+    { const { c, x } = mkc(16, 16); R(x, 7, 11, 2, 3, PAL.trunk); R(x, 6, 8, 4, 3, PAL.sprout); R(x, 7, 7, 2, 1, PAL.sprout); S.sapling = c; }
+    // bush full / empty
+    {
+      const mk = full => {
+        const { c, x } = mkc(16, 16);
+        const rows = [[5, 6], [4, 8], [4, 8], [5, 6]];
+        rows.forEach((r, i) => R(x, r[0], 6 + i, r[1] - r[0], 1, i === 0 ? PAL.bushD : PAL.bush));
+        R(x, 6, 7, 1, 1, '#4f9a52');
+        if (full) { [[5, 8], [8, 7], [10, 9], [6, 10], [9, 11]].forEach(p => R(x, p[0], p[1], 1, 1, Math.random() < .5 ? PAL.berry : PAL.berryL)); }
+        return c;
+      };
+      S.bushF = mk(true); S.bushE = mk(false);
+    }
+    // rocks (2)
+    for (let v = 0; v < 2; v++) {
+      const { c, x } = mkc(16, 16);
+      const w = v ? 10 : 8, h = v ? 7 : 6, ox = v ? 3 : 4, oy = 16 - h - 1;
+      R(x, ox + 1, oy, w - 2, 1, PAL.rockL);
+      R(x, ox, oy + 1, w, h - 2, PAL.rock);
+      R(x, ox + 1, oy + h - 1, w - 2, 1, PAL.rockD);
+      R(x, ox + 2, oy + 2, 2, 1, PAL.rockD); R(x, ox + w - 3, oy + 3, 2, 1, PAL.rockD);
+      if (v) R(x, ox + 5, oy - 2, 3, 2, PAL.rock), R(x, ox + 5, oy - 2, 3, 1, PAL.rockL);
+      S['rock' + v] = c;
+    }
+    // flowers (2)
+    for (let v = 0; v < 2; v++) {
+      const { c, x } = mkc(16, 16);
+      const cols = ['#f0f0f0', '#ffd94a', '#e88bd0'];
+      for (let i = 0; i < 3; i++) {
+        const px = 3 + i * 4 + v * 2, py = 6 + ((i * 5 + v * 3) % 6);
+        R(x, px, py + 1, 1, 2, '#4e7a40');
+        R(x, px - 1, py, 1, 1, cols[(i + v) % 3]); R(x, px + 1, py, 1, 1, cols[(i + v) % 3]);
+        R(x, px, py - 1, 1, 1, cols[(i + v + 1) % 3]); R(x, px, py, 1, 1, cols[(i + v + 2) % 3]);
+      }
+      S['flw' + v] = c;
+    }
+  },
+
+  /* ================= BUILDINGS ================= */
+  buildings() {
+    const S = this.s;
+    // --- tent 1x1 ---
+    {
+      const { c, x } = mkc(16, 16);
+      for (let i = 0; i < 9; i++) R(x, 7 - i, 6 + i, 2 + i * 2, 1, i > 6 ? PAL.tentD : PAL.tentC);
+      R(x, 7, 2, 2, 5, '#5a4426'); R(x, 6, 4, 5, 1, PAL.tentD);
+      R(x, 7, 12, 2, 3, '#4a3820');
+      R(x, 4, 8, 1, 4, PAL.tentD); R(x, 11, 8, 1, 4, PAL.tentD);
+      S.tent = c;
+    }
+    // --- camp (starting warehouse) 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 3, 14, 26, 15, PAL.plank);                     // walls
+      for (let i = 0; i < 5; i++) R(x, 3, 15 + i * 3, 26, 1, PAL.plankD);
+      R(x, 3, 14, 26, 1, PAL.woodL);
+      // roof
+      for (let i = 0; i < 10; i++) R(x, 1 + i, 4 + i, 30 - i * 2, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 1, 13, 30, 2, PAL.thatchD);
+      R(x, 15, 8, 2, 6, PAL.woodD);                        // ridge pole
+      R(x, 13, 20, 6, 9, PAL.door); R(x, 13, 20, 6, 1, '#7a5a34'); // door
+      R(x, 6, 18, 4, 4, '#2c2c34'); R(x, 24, 18, 4, 4, '#2c2c34'); // windows
+      R(x, 24, 26, 6, 5, PAL.wood); R(x, 25, 27, 4, 1, PAL.woodD); // crate
+      R(x, 5, 27, 4, 3, '#9a7448'); R(x, 6, 28, 2, 1, '#6e5136'); // barrel-ish
+      S.camp = c;
+    }
+    // --- warehouse (buildable store) 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 2, 12, 28, 17, PAL.stoneB);
+      for (let r = 0; r < 4; r++) R(x, 2, 13 + r * 4, 28, 1, PAL.stoneD);
+      R(x, 9, 13, 1, 15, PAL.stoneD); R(x, 19, 13, 1, 15, PAL.stoneD);
+      R(x, 1, 8, 30, 5, PAL.wood);                          // flat awning roof
+      for (let i = 0; i < 8; i++) R(x, 1 + i * 4, 8, 1, 5, PAL.woodD);
+      R(x, 1, 12, 30, 1, PAL.woodL);
+      R(x, 13, 19, 6, 10, PAL.door); R(x, 13, 19, 6, 1, '#7a5a34');
+      R(x, 5, 17, 4, 4, '#2c2c34'); R(x, 23, 17, 4, 4, '#2c2c34');
+      R(x, 4, 26, 7, 6, PAL.wood); R(x, 5, 27, 5, 1, PAL.woodD); R(x, 21, 26, 7, 6, PAL.wood); R(x, 22, 27, 5, 1, PAL.woodD);
+      S.warehouse = c;
+    }
+    // --- cottage 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 4, 16, 24, 12, PAL.stoneB);
+      R(x, 4, 17, 24, 1, PAL.stoneD); R(x, 4, 22, 24, 1, PAL.stoneD); R(x, 4, 26, 24, 1, PAL.stoneD);
+      R(x, 10, 16, 1, 12, PAL.stoneD); R(x, 21, 16, 1, 12, PAL.stoneD);
+      // timber gable
+      R(x, 13, 10, 6, 6, PAL.plank); R(x, 13, 10, 1, 6, PAL.plankD); R(x, 18, 10, 1, 6, PAL.plankD);
+      // thatch roof
+      for (let i = 0; i < 9; i++) { R(x, 2 + i, 2 + i, 13 - i, 1, i % 2 ? PAL.thatchD : PAL.thatch); R(x, 17, 2 + i, 13 - i, 1, i % 2 ? PAL.thatchD : PAL.thatch); }
+      R(x, 2, 11, 28, 1, PAL.thatchD); R(x, 15, 1, 2, 3, PAL.thatchD);
+      R(x, 13, 22, 6, 6, PAL.door); R(x, 13, 22, 6, 1, '#7a5a34');
+      R(x, 6, 20, 4, 4, '#2c2c34'); R(x, 22, 20, 4, 4, '#2c2c34');
+      S.cottage = c;
+    }
+    // --- farm 2x2, 4 stages ---
+    {
+      const stages = [
+        { spr: 0, col: null },                       // tilled
+        { spr: 1, col: PAL.sprout },                 // sprouts
+        { spr: 2, col: '#8fbf48' },                  // green
+        { spr: 3, col: PAL.wheat },                  // ripe
+      ];
+      stages.forEach((st, si) => {
+        const { c, x } = mkc(32, 32);
+        for (let r = 0; r < 5; r++) { R(x, 2, 3 + r * 6, 28, 4, r % 2 ? PAL.soil : PAL.soilD); }
+        R(x, 0, 0, 32, 2, '#5a8a4a'); R(x, 0, 30, 32, 2, '#4e7a40'); // grass fringe
+        if (st.spr > 0) {
+          for (let r = 0; r < 5; r++) for (let i = 0; i < 7; i++) {
+            const px = 4 + i * 4, py = 4 + r * 6;
+            if (st.spr === 1) R(x, px, py - 1, 1, 2, st.col);
+            else if (st.spr === 2) { R(x, px, py - 3, 1, 4, st.col); R(x, px - 1, py - 2, 1, 2, '#6ea83c'); }
+            else { R(x, px, py - 5, 1, 6, st.col); R(x, px - 1, py - 6, 3, 2, PAL.wheatD); R(x, px, py - 4, 1, 1, '#e8cc70'); }
+          }
+        }
+        S['farm' + si] = c;
+      });
+    }
+    // --- walls & gates ---
+    {
+      const { c, x } = mkc(16, 16);
+      [3, 8, 13].forEach(ox => {
+        R(x, ox, 3, 3, 12, PAL.wood);
+        R(x, ox, 3, 3, 1, PAL.woodL); R(x, ox + 2, 3, 1, 12, PAL.woodD);
+        R(x, ox, 1, 3, 2, PAL.woodL); R(x, ox + 1, 0, 1, 1, '#8a6a38'); // pointed top
+      });
+      R(x, 0, 6, 16, 1, PAL.woodD); R(x, 0, 11, 16, 1, PAL.woodD);
+      S.wallW = c;
+    }
+    {
+      const { c, x } = mkc(16, 16);
+      for (let r = 0; r < 4; r++) {
+        R(x, 0, r * 4, 16, 3, r % 2 ? PAL.stoneB : '#93939d');
+        R(x, 0, r * 4 + 3, 16, 1, PAL.stoneD);
+        const off = r % 2 ? 0 : 4;
+        for (let i = 0; i < 2; i++) R(x, off + i * 8, r * 4, 1, 3, PAL.stoneD);
+      }
+      R(x, 0, 0, 16, 1, PAL.stoneL); R(x, 2, 6, 2, 1, PAL.stoneD); R(x, 11, 10, 2, 1, PAL.stoneD);
+      S.wallS = c;
+    }
+    {
+      const { c, x } = mkc(16, 16); // wooden gate: frame + dark opening
+      R(x, 2, 0, 3, 16, PAL.wood); R(x, 11, 0, 3, 16, PAL.wood);
+      R(x, 2, 0, 1, 16, PAL.woodL); R(x, 13, 0, 1, 16, PAL.woodD);
+      R(x, 5, 5, 6, 2, PAL.woodD); R(x, 5, 10, 6, 2, PAL.woodD); // crossbars
+      R(x, 6, 7, 4, 3, '#3a2c18');
+      R(x, 7, 0, 2, 2, '#8a6a38');
+      S.gateW = c;
+    }
+    {
+      const { c, x } = mkc(16, 16); // stone gate
+      R(x, 0, 0, 4, 16, PAL.stoneB); R(x, 12, 0, 4, 16, PAL.stoneB);
+      R(x, 0, 0, 1, 16, PAL.stoneL); R(x, 15, 0, 1, 16, PAL.stoneD);
+      R(x, 0, 5, 16, 1, PAL.stoneD);
+      R(x, 5, 6, 6, 10, PAL.door); R(x, 7, 6, 1, 10, '#4a3018');
+      R(x, 5, 4, 6, 2, PAL.stoneD);
+      S.gateS = c;
+    }
+    // --- torch (2 flame frames) ---
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 24);
+      R(x, 7, 10, 2, 12, PAL.woodD); R(x, 6, 20, 4, 2, PAL.wood);
+      R(x, 6, 9, 4, 2, PAL.metalD);
+      const fy = f ? 3 : 4;
+      R(x, 7, fy - 2, 2, 4, '#ff9a2e'); R(x, 6, fy, 4, 3, '#ffce56'); R(x, 7, fy + 1, 2, 1, '#fff2b0');
+      if (f) R(x, 5, fy + 1, 1, 2, '#ff9a2e'); else R(x, 10, fy + 1, 1, 2, '#ff9a2e');
+      S['torch' + f] = c;
+    }
+    // --- watchtower 1x1 (tall sprite) ---
+    {
+      const { c, x } = mkc(16, 32);
+      R(x, 3, 12, 2, 18, PAL.wood); R(x, 11, 12, 2, 18, PAL.wood);
+      R(x, 3, 12, 1, 18, PAL.woodL); R(x, 12, 12, 1, 18, PAL.woodD);
+      R(x, 4, 18, 8, 1, PAL.woodD); R(x, 4, 24, 8, 1, PAL.woodD); // braces
+      R(x, 2, 9, 12, 4, PAL.plank); R(x, 2, 9, 12, 1, PAL.woodL); // platform
+      R(x, 2, 13, 1, 2, PAL.woodD); R(x, 13, 13, 1, 2, PAL.woodD);
+      R(x, 2, 6, 1, 3, PAL.woodD); R(x, 13, 6, 1, 3, PAL.woodD); // rail posts
+      R(x, 2, 6, 12, 1, PAL.wood); // rail
+      for (let i = 0; i < 5; i++) R(x, 2 + i * 3, 2 + (i % 2), 3, 2, i % 2 ? PAL.thatchD : PAL.thatch); // roof
+      R(x, 7, 4, 2, 2, '#ff9a2e'); // brazier ember
+      S.tower = c;
+    }
+    // --- ballista tower ---
+    {
+      const { c, x } = mkc(16, 32);
+      R(x, 4, 12, 8, 18, PAL.stoneB);
+      R(x, 4, 12, 1, 18, PAL.stoneL); R(x, 11, 12, 1, 18, PAL.stoneD);
+      R(x, 4, 17, 8, 1, PAL.stoneD); R(x, 4, 23, 8, 1, PAL.stoneD);
+      R(x, 3, 9, 10, 4, PAL.stoneL); R(x, 3, 9, 10, 1, '#c2c2cc'); // platform
+      R(x, 2, 6, 2, 3, PAL.metalD); R(x, 12, 6, 2, 3, PAL.metalD); // bow arms
+      R(x, 3, 7, 10, 1, PAL.metalD);
+      R(x, 7, 6, 2, 3, PAL.woodD); R(x, 6, 6, 4, 1, PAL.metal); // bolt
+      S.ballista = c;
+    }
+    // --- shrine ---
+    {
+      const { c, x } = mkc(16, 24);
+      [[3, 18], [11, 18]].forEach(p => { R(x, p[0], p[1] - 4, 2, 6, PAL.stoneB); R(x, p[0], p[1] - 4, 2, 1, PAL.stoneL); });
+      R(x, 2, 14, 12, 2, PAL.stoneD); R(x, 4, 12, 8, 2, PAL.stoneB);
+      R(x, 7, 8, 2, 4, '#d8f4f8');
+      R(x, 6, 10, 4, 3, PAL.crystal); R(x, 7, 8, 2, 2, '#b0f2f6'); R(x, 6, 12, 1, 1, '#3fa8b0');
+      S.shrine = c;
+    }
+    // --- beacon 3x3 (48x72, unlit) ---
+    {
+      const { c, x } = mkc(48, 72);
+      // stepped ziggurat
+      R(x, 4, 56, 40, 14, PAL.stoneB); R(x, 4, 56, 40, 1, PAL.stoneL);
+      R(x, 4, 62, 40, 1, PAL.stoneD); R(x, 16, 56, 1, 14, PAL.stoneD); R(x, 32, 56, 1, 14, PAL.stoneD);
+      R(x, 10, 42, 28, 14, '#909098'); R(x, 10, 42, 28, 1, PAL.stoneL); R(x, 10, 50, 28, 1, PAL.stoneD);
+      R(x, 16, 30, 16, 12, PAL.stoneB); R(x, 16, 30, 16, 1, PAL.stoneL); R(x, 16, 38, 16, 1, PAL.stoneD);
+      // brazier bowl
+      R(x, 10, 24, 28, 6, PAL.stoneD); R(x, 12, 22, 24, 3, '#5c5c66');
+      R(x, 14, 25, 20, 3, '#3a3a44'); // coals pit
+      [[18, 25], [26, 26], [23, 24]].forEach(p => R(x, p[0], p[1], 2, 1, '#6e3418'));
+      // side runes
+      R(x, 8, 48, 2, 5, PAL.crystal); R(x, 38, 48, 2, 5, PAL.crystal);
+      S.beacon = c;
+    }
+    // --- beacon lit overlay (flame) ---
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(48, 72);
+      const h = f ? 20 : 17;
+      for (let i = 0; i < h; i++) {
+        const w = Math.max(2, 18 - (i * 16 / h) | 0);
+        const col = i < 4 ? '#fff2b0' : i < 9 ? '#ffce56' : i < 14 ? '#ff9a2e' : '#e86a1e';
+        R(x, 24 - (w >> 1) + ((f && i > 6) ? 1 : 0), 26 - i, w, 1, col);
+      }
+      if (f) { R(x, 12, 14, 3, 4, '#ff9a2e'); R(x, 33, 16, 3, 3, '#ffce56'); }
+      S['beaconF' + f] = c;
+    }
+    // construction scaffold
+    {
+      const { c, x } = mkc(16, 16);
+      R(x, 1, 1, 14, 1, PAL.woodL); R(x, 1, 14, 14, 1, PAL.woodD);
+      R(x, 1, 1, 1, 14, PAL.woodL); R(x, 14, 1, 1, 14, PAL.woodD);
+      R(x, 2, 2, 3, 3, '#6e5136'); R(x, 10, 9, 4, 4, '#6e5136');
+      R(x, 4, 7, 8, 2, PAL.wood);
+      S.site = c;
+    }
+  },
+
+  /* ================= MONSTERS ================= */
+  monsters() {
+    const S = this.s;
+    // shade — floating blob
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 16);
+      const rows = [[5, 6], [4, 8], [3, 10], [3, 10], [3, 10], [4, 8]];
+      rows.forEach((r, i) => R(x, r[0], 3 + i, r[1] - r[0], 1, i < 2 ? '#3a3252' : PAL.shade));
+      R(x, 4, 2, 8, 1, '#3a3252'); R(x, 6, 1, 4, 1, PAL.shadeO);
+      // outline wisps
+      R(x, 2, 5, 1, 6, PAL.shadeO); R(x, 13, 5, 1, 6, PAL.shadeO); R(x, 3, 3, 10, 1, PAL.shadeO);
+      R(x, 6, 6, 2, 2, PAL.shadeEye); R(x, 9, 6, 2, 2, PAL.shadeEye);
+      R(x, 6, 6, 1, 1, '#f0d0ff'); R(x, 9, 6, 1, 1, '#f0d0ff');
+      // wispy bottom
+      if (f) { R(x, 4, 9, 2, 2, PAL.shade); R(x, 10, 9, 2, 3, PAL.shade); R(x, 7, 9, 1, 2, '#3a3252'); }
+      else { R(x, 5, 9, 2, 3, PAL.shade); R(x, 9, 9, 2, 2, PAL.shade); R(x, 12, 8, 1, 2, '#3a3252'); }
+      S['mon_shade' + f] = c;
+    }
+    // runner — lean sprinter
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 16);
+      R(x, 6, 1, 4, 8, '#3c3450'); R(x, 5, 2, 1, 6, '#2c2540'); R(x, 10, 2, 1, 6, '#2c2540');
+      R(x, 5, 0, 5, 2, '#2c2540');
+      R(x, 6, 3, 1, 1, '#ff7070'); R(x, 8, 3, 1, 1, '#ff7070');
+      if (f) { R(x, 6, 9, 2, 4, '#2c2540'); R(x, 8, 9, 2, 2, '#2c2540'); R(x, 3, 4, 3, 1, '#2c2540'); }
+      else { R(x, 8, 9, 2, 4, '#2c2540'); R(x, 6, 9, 2, 2, '#2c2540'); R(x, 10, 4, 3, 1, '#2c2540'); }
+      R(x, 7, 13, 1, 2, '#2c2540'); R(x, 9, 12, 1, 3, '#2c2540');
+      S['mon_runner' + f] = c;
+    }
+    // brute — hulking
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 16);
+      R(x, 3, 3, 10, 9, '#46503c'); R(x, 2, 4, 12, 6, '#3d4634');
+      R(x, 4, 2, 8, 2, '#333d2c');
+      R(x, 4, 5, 2, 2, '#ffd94a'); R(x, 10, 5, 2, 2, '#ffd94a');
+      R(x, 6, 8, 4, 1, '#222a1c'); R(x, 7, 9, 1, 1, '#222a1c');
+      if (f) { R(x, 1, 5, 2, 5, '#333d2c'); R(x, 13, 4, 2, 4, '#333d2c'); }
+      else { R(x, 1, 4, 2, 4, '#333d2c'); R(x, 13, 5, 2, 5, '#333d2c'); }
+      R(x, 4, 12, 3, 3, '#2c3324'); R(x, 9, 12, 3, 3, '#2c3324');
+      R(x, 5, 0, 2, 2, '#333d2c'); R(x, 9, 0, 2, 2, '#333d2c'); // horns
+      S['mon_brute' + f] = c;
+    }
+    // stalker — tall clawed
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 16);
+      R(x, 6, 0, 4, 11, '#221e36'); R(x, 5, 2, 1, 8, '#191628'); R(x, 10, 2, 1, 8, '#191628');
+      R(x, 6, 2, 1, 1, '#ffffff'); R(x, 8, 2, 1, 1, '#ffffff');
+      if (f) { R(x, 3, 1, 2, 6, '#191628'); R(x, 11, 2, 2, 5, '#191628'); R(x, 2, 0, 2, 1, '#cfd4e8'); R(x, 12, 1, 2, 1, '#cfd4e8'); }
+      else { R(x, 3, 2, 2, 5, '#191628'); R(x, 11, 1, 2, 6, '#191628'); R(x, 3, 7, 1, 2, '#cfd4e8'); R(x, 12, 6, 1, 2, '#cfd4e8'); }
+      R(x, 6, 11, 2, 4, '#191628'); R(x, 8, 11, 2, 3, '#191628');
+      S['mon_stalker' + f] = c;
+    }
+    // night lord — 32x32 boss
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(32, 32);
+      // cloak
+      const rows = [[10, 12], [8, 16], [7, 18], [6, 20], [6, 20], [5, 22], [5, 22], [6, 20], [7, 18]];
+      rows.forEach((r, i) => R(x, r[0], 6 + i, r[1] - r[0], 1, i < 3 ? '#2a2342' : '#1d1830'));
+      R(x, 9, 4, 14, 3, '#2a2342'); // shoulders
+      R(x, 12, 1, 8, 4, '#241e3a'); // head hood
+      R(x, 13, 2, 2, 2, '#ff5a5a'); R(x, 17, 2, 2, 2, '#ff5a5a'); // eyes
+      R(x, 13, 2, 1, 1, '#ffd0d0'); R(x, 17, 2, 1, 1, '#ffd0d0');
+      // horns
+      R(x, 8, 0, 2, 5, '#c9c9d9'); R(x, 22, 0, 2, 5, '#c9c9d9');
+      R(x, 7, 0, 1, 2, '#c9c9d9'); R(x, 24, 0, 1, 2, '#c9c9d9');
+      // claws
+      if (f) { R(x, 3, 8, 4, 2, '#191430'); R(x, 25, 10, 4, 2, '#191430'); }
+      else { R(x, 3, 10, 4, 2, '#191430'); R(x, 25, 8, 4, 2, '#191430'); }
+      R(x, 2, 7, 2, 1, '#cfd4e8'); R(x, 28, 9, 2, 1, '#cfd4e8');
+      // ragged hem
+      for (let i = 0; i < 8; i++) R(x, 7 + i * 2 + (f ? 1 : 0), 15, 1, 2 + (i % 3), '#1d1830');
+      // inner ember
+      R(x, 15, 8, 2, 4, f ? '#7c2e8a' : '#5c2266');
+      S['mon_lord' + f] = c;
+    }
+  },
+
+  /* ================= FX & ICONS ================= */
+  fx() {
+    const S = this.s;
+    { const { c, x } = mkc(9, 3); R(x, 0, 0, 7, 1, PAL.metal); R(x, 6, 0, 3, 1, PAL.metalD); R(x, 0, 1, 2, 1, '#e8e8f0'); S.arrow = c; }
+    { const { c, x } = mkc(4, 4); R(x, 1, 0, 2, 4, '#fff2c8'); R(x, 0, 1, 4, 2, '#ffd977'); S.spark = c; }
+    for (let f = 0; f < 3; f++) {
+      const { c, x } = mkc(6, 7);
+      R(x, 2, 1 + f, 2, 4, '#ff9a2e'); R(x, 1, 2 + f, 4, 3, '#ffce56'); R(x, 2, 3 + f, 2, 2, '#fff2b0');
+      S['flame' + f] = c;
+    }
+    { const { c, x } = mkc(5, 5); x.fillStyle = 'rgba(120,120,130,.7)'; x.fillRect(1, 0, 3, 5); x.fillRect(0, 1, 5, 3); S.smoke = c; }
+    { const { c, x } = mkc(7, 7); R(x, 1, 1, 5, 5, '#8a4a28'); R(x, 2, 0, 3, 2, '#ff9a2e'); R(x, 0, 2, 2, 3, '#e86a1e'); S.meteor = c; }
+    // carry icons (drawn above heads)
+    { const { c, x } = mkc(7, 6); R(x, 0, 1, 7, 2, PAL.wood); R(x, 0, 3, 7, 2, PAL.woodD); R(x, 1, 0, 1, 1, PAL.woodL); R(x, 4, 2, 1, 1, '#c9a86a'); S.carryWood = c; }
+    { const { c, x } = mkc(7, 6); R(x, 1, 2, 2, 2, PAL.berry); R(x, 4, 2, 2, 2, PAL.berry); R(x, 2, 4, 2, 2, PAL.berryL); R(x, 3, 0, 1, 2, '#4e7a40'); S.carryFood = c; }
+    { const { c, x } = mkc(7, 6); R(x, 0, 1, 7, 4, PAL.rock); R(x, 1, 1, 4, 1, PAL.rockL); R(x, 1, 4, 5, 1, PAL.rockD); S.carryStone = c; }
+    // ghost placement tile
+    { const { c, x } = mkc(16, 16); x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 1; x.strokeRect(.5, .5, 15, 15); S.ghostTile = c; }
+  },
+
+  icons() {
+    const S = this.s;
+    const ic = (name, fn) => { const { c, x } = mkc(16, 16); fn(x); S['ic_' + name] = c; };
+    ic('wood', x => { R(x, 1, 3, 14, 3, PAL.wood); R(x, 1, 8, 14, 3, PAL.woodD); R(x, 12, 4, 2, 1, '#e8d0a0'); R(x, 12, 9, 2, 1, '#e8d0a0'); });
+    ic('stone', x => { R(x, 3, 5, 10, 8, PAL.rock); R(x, 4, 4, 6, 2, PAL.rockL); R(x, 3, 12, 10, 1, PAL.rockD); R(x, 6, 8, 3, 1, PAL.rockD); });
+    ic('food', x => { R(x, 3, 5, 4, 4, PAL.berry); R(x, 9, 6, 4, 4, PAL.berryL); R(x, 5, 10, 4, 4, PAL.berry); R(x, 7, 2, 1, 3, '#4e7a40'); R(x, 4, 3, 3, 1, '#4e7a40'); });
+    ic('essence', x => { R(x, 5, 3, 6, 10, '#8a5cd0'); R(x, 4, 5, 8, 6, '#8a5cd0'); R(x, 6, 4, 2, 3, '#d0b0ff'); R(x, 6, 11, 4, 1, '#5c3a94'); });
+    ic('pop', x => { R(x, 5, 2, 6, 6, '#f0c8a0'); R(x, 5, 2, 6, 2, '#6b4a26'); R(x, 3, 9, 10, 5, '#4a8f3c'); R(x, 6, 5, 1, 1, '#222'); R(x, 9, 5, 1, 1, '#222'); });
+    ic('build', x => { R(x, 3, 7, 8, 2, '#7a5a34'); R(x, 9, 3, 4, 5, PAL.metal); R(x, 10, 3, 2, 1, PAL.metalD); R(x, 2, 12, 12, 2, PAL.plank); });
+    ic('jobs', x => { R(x, 2, 4, 4, 4, '#f0c8a0'); R(x, 1, 9, 6, 5, '#c03030'); R(x, 10, 5, 4, 4, '#f0c8a0'); R(x, 9, 10, 6, 5, '#4a8f3c'); });
+    ic('powers', x => { R(x, 7, 1, 2, 14, '#c9a94b'); R(x, 1, 7, 14, 2, '#c9a94b'); R(x, 4, 4, 8, 8, '#8a5cd0'); R(x, 6, 6, 4, 4, '#d0b0ff'); });
+    ic('map', x => { R(x, 1, 3, 14, 10, '#d8cbb0'); R(x, 1, 3, 14, 1, '#b0a388'); R(x, 1, 8, 14, 1, '#b0a388'); R(x, 5, 5, 2, 2, '#4a8f3c'); R(x, 9, 9, 2, 2, '#3b6ea8'); R(x, 10, 4, 2, 2, '#e05555'); });
+    ic('sun', x => { R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 7, 1, 2, 3, '#ffd94a'); R(x, 7, 12, 2, 3, '#ffd94a'); R(x, 1, 7, 3, 2, '#ffd94a'); R(x, 12, 7, 3, 2, '#ffd94a'); R(x, 6, 6, 2, 2, '#fff2b0'); });
+    ic('moon', x => { R(x, 4, 2, 7, 12, '#c9d4f0'); R(x, 8, 2, 6, 12, '#1e222b'); R(x, 3, 5, 2, 2, '#c9d4f0'); R(x, 2, 9, 2, 2, '#c9d4f0'); });
+    ic('dusk', x => { R(x, 1, 7, 14, 2, '#e8894a'); R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 11, 5, 5, 6, '#1e222b'); });
+  },
+
+  /* -------- villager sprites (per unique look) -------- */
+  villager(look, frame) {
+    const key = `${look.skin}|${look.hair}|${look.cloth}|${frame}|${look.guard ? 1 : 0}`;
+    let c = this._vcache.get(key);
+    if (c) return c;
+    const m = mkc(16, 16); const x = m.x;
+    const skin = ['#f0c8a0', '#d9a06c', '#a9744b', '#7c5233'][look.skin % 4];
+    const hair = ['#3a2a1a', '#6b4a26', '#222222', '#b8862e', '#8a3a2a', '#c9c9c9'][look.hair % 6];
+    const cloth = look.cloth, clothD = shade(cloth, -0.3);
+    const bob = frame ? 1 : 0;
+    // legs
+    const legY = 12 + bob;
+    if (frame === 0) { R(x, 6, 12, 2, 3, '#3a2f28'); R(x, 9, 12, 2, 3, '#3a2f28'); }
+    else if (frame === 1) { R(x, 5, 11 + bob, 2, 4 - bob, '#3a2f28'); R(x, 9, 12, 2, 3, '#3a2f28'); }
+    else { R(x, 6, 12, 2, 3, '#3a2f28'); R(x, 10, 11 + bob, 2, 4 - bob, '#3a2f28'); }
+    // body
+    R(x, 5, 7 + bob, 6, 5, cloth);
+    R(x, 5, 10 + bob, 6, 1, clothD);
+    R(x, 5, 7 + bob, 6, 1, shade(cloth, 0.18));
+    // arms
+    R(x, 4, 8 + bob, 1, 3, clothD); R(x, 11, 8 + bob, 1, 3, clothD);
+    // head
+    R(x, 5, 2 + bob, 6, 5, skin);
+    R(x, 5, 2 + bob, 6, 2, hair);
+    R(x, 4, 3 + bob, 1, 2, hair); R(x, 11, 3 + bob, 1, 2, hair);
+    R(x, 6, 4 + bob, 1, 1, '#1c1c24'); R(x, 9, 4 + bob, 1, 1, '#1c1c24');
+    // guard helm
+    if (look.guard) { R(x, 4, 1 + bob, 8, 2, '#8a8f9c'); R(x, 5, 0 + bob, 6, 1, '#8a8f9c'); R(x, 4, 1 + bob, 8, 1, '#aab0be'); }
+    // tool by cloth color
+    const J = JOB_INFO;
+    if (cloth === J.guard.cloth) { R(x, 12, 4 + bob, 1, 7, PAL.metal); R(x, 11, 10 + bob, 3, 1, PAL.plank); }
+    else if (cloth === J.lumber.cloth) { R(x, 12, 6 + bob, 1, 4, '#7a5a34'); R(x, 12, 5 + bob, 2, 2, '#b8bcc8'); }
+    else if (cloth === J.miner.cloth) { R(x, 12, 6 + bob, 1, 5, '#7a5a34'); R(x, 11, 4 + bob, 3, 1, '#b8bcc8'); R(x, 13, 5 + bob, 1, 2, '#b8bcc8'); }
+    else if (cloth === J.forager.cloth) { R(x, 11, 9 + bob, 3, 2, '#a97f3f'); R(x, 11, 9 + bob, 3, 1, '#c9a35f'); }
+    else if (cloth === J.farmer.cloth) { R(x, 12, 7 + bob, 1, 3, '#7a5a34'); R(x, 12, 6 + bob, 2, 1, '#d9d9e2'); }
+    else if (cloth === J.builder.cloth) { R(x, 12, 6 + bob, 1, 4, '#7a5a34'); R(x, 11, 5 + bob, 3, 2, '#9aa0aa'); }
+    c = m.c; this._vcache.set(key, c);
+    return c;
+  },
+
+  monster(type, frame) { return this.s['mon_' + type + frame]; },
+
+  // UI helper: clone an icon canvas into a DOM canvas element
+  iconEl(name, size) {
+    const src = this.s['ic_' + name] || this.s[name];
+    const cv = document.createElement('canvas');
+    cv.width = src.width; cv.height = src.height;
+    cv.getContext('2d').drawImage(src, 0, 0);
+    if (size) { cv.style.width = size + 'px'; cv.style.height = size + 'px'; }
+    return cv;
+  },
+
+  /* -------- title / end screen painting -------- */
+  titlePaint(cv, mode) {
+    const x = cv.getContext('2d');
+    const w = cv.width, h = cv.height;
+    // sky
+    const g = x.createLinearGradient(0, 0, 0, h);
+    if (mode === 'win') { g.addColorStop(0, '#2c3a6e'); g.addColorStop(.55, '#e8894a'); g.addColorStop(1, '#ffd94a'); }
+    else if (mode === 'lose') { g.addColorStop(0, '#05060d'); g.addColorStop(1, '#141830'); }
+    else { g.addColorStop(0, '#1c1440'); g.addColorStop(.5, '#5a3a6e'); g.addColorStop(.78, '#e8894a'); g.addColorStop(1, '#f0b060'); }
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    // stars
+    const rng = U.mulberry32(42);
+    x.fillStyle = mode === 'lose' ? 'rgba(200,210,255,.5)' : 'rgba(255,255,255,.7)';
+    for (let i = 0; i < 40; i++) x.fillRect((rng() * w) | 0, (rng() * h * .5) | 0, 1, 1);
+    // moon / sun
+    if (mode === 'win') { x.fillStyle = '#fff2b0'; x.fillRect(w / 2 - 20, h * .52, 40, 40); x.fillStyle = '#ffd94a'; x.fillRect(w / 2 - 26, h * .55, 52, 40); }
+    else {
+      x.fillStyle = '#e8ecf8'; x.fillRect(w * .74, h * .16, 26, 26);
+      x.fillStyle = mode === 'lose' ? '#141830' : '#1c1440'; x.fillRect(w * .74 + 10, h * .16 - 4, 26, 26);
+    }
+    // ground
+    x.fillStyle = mode === 'lose' ? '#0c0e18' : '#1a2416';
+    x.fillRect(0, h * .72, w, h * .28);
+    x.fillStyle = mode === 'lose' ? '#10121e' : '#141c10';
+    for (let i = 0; i < w; i += 7) x.fillRect(i, h * .72 + ((i * 13) % 9 | 0), 4, 3);
+    // silhouette pines
+    const pine = (px, py, s, col) => {
+      x.fillStyle = col;
+      for (let i = 0; i < 4; i++) x.fillRect(px - ((i + 1) * s), py + i * s * 2, (i + 1) * 2 * s, s * 2);
+      x.fillRect(px - s / 2, py + 8 * s, s, s * 2);
+    };
+    const silCol = mode === 'win' ? '#2a3020' : '#0e1220';
+    pine(w * .12, h * .56, 4, silCol); pine(w * .2, h * .64, 3, silCol);
+    pine(w * .88, h * .58, 4, silCol); pine(w * .8, h * .66, 3, silCol);
+    pine(w * .3, h * .68, 2, silCol); pine(w * .68, h * .69, 2, silCol);
+    // camp silhouette (tent + hut)
+    const gy = h * .78;
+    x.fillStyle = silCol;
+    x.fillRect(w * .4, gy - 14, 34, 14); x.fillRect(w * .4 - 2, gy - 18, 38, 5); // hut
+    for (let i = 0; i < 7; i++) x.fillRect(w * .55 + 10 - i, gy - 8 + i, i * 2 + 2, 1); // tent
+    // beacon tower
+    const bx = w * .5 - 14, by = gy - 34;
+    x.fillStyle = mode === 'win' ? '#4a4a56' : '#2a2a34';
+    x.fillRect(bx + 8, by + 22, 12, 12); x.fillRect(bx + 10, by + 12, 8, 10); x.fillRect(bx + 4, by + 8, 20, 5);
+    if (mode === 'win' || mode === 'title') {
+      const fl = (fx, fy, s, col) => { x.fillStyle = col; for (let i = 0; i < s; i++) x.fillRect(fx - ((s - i) / 2 | 0), fy - i, (s - i), 1); };
+      fl(bx + 14, by + 7, 14, '#ff9a2e'); fl(bx + 14, by + 5, 9, '#ffce56'); fl(bx + 14, by + 3, 5, '#fff2b0');
+      const rg = x.createRadialGradient(bx + 14, by + 2, 2, bx + 14, by + 2, 46);
+      rg.addColorStop(0, 'rgba(255,200,90,.45)'); rg.addColorStop(1, 'rgba(255,200,90,0)');
+      x.fillStyle = rg; x.fillRect(bx - 40, by - 44, 110, 110);
+    } else {
+      // menacing eyes in the dark
+      const rng2 = U.mulberry32(7);
+      for (let i = 0; i < 7; i++) {
+        const ex = w * .1 + rng2() * w * .8, ey = h * .74 + rng2() * h * .18;
+        x.fillStyle = rng2() < .5 ? '#c46bff' : '#ff5a5a';
+        x.fillRect(ex, ey, 2, 2); x.fillRect(ex + 4, ey, 2, 2);
+      }
+    }
+    // vignette
+    const vg = x.createRadialGradient(w / 2, h / 2, h * .4, w / 2, h / 2, h);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)');
+    x.fillStyle = vg; x.fillRect(0, 0, w, h);
+  },
+};
+;
+
+/* ===== Bundled from js/world.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — world.js
+   Procedural map: value-noise terrain, forests, berry thickets,
+   stone lodes. Guarantees starting resources near the village.
+   Terrain is baked to an offscreen canvas; tiles rebake on change.
+   ============================================================ */
+
+const World = {
+  W: CONFIG.MAP_W, H: CONFIG.MAP_H,
+  t: null,     // Uint8 terrain (T.*)
+  obj: null,   // Uint8 object (OBJ.*)
+  amt: null,   // Uint8 remaining units in object
+  occ: null,   // Int32 building id per tile (0 = none)
+  bakeCv: null,
+  center: { x: 0, y: 0 },
+
+  idx(tx, ty) { return ty * this.W + tx; },
+  inB(tx, ty) { return tx >= 0 && ty >= 0 && tx < this.W && ty < this.H; },
+
+  // ---- value noise ----
+  noiseGen(seed) {
+    const rng = U.mulberry32(seed);
+    const gw = 24, gh = 24; // coarse lattice
+    const grid = new Float32Array((gw + 1) * (gh + 1));
+    for (let i = 0; i < grid.length; i++) grid[i] = rng();
+    const at = (x, y) => grid[Math.min(gh, y) * (gw + 1) + Math.min(gw, x)];
+    const smooth = t => t * t * (3 - 2 * t);
+    const sample = (nx, ny) => { // nx,ny in 0..1
+      const fx = nx * gw, fy = ny * gh;
+      const x0 = fx | 0, y0 = fy | 0;
+      const sx = smooth(fx - x0), sy = smooth(fy - y0);
+      const a = at(x0, y0), b = at(x0 + 1, y0), c = at(x0, y0 + 1), d = at(x0 + 1, y0 + 1);
+      return U.lerp(U.lerp(a, b, sx), U.lerp(c, d, sx), sy);
+    };
+    return {
+      fbm(nx, ny, oct) {
+        let v = 0, amp = 1, tot = 0, f = 1;
+        for (let o = 0; o < oct; o++) { v += sample((nx * f) % 1, (ny * f) % 1) * amp; tot += amp; amp *= .5; f *= 2; }
+        return v / tot;
+      }
+    };
+  },
+
+  gen(seed) {
+    const W = this.W, H = this.H;
+    this.t = new Uint8Array(W * H);
+    this.obj = new Uint8Array(W * H);
+    this.amt = new Uint8Array(W * H);
+    this.occ = new Int32Array(W * H);
+    G.regrow = new Map();
+    const elev = this.noiseGen(seed);
+    const moist = this.noiseGen(seed * 7 + 13);
+    const rocky = this.noiseGen(seed * 3 + 101);
+    const cx = W / 2, cy = H / 2;
+    this.center = { x: cx, y: cy };
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = this.idx(x, y);
+        const nx = x / W, ny = y / H;
+        // island falloff: water ring at map edge focuses play inward
+        const dx = (x - cx) / (W / 2), dy = (y - cy) / (H / 2);
+        const edge = Math.max(Math.abs(dx), Math.abs(dy));
+        const e = elev.fbm(nx, ny, 4) * (1 - Math.pow(U.clamp((edge - .82) / .18, 0, 1), 1.6));
+        const m = moist.fbm(nx, ny, 3);
+        const r = rocky.fbm(nx + .31, ny + .77, 3);
+        const dc = U.dst(x, y, cx, cy);
+        if (e < 0.34) this.t[i] = T.WATER;
+        else {
+          this.t[i] = T.GRASS;
+          if (e > 0.36 && e < 0.42 && U.hash2(x, y) < .3) this.t[i] = T.DIRT; // patches
+          if (this.t[i] === T.GRASS) {
+            if (m > 0.60 && e > 0.42) {
+              this.obj[i] = (e > 0.58 || m > 0.74) ? OBJ.PINE : OBJ.TREE;
+              if (U.hash2(x + 9, y) < .18) this.obj[i] = OBJ.NONE; // gaps in woods
+            } else if (m > 0.52 && m <= 0.60 && U.hash2(x, y + 5) < 0.10) {
+              this.obj[i] = OBJ.BUSH;
+            } else if (m <= 0.52 && U.hash2(x + 3, y + 3) < 0.045) {
+              this.obj[i] = OBJ.FLOWER;
+            }
+            // stone: richer away from center (risk/reward)
+            if (r > 0.68 && dc > 14 && U.hash2(x + 1, y + 7) < .5) {
+              this.obj[i] = OBJ.ROCK;
+            } else if (r > 0.63 && dc > 10 && U.hash2(x + 4, y + 2) < .16) {
+              this.obj[i] = OBJ.ROCK;
+            }
+          }
+        }
+      }
+    }
+
+    // clear village heart
+    for (let y = cy - 5 | 0; y <= cy + 5; y++)
+      for (let x = cx - 5 | 0; x <= cx + 5; x++)
+        if (this.inB(x, y) && U.dst(x, y, cx, cy) <= 5.5) {
+          const i = this.idx(x, y);
+          this.t[i] = T.GRASS; this.obj[i] = OBJ.NONE;
+        }
+
+    // guarantee starting resources (idempotent placement on grass)
+    const sprinkle = (type, count, rMin, rMax, amt) => {
+      let placed = 0, tries = 0;
+      while (placed < count && tries++ < 800) {
+        const a = Math.random() * Math.PI * 2;
+        const r = rMin + Math.random() * (rMax - rMin);
+        const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r);
+        if (!this.inB(x, y)) continue;
+        const i = this.idx(x, y);
+        if (this.t[i] !== T.GRASS) continue;
+        if (this.obj[i] === type) { placed++; continue; }
+        if (this.obj[i] !== OBJ.NONE && this.obj[i] !== OBJ.FLOWER) continue;
+        this.obj[i] = type; if (amt) this.amt[i] = amt;
+        placed++;
+      }
+    };
+    sprinkle(OBJ.BUSH, 16, 5, 13, OBJ_AMT[OBJ.BUSH]);
+    sprinkle(OBJ.TREE, 26, 7, 17, OBJ_AMT[OBJ.TREE]);
+    sprinkle(OBJ.PINE, 10, 12, 22, OBJ_AMT[OBJ.PINE]);
+    sprinkle(OBJ.ROCK, 8, 13, 20, OBJ_AMT[OBJ.ROCK]);
+
+    // fill amounts for all generated objects
+    for (let i = 0; i < this.obj.length; i++) {
+      const o = this.obj[i];
+      if ((o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BUSH || o === OBJ.ROCK) && this.amt[i] === 0)
+        this.amt[i] = OBJ_AMT[o] + (U.hash2(i, 17) < .3 ? 1 : 0);
+    }
+
+    this.bakeAll();
+  },
+
+  // adopt arrays from a save (no regen)
+  adopt(data) {
+    this.t = Uint8Array.from(data.t);
+    this.obj = Uint8Array.from(data.obj);
+    this.amt = Uint8Array.from(data.amt);
+    this.occ = new Int32Array(this.W * this.H);
+    this.center = { x: this.W / 2, y: this.H / 2 };
+    this.bakeAll();
+  },
+
+  /* ---------------- baking ---------------- */
+  bakeAll() {
+    const sz = this.W * CONFIG.TILE;
+    if (!this.bakeCv) { this.bakeCv = document.createElement('canvas'); this.bakeCv.width = sz; this.bakeCv.height = sz; }
+    const x = this.bakeCv.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    for (let ty = 0; ty < this.H; ty++)
+      for (let tx = 0; tx < this.W; tx++)
+        this.bakeTileCtx(x, tx, ty);
+  },
+
+  bakeTileCtx(x, tx, ty) {
+    const T16 = CONFIG.TILE, i = this.idx(tx, ty), px = tx * T16, py = ty * T16;
+    const t = this.t[i];
+    if (t === T.WATER) {
+      x.drawImage(Art.s.water, px, py);
+      // foam against land neighbors
+      x.fillStyle = PAL.water[2];
+      const n = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      for (const [dx, dy] of n) {
+        if (!this.inB(tx + dx, ty + dy)) continue;
+        const nt = this.t[this.idx(tx + dx, ty + dy)];
+        if (nt === T.WATER) continue;
+        if (dy === -1) x.fillRect(px, py, T16, 2);
+        else if (dy === 1) x.fillRect(px, py + T16 - 2, T16, 2);
+        else if (dx === -1) x.fillRect(px, py, 2, T16);
+        else x.fillRect(px + T16 - 2, py, 2, T16);
+      }
+      return;
+    }
+    const v = (U.hash2(tx, ty) * 4) | 0;
+    if (t === T.GRASS) x.drawImage(Art.s['g' + v], px, py);
+    else if (t === T.DIRT) x.drawImage(Art.s.dirt, px, py);
+    else if (t === T.ROAD) x.drawImage(Art.s['road' + (v % 2)], px, py);
+  },
+
+  bakeTile(tx, ty) {
+    if (!this.bakeCv || !this.inB(tx, ty)) return;
+    const x = this.bakeCv.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    this.bakeTileCtx(x, tx, ty);
+    // rebake water neighbors so foam stays right
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      const nx = tx + dx, ny = ty + dy;
+      if (this.inB(nx, ny) && this.t[this.idx(nx, ny)] === T.WATER) this.bakeTileCtx(x, nx, ny);
+    }
+  },
+
+  /* ---------------- queries ---------------- */
+  tileT(tx, ty) { return this.inB(tx, ty) ? this.t[this.idx(tx, ty)] : T.WATER; },
+  objAt(tx, ty) { return this.inB(tx, ty) ? this.obj[this.idx(tx, ty)] : OBJ.NONE; },
+  amtAt(tx, ty) { return this.inB(tx, ty) ? this.amt[this.idx(tx, ty)] : 0; },
+  bldAt(tx, ty) {
+    if (!this.inB(tx, ty)) return null;
+    const id = this.occ[this.idx(tx, ty)];
+    return id ? Buildings.byId(id) : null;
+  },
+
+  setObj(tx, ty, o, amt) {
+    if (!this.inB(tx, ty)) return;
+    const i = this.idx(tx, ty);
+    this.obj[i] = o; this.amt[i] = amt || 0;
+  },
+
+  // depleted → regrowth scheduling
+  deplete(tx, ty) {
+    const i = this.idx(tx, ty), o = this.obj[i];
+    this.amt[i] = 0;
+    if (o === OBJ.TREE || o === OBJ.PINE) {
+      this.obj[i] = OBJ.STUMP;
+      G.regrow.set(i, { t: 150 + Math.random() * 60, kind: o });   // stump → sapling → tree
+    } else if (o === OBJ.BUSH) {
+      this.obj[i] = OBJ.BUSH; // keep bush sprite-empty state via amt
+      G.regrow.set(i, { t: 170 + Math.random() * 50, kind: OBJ.BUSH });
+    } else if (o === OBJ.ROCK) {
+      this.obj[i] = OBJ.NONE; // lode exhausted forever
+    }
+  },
+
+  // walkability for pathing/movement. opts: {monster}
+  walkable(tx, ty, opts) {
+    if (!this.inB(tx, ty)) return false;
+    const i = this.idx(tx, ty);
+    if (this.t[i] === T.WATER) return false;
+    const o = this.obj[i];
+    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK) return false;
+    const id = this.occ[i];
+    if (id) {
+      const b = Buildings.byId(id);
+      if (b && b.built) {
+        if (b.def.kind === 'gate' && !(opts && opts.monster)) return true;
+        return false;
+      }
+      // construction sites are passable
+      return true;
+    }
+    return true;
+  },
+
+  // movement cost for A*. monsters treat solid buildings as pricey breakables.
+  cost(tx, ty, monster) {
+    if (!this.inB(tx, ty)) return Infinity;
+    const i = this.idx(tx, ty);
+    if (this.t[i] === T.WATER) return Infinity;
+    const o = this.obj[i];
+    let c = this.t[i] === T.ROAD ? 0.72 : 1;
+    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK) return Infinity;
+    const id = this.occ[i];
+    if (id) {
+      const b = Buildings.byId(id);
+      if (b && b.built) {
+        if (b.def.kind === 'gate') return monster ? 22 : 0.8;
+        if (monster) return 24 + b.hp / 60;  // will have to break it
+        return Infinity;
+      }
+      return 1.4; // site
+    }
+    return c;
+  },
+
+  // spiral out from (tx,ty) to find nearest matching object tile
+  findNearestObj(tx, ty, types, maxR) {
+    tx |= 0; ty |= 0;
+    const cands = [];
+    for (let r = 1; r <= maxR; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const x = tx + dx, y = ty + dy;
+          if (!this.inB(x, y)) continue;
+          const i = this.idx(x, y);
+          const o = this.obj[i];
+          if (types.includes(o)) {
+            if (o === OBJ.BUSH && this.amt[i] <= 0) continue;
+            cands.push({ x, y, i, d: r });
+          }
+        }
+      }
+      if (cands.length) {
+        // prefer closest few but randomize among them so workers spread out
+        cands.sort((a, b) => a.d - b.d);
+        const top = cands.slice(0, Math.min(4, cands.length));
+        return U.choice(top);
+      }
+    }
+    return null;
+  },
+
+  // random walkable edge point; pass an array of sides (0=N,1=S,2=W,3=E) to focus spawns
+  edgePoint(sideSel) {
+    const pick = s => {
+      let x, y;
+      if (s === 0) { x = U.irnd(4, this.W - 5); y = 2; }
+      else if (s === 1) { x = U.irnd(4, this.W - 5); y = this.H - 3; }
+      else if (s === 2) { x = 2; y = U.irnd(4, this.H - 5); }
+      else { x = this.W - 3; y = U.irnd(4, this.H - 5); }
+      return { x, y };
+    };
+    const sides = sideSel || [0, 1, 2, 3];
+    for (let tries = 0; tries < 80; tries++) {
+      const p = pick(U.choice(sides));
+      if (this.walkable(p.x, p.y)) return { x: p.x + 0.5, y: p.y + 0.5 };
+    }
+    return { x: this.W / 2, y: 1.5 };
+  },
+};
+;
+
+/* ===== Bundled from js/path.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — path.js
+   A* over the tile grid, 8-directional with corner-cut
+   prevention. Monsters path *through* solid buildings at high
+   cost, which naturally makes them prefer gaps and gates but
+   batter walls when fully sealed.
+   ============================================================ */
+
+const Path = {
+  find(sx, sy, tx, ty, opts) {
+    opts = opts || {};
+    const monster = !!opts.monster, adjacent = !!opts.adjacent;
+    sx |= 0; sy |= 0; tx |= 0; ty |= 0;
+    const W = World.W, H = World.H;
+    if (!World.inB(tx, ty)) return null;
+
+    // If goal blocked and adjacent allowed, snap to a nearby walkable tile
+    if (adjacent && !this.pass(tx, ty, monster)) {
+      const spot = this.nearbyFree(tx, ty, monster, 2);
+      if (!spot) return null;
+      tx = spot.x; ty = spot.y;
+    }
+    if (sx === tx && sy === ty) return [{ x: tx + .5, y: ty + .5 }];
+
+    const size = W * H;
+    const g = this._g || (this._g = new Float64Array(size));
+    const came = this._came || (this._came = new Int32Array(size));
+    const closed = this._closed || (this._closed = new Uint8Array(size));
+    g.fill(Infinity); closed.fill(0);
+    const open = this._heap || (this._heap = new Heap());
+    open.clear();
+
+    const si = World.idx(sx, sy), ti = World.idx(tx, ty);
+    g[si] = 0; came[si] = -1;
+    open.push(si, this.h(sx, sy, tx, ty));
+    let best = si, bestH = this.h(sx, sy, tx, ty);
+    let nodes = 0, maxNodes = opts.maxNodes || 5000;
+
+    while (open.len && nodes < maxNodes) {
+      const cur = open.pop();
+      if (closed[cur]) continue;
+      closed[cur] = 1; nodes++;
+      if (cur === ti) { best = cur; bestH = 0; break; }
+      const cx = cur % W, cy = (cur / W) | 0;
+      const hh = this.h(cx, cy, tx, ty);
+      if (hh < bestH) { bestH = hh; best = cur; }
+      for (let d = 0; d < 8; d++) {
+        const dx = DIR8[d][0], dy = DIR8[d][1];
+        const nx = cx + dx, ny = cy + dy;
+        if (!World.inB(nx, ny)) continue;
+        const step = World.cost(nx, ny, monster);
+        if (step === Infinity) continue;
+        if (dx && dy) { // no corner cutting
+          if (World.cost(cx + dx, cy, monster) === Infinity) continue;
+          if (World.cost(cx, cy + dy, monster) === Infinity) continue;
+        }
+        const ni = World.idx(nx, ny);
+        if (closed[ni]) continue;
+        const ng = g[cur] + step * (dx && dy ? 1.42 : 1);
+        if (ng < g[ni]) {
+          g[ni] = ng; came[ni] = cur;
+          open.push(ni, ng + this.h(nx, ny, tx, ty) * 1.05);
+        }
+      }
+    }
+
+    // build path from best node (exact or closest reached)
+    if (best === si && si !== ti) {
+      // no progress at all — try direct adjacent fallback
+      if (!adjacent) return null;
+    }
+    const pts = [];
+    let n = best;
+    while (n !== -1) { pts.push({ x: (n % W) + 0.5, y: ((n / W) | 0) + 0.5 }); n = came[n]; }
+    pts.reverse();
+    if (pts.length > 1) { pts.shift(); } // drop current tile
+    return pts.length ? pts : null;
+  },
+
+  pass(tx, ty, monster) {
+    if (!World.inB(tx, ty)) return false;
+    return World.cost(tx, ty, monster) !== Infinity;
+  },
+
+  nearbyFree(tx, ty, monster, r) {
+    let best = null, bd = 1e9;
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        const x = tx + dx, y = ty + dy;
+        if (!this.pass(x, y, monster)) continue;
+        const d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; best = { x, y }; }
+      }
+    return best;
+  },
+
+  h(ax, ay, bx, by) {
+    const dx = Math.abs(ax - bx), dy = Math.abs(ay - by);
+    return (dx + dy) + (-0.6) * Math.min(dx, dy);
+  },
+};
+
+const DIR8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+
+// binary min-heap keyed by priority
+class Heap {
+  constructor() { this.a = []; this.len = 0; }
+  clear() { this.a.length = 0; this.len = 0; }
+  push(v, p) {
+    const a = this.a; a.push([p, v]); this.len++;
+    let i = a.length - 1;
+    while (i > 0) {
+      const par = (i - 1) >> 1;
+      if (a[par][0] <= a[i][0]) break;
+      [a[par], a[i]] = [a[i], a[par]]; i = par;
+    }
+  }
+  pop() {
+    const a = this.a; if (!a.length) return -1;
+    const top = a[0][1]; this.len--;
+    const last = a.pop();
+    if (a.length) {
+      a[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = i * 2 + 1, r = l + 1;
+        let m = i;
+        if (l < a.length && a[l][0] < a[m][0]) m = l;
+        if (r < a.length && a[r][0] < a[m][0]) m = r;
+        if (m === i) break;
+        [a[m], a[i]] = [a[i], a[m]]; i = m;
+      }
+    }
+    return top;
+  }
+}
+;
+
+/* ===== Bundled from js/buildings.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — buildings.js
+   BUILD: definitions. Buildings: placement, construction,
+   farms, towers, demolition, housing & storage queries.
+   ============================================================ */
+
+const BUILD = {
+  tent: {
+    name: 'Tent', cat: 'basics', w: 1, h: 1, hp: 130, cost: { wood: 8 }, time: 16,
+    housing: 2, light: 2.2, kind: 'house', unlock: 0,
+    desc: 'Shelter for two villagers. Cheap and quick — your first priority.',
+  },
+  farm: {
+    name: 'Wheat Plot', cat: 'basics', w: 2, h: 2, hp: 140, cost: { wood: 6 }, time: 18,
+    kind: 'farm', grassOnly: true, unlock: 0,
+    desc: 'Reliable food. Wheat ripens in the sun; a Farmer harvests ~15 food.',
+  },
+  road: {
+    name: 'Road', cat: 'basics', w: 1, h: 1, hp: 1, cost: { stone: 1 }, time: 0,
+    kind: 'road', terrain: true, unlock: 0, paint: true,
+    desc: 'Stone path. Villagers walk 30% faster along roads. Drag to paint.',
+  },
+  cottage: {
+    name: 'Cottage', cat: 'basics', w: 2, h: 2, hp: 380, cost: { wood: 14, stone: 12 }, time: 42,
+    housing: 4, light: 2.8, kind: 'house', unlock: 4,
+    desc: 'Sturdy stone home for four. Warm windows glow at night.',
+  },
+  wallW: {
+    name: 'Palisade', cat: 'defense', w: 1, h: 1, hp: 220, cost: { wood: 2 }, time: 5,
+    kind: 'wall', paint: true, unlock: 0,
+    desc: 'Wooden wall. Blocks the horde. Drag to draw long lines.',
+  },
+  wallS: {
+    name: 'Stone Wall', cat: 'defense', w: 1, h: 1, hp: 520, cost: { stone: 4 }, time: 9,
+    kind: 'wall', paint: true, unlock: 2,
+    desc: 'Thick stone wall. Brutes hammer a long time before it gives.',
+  },
+  gateW: {
+    name: 'Wooden Gate', cat: 'defense', w: 1, h: 1, hp: 260, cost: { wood: 4 }, time: 9,
+    kind: 'gate', unlock: 2,
+    desc: 'Your people pass freely; the horde must batter it down.',
+  },
+  gateS: {
+    name: 'Stone Gate', cat: 'defense', w: 1, h: 1, hp: 600, cost: { stone: 8 }, time: 14,
+    kind: 'gate', unlock: 6,
+    desc: 'Reinforced gate. The strongest door in the valley.',
+  },
+  tower: {
+    name: 'Watchtower', cat: 'defense', w: 1, h: 1, hp: 300, cost: { wood: 14, stone: 10 }, time: 32,
+    kind: 'tower', atk: CONFIG.TOWER, light: 2.7, tall: 16, unlock: 3,
+    desc: 'Rains arrows on the horde (8 dmg, range 5.5). Works alone, all night.',
+  },
+  ballista: {
+    name: 'Ballista', cat: 'defense', w: 1, h: 1, hp: 420, cost: { wood: 22, stone: 26 }, time: 50,
+    kind: 'tower', atk: CONFIG.BALLISTA, light: 1.6, tall: 16, unlock: 7,
+    desc: 'Heavy bolts punch through brutes (27 dmg, range 7.5).',
+  },
+  torch: {
+    name: 'Torch', cat: 'defense', w: 1, h: 1, hp: 70, cost: { wood: 2, stone: 1 }, time: 5,
+    kind: 'torch', light: 4.3, tall: 8, unlock: 0,
+    desc: 'Pushes back the dark. Shades crawl slower in the light.',
+  },
+  warehouse: {
+    name: 'Warehouse', cat: 'basics', w: 2, h: 2, hp: 420, cost: { wood: 18, stone: 8 }, time: 40,
+    kind: 'store', light: 3.0, unlock: 5,
+    desc: 'A second stockpile — shorten hauling trips and guard outer farms.',
+  },
+  shrine: {
+    name: 'Shrine', cat: 'mystic', w: 1, h: 1, hp: 200, cost: { stone: 16 }, time: 28,
+    kind: 'shrine', light: 3.1, tall: 8, essence: true, unlock: 8,
+    desc: 'Faith of the valley made stone. Slowly regenerates your Essence.',
+  },
+  beacon: {
+    name: 'The Beacon', cat: 'mystic', w: 3, h: 3, hp: 900, cost: { wood: 100, stone: 80 }, time: 110,
+    kind: 'beacon', light: 0, tall: 40, unlock: 10,
+    desc: 'The Great Beacon of legend. Lighting it calls the final horde — survive that night and dawn returns forever.',
+  },
+};
+
+// starting camp (not buildable)
+const CAMP_DEF = {
+  name: 'Settlers\u2019 Camp', cat: null, w: 2, h: 2, hp: 850, cost: {}, time: 0,
+  kind: 'store', light: 3.2, housing: 2, tall: 0, desc: 'Where it all began. Stores goods and shelters two.',
+};
+
+const Buildings = {
+  byIdMap: new Map(),
+
+  def(key) { return key === 'camp' ? CAMP_DEF : BUILD[key]; },
+
+  byId(id) { return this.byIdMap.get(id) || null; },
+
+  create(key, tx, ty, built) {
+    const def = this.def(key);
+    const b = {
+      id: NID(), key, def, x: tx, y: ty, w: def.w, h: def.h,
+      hp: built ? def.hp : Math.max(8, def.hp * 0.1),
+      maxHp: def.hp, built: !!built, progress: built ? 1 : 0,
+      growth: 0, tendedT: 99, cd: 0, lit: false,
+    };
+    this.byIdMap.set(b.id, b);
+    G.buildings.push(b);
+    for (let dy = 0; dy < b.h; dy++)
+      for (let dx = 0; dx < b.w; dx++)
+        World.occ[World.idx(tx + dx, ty + dy)] = b.id;
+    return b;
+  },
+
+  canPlace(key, tx, ty) {
+    const def = BUILD[key];
+    if (!def) return { ok: false, reason: 'Unknown' };
+    for (let dy = 0; dy < def.h; dy++) {
+      for (let dx = 0; dx < def.w; dx++) {
+        const x = tx + dx, y = ty + dy;
+        if (!World.inB(x, y)) return { ok: false, reason: 'Off map' };
+        const i = World.idx(x, y);
+        const t = World.t[i];
+        if (t === T.WATER) return { ok: false, reason: 'On water' };
+        if (def.terrain) { // roads can overwrite grass/dirt but not objects/farms
+          if (t === T.ROAD) return { ok: false, reason: '' };
+          const o = World.obj[i];
+          if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.BUSH) return { ok: false, reason: 'Blocked' };
+          if (World.occ[i]) return { ok: false, reason: 'Occupied' };
+          continue;
+        }
+        if (t !== T.GRASS && t !== T.DIRT) return { ok: false, reason: 'Bad ground' };
+        if (def.grassOnly && t !== T.GRASS) return { ok: false, reason: 'Needs grass' };
+        const o = World.obj[i];
+        if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.BUSH || o === OBJ.SAPLING)
+          return { ok: false, reason: 'Blocked — clear first' };
+        if (World.occ[i]) return { ok: false, reason: 'Occupied' };
+      }
+    }
+    return { ok: true, reason: '' };
+  },
+
+  afford(key) {
+    const def = BUILD[key]; if (!def) return false;
+    if ((def.cost.wood || 0) > G.res.wood) return false;
+    if ((def.cost.stone || 0) > G.res.stone) return false;
+    return true;
+  },
+
+  pay(key) {
+    const def = BUILD[key];
+    G.res.wood -= def.cost.wood || 0;
+    G.res.stone -= def.cost.stone || 0;
+  },
+
+  place(key, tx, ty) {
+    const chk = this.canPlace(key, tx, ty);
+    if (!chk.ok && chk.reason) return null;
+    if (!chk.ok) return null;
+    if (!this.afford(key)) return null;
+    this.pay(key);
+    const def = BUILD[key];
+    if (def.kind === 'road') {
+      const i = World.idx(tx, ty);
+      World.t[i] = T.ROAD;
+      World.obj[i] = OBJ.NONE;
+      World.bakeTile(tx, ty);
+      return 'road';
+    }
+    // clear flowers/stumps under footprint
+    for (let dy = 0; dy < def.h; dy++)
+      for (let dx = 0; dx < def.w; dx++) {
+        const i = World.idx(tx + dx, ty + dy);
+        if (World.obj[i] === OBJ.FLOWER || World.obj[i] === OBJ.STUMP) World.obj[i] = OBJ.NONE;
+      }
+    const b = this.create(key, tx, ty, false);
+    G.stats.built++;
+    // nudge villagers out of footprint
+    for (const v of G.villagers) {
+      if (v.x >= tx && v.x < tx + def.w && v.y >= ty && v.y < ty + def.h) {
+        const spot = Path.nearbyFree(tx, ty, false, 3);
+        if (spot) { v.x = spot.x + .5; v.y = spot.y + .5; v.path = null; }
+      }
+    }
+    return b;
+  },
+
+  demolish(b, silent) {
+    const i = G.buildings.indexOf(b);
+    if (i < 0) return;
+    G.buildings.splice(i, 1);
+    this.byIdMap.delete(b.id);
+    for (let dy = 0; dy < b.h; dy++)
+      for (let dx = 0; dx < b.w; dx++) {
+        const idx = World.idx(b.x + dx, b.y + dy);
+        if (World.occ[idx] === b.id) World.occ[idx] = 0;
+      }
+    if (b.built && !silent) {
+      const def = b.def;
+      G.res.wood += Math.floor((def.cost.wood || 0) * 0.5);
+      G.res.stone += Math.floor((def.cost.stone || 0) * 0.5);
+    }
+    if (b.key === 'beacon' && G.beaconLit) { G.beaconLit = false; }
+    if (G.sel && G.sel.ref === b) { G.sel = null; UI.selHide(); }
+    for (const v of G.villagers) if (v.tgt === b || v.workB === b) { v.tgt = null; v.workB = null; v.state = 'idle'; }
+  },
+
+  housingCap() {
+    let cap = 0;
+    for (const b of G.buildings) if (b.built && b.def.housing) cap += b.def.housing;
+    return cap;
+  },
+
+  stores() { return G.buildings.filter(b => b.built && b.def.kind === 'store'); },
+
+  nearestStore(tx, ty) {
+    let best = null, bd = 1e9;
+    for (const b of this.stores()) {
+      const d = U.dst2(tx, ty, b.x + b.w / 2, b.y + b.h / 2);
+      if (d < bd) { bd = d; best = b; }
+    }
+    return best;
+  },
+
+  count(key) { let n = 0; for (const b of G.buildings) if (b.key === key) n++; return n; },
+
+  damaged() {
+    return G.buildings.filter(b => b.built && b.hp < b.maxHp - 0.5)
+      .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
+  },
+
+  unBuilt() { return G.buildings.filter(b => !b.built); },
+
+  // per-frame building logic
+  update(dt) {
+    const night = isNightLike();
+    for (const b of G.buildings) {
+      if (b.cd > 0) b.cd -= dt;
+      if (b.tendedT < 90) b.tendedT += dt;
+      // farms grow in daylight (faster while tended)
+      if (b.def.kind === 'farm' && b.built && !night) {
+        const boost = b.tendedT < 2 ? CONFIG.FARM.tendBoost : 1;
+        b.growth = Math.min(1, b.growth + dt * boost / CONFIG.FARM.grow);
+      }
+      // towers shoot
+      if (b.def.kind === 'tower' && b.built && b.cd <= 0) {
+        const cx = b.x + .5, cy = b.y + .5;
+        let tgt = null, bd = b.def.atk.range * b.def.atk.range;
+        for (const m of G.monsters) {
+          if (m.dead) continue;
+          const d = U.dst2(cx, cy, m.x, m.y);
+          if (d < bd) { bd = d; tgt = m; }
+        }
+        if (tgt) {
+          b.cd = b.def.atk.rate;
+          Sim.shootTower(b, tgt);
+        }
+      }
+    }
+  },
+
+  windowGlows() {
+    // pixel-offset glow points per building kind (for night windows)
+    const out = [];
+    for (const b of G.buildings) {
+      if (!b.built) continue;
+      const k = b.key;
+      if (k === 'cottage') out.push([b.x * 16 + 8, b.y * 16 + 24], [b.x * 16 + 25, b.y * 16 + 24]);
+      else if (k === 'warehouse') out.push([b.x * 16 + 8, b.y * 16 + 21], [b.x * 16 + 26, b.y * 16 + 21]);
+      else if (k === 'camp') out.push([b.x * 16 + 8, b.y * 16 + 21], [b.x * 16 + 26, b.y * 16 + 21]);
+      else if (k === 'cottage2') out.push([0, 0]);
+    }
+    return out;
+  },
+};
+;
+
+/* ===== Bundled from js/entities.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — entities.js
+   Villagers (named, traited, unique pixel look) and monsters.
+   ============================================================ */
+
+const SYL_A = ['Ky', 'Mira', 'Tob', 'Lira', 'Bran', 'Nyla', 'Fen', 'Dara', 'Os', 'Wren', 'Tama', 'Jori', 'Ash', 'Elowen', 'Gar', 'Sela', 'Rho', 'Pell', 'Isla', 'Milo', 'Bryn', 'Edda', 'Cor', 'Ves'];
+const SYL_B = ['ren', 'win', 'la', 'ric', 'dis', 'na', 'mar', 'beth', 'well', 'dra', 'lin', 'vas', 'gorn', 'tha', 'lis', 'mund', 'wen', 'tar', 'a', 'is'];
+const TRAITS = [
+  { key: 'hardy', name: 'Hardy', desc: '+20 max health' },
+  { key: 'swift', name: 'Swift', desc: 'walks 18% faster' },
+  { key: 'diligent', name: 'Diligent', desc: 'works 12% faster' },
+  { key: 'strong', name: 'Strong Back', desc: 'carries 3 more' },
+  { key: null, name: '', desc: '' },
+];
+
+const Entities = {
+  name() { return U.choice(SYL_A) + U.choice(SYL_B); },
+  trait() { return U.choice(TRAITS); },
+
+  makeVillager(x, y, job, arrive) {
+    const tr = this.trait();
+    const v = {
+      kind: 'v', id: NID(),
+      name: this.name(), trait: tr.key ? tr : null,
+      look: { skin: U.irnd(0, 3), hair: U.irnd(0, 5), cloth: JOB_INFO[job || 'idle'].cloth, guard: job === 'guard' },
+      job: job || 'idle',
+      x, y, hp: CONFIG.V.hp, maxHp: CONFIG.V.hp,
+      hunger: 30 + Math.random() * 30,
+      state: arrive ? 'arrive' : 'idle',
+      path: null, pi: 0, moveT: 0, anim: 0, facing: 1,
+      tgt: null, tgtTile: null, workT: 0, workB: null,
+      carry: { type: null, amt: 0 },
+      atkCd: 0, fearT: 0, stuckT: 0, lastD: 1e9, aiT: Math.random() * 0.5,
+      ate: false, starveWarned: false,
+    };
+    if (v.trait && v.trait.key === 'hardy') { v.maxHp += 20; v.hp = v.maxHp; }
+    return v;
+  },
+
+  makeMonster(type, x, y) {
+    const st = CONFIG.MONS[type];
+    const hpMul = G.diffM.hp * (1 + Math.max(0, G.day - CONFIG.WAVE.hpScaleDay) * CONFIG.WAVE.hpScale);
+    const m = {
+      kind: 'm', id: NID(), type, name: st.name,
+      x, y, hp: Math.round(st.hp * hpMul), maxHp: Math.round(st.hp * hpMul),
+      dmg: st.dmg, spd: st.spd, atkT: st.atkT, ess: st.ess,
+      state: 'advance', path: null, pi: 0,
+      tgtE: null, tgtB: null, atkCd: 0,
+      anim: Math.random() * 2, aiT: Math.random() * 0.5,
+      stuckT: 0, lastD: 1e9, burning: 0, dead: false,
+      bld: st.bld || 1, r: st.r || 0.5,
+    };
+    return m;
+  },
+
+  villagerSpeed(v) {
+    let s = CONFIG.V.spd;
+    if (v.trait && v.trait.key === 'swift') s *= 1.18;
+    if (v.job === 'guard' && isNightLike()) s *= 1.08;
+    const t = World.tileT(v.x | 0, v.y | 0);
+    if (t === T.ROAD) s *= 1.3;
+    return s;
+  },
+
+  workSpeed(v) {
+    let s = 1;
+    if (v.trait && v.trait.key === 'diligent') s *= 1.12;
+    return s;
+  },
+
+  carryMax(v) {
+    let c = CONFIG.CARRY;
+    if (v.trait && v.trait.key === 'strong') c += 3;
+    return c;
+  },
+
+  farmYield(v) { return CONFIG.FARM.yield; },
+};
+;
+
+/* ===== Bundled from js/game.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — game.js
+   The simulation: day/night cycle, villager job AI, monster
+   waves, combat, food & essence economy, population growth,
+   unlocks, chronicle, victory & defeat.
+   ============================================================ */
+
+const Sim = {
+  /* ---------------- setup ---------------- */
+  newGame(diff, seed) {
+    const C = CONFIG;
+    G.state = 'playing';
+    G.seed = seed || (Math.random() * 1e9) | 0;
+    G.day = 1; G.time = 0; G.phase = 'day';
+    G.speed = 1; G.paused = false;
+    G.diff = diff in C.DIFF ? diff : 'normal';
+    G.diffM = C.DIFF[G.diff];
+    G.res = { wood: C.START.wood, stone: C.START.stone, food: C.START.food, essence: C.START.essence };
+    G.villagers = []; G.monsters = []; G.buildings = [];
+    G.effects = []; G.floaters = [];
+    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, builder: 1, guard: 0 };
+    G.regrow = new Map();
+    G.stats = { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: C.VIL_START };
+    G.chronicle = [];
+    G.wave = null; G.finalNight = false; G.beaconLit = false; G.boss = null;
+    G.tut = 0; G.tutOn = true;
+    G.shake = 0; G.sel = null; G.follow = null;
+
+    Buildings.byIdMap.clear();
+    World.gen(G.seed);
+
+    const cx = World.W / 2 | 0, cy = World.H / 2 | 0;
+    // starting camp slightly left of center, tents around it
+    Buildings.create('camp', cx - 1, cy - 1, true);
+    const starters = ['forager', 'forager', 'lumber', 'lumber', 'miner', 'builder'];
+    for (let i = 0; i < C.VIL_START; i++) {
+      const a = (i / C.VIL_START) * Math.PI * 2;
+      const v = Entities.makeVillager(cx + Math.cos(a) * 2.5 + .5, cy + Math.sin(a) * 2.5 + .5, starters[i]);
+      G.villagers.push(v);
+    }
+    G.cam.x = (cx + .5) * C.TILE; G.cam.y = (cy + .5) * C.TILE; G.cam.z = C.ZOOM.start;
+
+    // grant day-0 unlocks
+    G.unlocks = {};
+    for (const k in BUILD) if (BUILD[k].unlock <= 0) G.unlocks[k] = true;
+
+    this.log(`Day 1 — ${C.VIL_START} settlers raise the camp of Dawnhold beneath a dimming sun.`, 'good');
+    UI.toast('Shelter is short — raise Tents before dark.', 'good');
+    UI.tutStart();
+    UI.refreshAll();
+    UI.showGameUI();
+  },
+
+  /* ---------------- main tick ---------------- */
+  tick(dtRaw) {
+    if (G.state !== 'playing') return;
+    const C = CONFIG;
+    const dt = Math.min(dtRaw, 0.25); // clamp big pauses
+    G.time += dt;
+
+    // ----- phase machine -----
+    let plen;
+    if (G.phase === 'day') plen = C.DAY_LEN;
+    else if (G.phase === 'dusk') plen = C.TRANS;
+    else if (G.phase === 'night') plen = C.NIGHT_LEN * G.diffM.night;
+    else plen = C.TRANS;
+    if (G.time >= plen) {
+      G.time -= plen;
+      if (G.phase === 'day') this.dusk();
+      else if (G.phase === 'dusk') this.night();
+      else if (G.phase === 'night') this.dawnPhase();
+      else this.dayStart();
+    }
+
+    // ----- spawner -----
+    if (G.wave && G.phase === 'night') this.waveSpawn(dt);
+
+    // ----- essence -----
+    let regen = (isDayLike() ? C.ESSENCE.regenDay : C.ESSENCE.regenNight) * G.diffM.regen;
+    for (const b of G.buildings) if (b.built && b.def.essence) regen += 0.06;
+    G.res.essence = Math.min(C.ESSENCE.max, G.res.essence + regen * dt);
+
+    // ----- entities -----
+    Buildings.update(dt);
+    for (let i = G.villagers.length - 1; i >= 0; i--) {
+      const v = G.villagers[i];
+      this.updateVillager(v, dt);
+      if (v.hp <= 0) this.villagerDeath(v, v.starving ? 'starvation' : 'the horde');
+    }
+    for (let i = G.monsters.length - 1; i >= 0; i--) {
+      const m = G.monsters[i];
+      this.updateMonster(m, dt);
+      if (m.dead || m.hp <= 0) { G.monsters.splice(i, 1); if (G.boss === m) { G.boss = null; UI.bossBar(null); } }
+    }
+    this.separate();
+
+    // ----- regrowth -----
+    if (G.regrow.size) {
+      for (const [i, rg] of G.regrow) {
+        rg.t -= dt;
+        if (rg.t <= 0) {
+          const x = i % World.W, y = (i / World.W) | 0;
+          if (rg.kind === OBJ.BUSH) {
+            World.amt[i] = OBJ_AMT[OBJ.BUSH];
+          } else if (rg.kind === OBJ.TREE || rg.kind === OBJ.PINE) {
+            if (World.obj[i] === OBJ.STUMP) {
+              World.obj[i] = OBJ.SAPLING;
+              rg.t = 55 + Math.random() * 30;
+              continue;
+            } else if (World.obj[i] === OBJ.SAPLING) {
+              World.obj[i] = rg.kind;
+              World.amt[i] = OBJ_AMT[rg.kind];
+            }
+          }
+          G.regrow.delete(i);
+        }
+      }
+    }
+
+    this.updateEffects(dt);
+
+    // ----- tutorial & defeat -----
+    UI.tutCheck();
+    if (G.villagers.length === 0 && G.state === 'playing') {
+      G.state = 'defeat';
+      this.log('The last light of Dawnhold goes out.', 'bad');
+      setTimeout(() => UI.endScreen('defeat'), 1600);
+    }
+  },
+
+  /* ---------------- phases ---------------- */
+  dusk() {
+    G.phase = 'dusk';
+    const n = this.waveSize(G.day);
+    if (n > 0) {
+      // pre-pick the attack direction(s) so the player can prepare (readable tactics)
+      G.nextSides = G.day >= 5 ? [U.irnd(0, 3), U.irnd(0, 3)] : [U.irnd(0, 3)];
+      const names = ['north', 'south', 'west', 'east'];
+      const dir = [...new Set(G.nextSides)].map(s => names[s]).join(' and ');
+      UI.toast(`The sun slips away. ${n} shapes stir to the ${dir}...`, 'bad');
+      this.log(`Dusk of day ${G.day} — ${n} shades gather to the ${dir}.`, 'bad');
+    } else if (G.diff === 'peaceful') {
+      UI.toast('Night falls. Peaceful valley — nothing stirs.', 'good');
+    }
+    // villagers seek shelter
+    for (const v of G.villagers) {
+      if (v.job === 'guard') continue;
+      v.state = 'shelter'; v.path = null; v.tgt = null; v.workB = null;
+    }
+    if (G.tut === 3) UI.tutAdvance(4);
+  },
+
+  night() {
+    G.phase = 'night';
+    const n = this.waveSize(G.day);
+    if (n > 0) {
+      const isFinal = G.finalNight;
+      let comps = [];
+      const total = isFinal ? Math.round(n * CONFIG.WAVE.final) : n;
+      for (let i = 0; i < total; i++) comps.push(this.rollType(G.day));
+      G.wave = { left: total, comps, t: 0, window: CONFIG.WAVE.spawnWindow };
+      G.stats.wavePeak = Math.max(G.stats.wavePeak, total);
+      if (isFinal) {
+        comps.push('lord');
+        G.finalNightDay = G.day;
+        UI.toast('THE LONG NIGHT — the horde answers the Beacon!', 'bad');
+        this.log('The Long Night begins. Everything the dark has, it sends.', 'bad');
+      } else {
+        this.log(`Night ${G.day} — the horde attacks.`, 'bad');
+      }
+    } else G.wave = null;
+  },
+
+  dawnPhase() {
+    G.phase = 'dawn';
+    G.wave = null;
+    // monsters burn away in sunlight
+    for (const m of G.monsters) {
+      m.burning = 2.2;
+      m.state = 'burn';
+    }
+    const dayBefore = G.day;
+    // victory requires surviving the actual final assault night
+    const survivedFinal = G.beaconLit && G.finalNightDay === dayBefore;
+    // day turnover happens as the sun crests
+    G.day++;
+    G.time = 0;
+
+    // heal villagers
+    for (const v of G.villagers) {
+      v.hp = Math.min(v.maxHp, v.hp + v.maxHp * CONFIG.V.dayHeal);
+      v.state = 'idle'; v.path = null; v.tgt = null; v.workB = null; v.fearT = 0;
+      v.starving = false; v.starveWarned = false;
+    }
+    G.stats.peakPop = Math.max(G.stats.peakPop, G.villagers.length);
+
+    // victory check
+    if (survivedFinal && G.finalNight && G.buildings.some(b => b.key === 'beacon' && b.built)) {
+      G.state = 'victory';
+      this.log('THE BEACON BLAZES. Dawn returns — forever.', 'magic');
+      setTimeout(() => UI.endScreen('victory'), 1800);
+      return;
+    }
+
+    // unlocks
+    let newU = [];
+    for (const k in BUILD) {
+      const d = BUILD[k];
+      if (!G.unlocks[k] && d.unlock > 0 && d.unlock <= G.day) { G.unlocks[k] = true; newU.push(d.name); }
+    }
+    if (!G.unlocks.__meteor && CONFIG.POWERS.meteor.unlockDay <= G.day) {
+      G.unlocks.__meteor = true; newU.push('Meteor (Powers)');
+    }
+    if (newU.length) {
+      UI.toast('Unlocked: ' + newU.join(', '), 'good');
+      this.log(`Word spreads — new craft learned: ${newU.join(', ')}.`, 'good');
+      UI.refreshAll();
+    }
+
+    // arrivals
+    this.arrivals();
+
+    this.log(`Dawn of day ${G.day}. ${G.villagers.length} souls, ${G.res.food} food in store.`, '');
+    UI.toast(`Day ${G.day} — the village stands.`, 'good');
+
+    if (G.settings.autosave) SaveSys.autosave();
+    if (G.tut === 1) UI.tutAdvance(2);
+  },
+
+  dayStart() {
+    G.phase = 'day';
+    // a little daytime texture: variety beats repetition (audit: Final Outpost)
+    if (G.day >= 2 && Math.random() < 0.30) this.dayEvent();
+  },
+
+  dayEvent() {
+    const roll = Math.random();
+    if (roll < 0.38) {
+      let n = 0;
+      for (let i = 0; i < World.obj.length; i++) {
+        if (World.obj[i] === OBJ.BUSH && World.amt[i] < OBJ_AMT[OBJ.BUSH]) { World.amt[i] = OBJ_AMT[OBJ.BUSH]; n++; }
+      }
+      if (n > 0) {
+        UI.toast('Overnight rain — every bush hangs heavy with berries!', 'good');
+        this.log('A good rain. The thickets hang heavy with berries.', 'good');
+      }
+    } else if (roll < 0.68 && G.day >= 3) {
+      const w = 10 + G.day * 2;
+      G.res.wood += w;
+      UI.toast(`Foragers drag home a storm-felled oak: +${w} wood.`, 'good');
+      this.log('A storm-felled oak yielded seasoned timber.', 'good');
+    } else if (roll < 0.86 && G.day >= 5 && G.monsters.length === 0) {
+      const n = U.irnd(2, 3);
+      for (let i = 0; i < n; i++) {
+        const p = World.edgePoint();
+        G.monsters.push(Entities.makeMonster('runner', p.x, p.y));
+      }
+      UI.toast('Unnatural gloom — a pack of runners stalks the valley in daylight!', 'bad');
+      this.log('Runners prowled in broad daylight. The dark grows bold.', 'bad');
+    } else {
+      const e = 10 + G.day;
+      G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + e);
+      UI.toast(`A pilgrim shares tales of the Light: +${e} essence.`, 'magic');
+      this.log('A pilgrim passed through, sharing tales of the Light.', 'magic');
+    }
+  },
+
+  waveSize(day) {
+    if (G.diffM.wave === 0) return 0;
+    return Math.min(CONFIG.WAVE.cap, Math.round((CONFIG.WAVE.base + CONFIG.WAVE.per * day) * G.diffM.wave));
+  },
+
+  rollType(day) {
+    const M = CONFIG.MONS;
+    let pool = [{ t: 'shade', w: 1 }];
+    if (day >= M.runner.from) pool.push({ t: 'runner', w: M.runner.w });
+    if (day >= M.brute.from) pool.push({ t: 'brute', w: M.brute.w });
+    if (day >= M.stalker.from) pool.push({ t: 'stalker', w: M.stalker.w });
+    let tot = pool.reduce((s, p) => s + p.w, 0);
+    let r = Math.random() * tot;
+    for (const p of pool) { r -= p.w; if (r <= 0) return p.t; }
+    return 'shade';
+  },
+
+  waveSpawn(dt) {
+    const w = G.wave;
+    w.t += dt;
+    const should = Math.min(w.comps.length, Math.floor(w.t / w.window * (w.comps.length + 2)));
+    while (w.left > 0 && G.monsters.length < 70 && w.comps.length - w.left < should) {
+      const type = w.comps[w.comps.length - w.left];
+      w.left--;
+      const p = World.edgePoint(type === 'lord' && G.nextSides ? [G.nextSides[0]] : G.nextSides);
+      const m = Entities.makeMonster(type, p.x, p.y);
+      G.monsters.push(m);
+      if (type === 'lord') { G.boss = m; UI.bossBar(m); UI.toast('A NIGHT LORD rises with the horde!', 'bad'); G.shake = Math.max(G.shake, 6); }
+    }
+    if (w.left <= 0 && G.monsters.length === 0) G.wave = null;
+  },
+
+  arrivals() {
+    const C = CONFIG.ARRIVE;
+    const cap = Buildings.housingCap();
+    const pop = G.villagers.length;
+    if (pop >= C.maxPop) return;
+    let arrived = [];
+    if (G.res.food >= C.foodNeed && pop < cap && Math.random() < C.chance) {
+      arrived.push(this.spawnArriver('A wanderer arrives from the wilds, seeking shelter.'));
+    }
+    if (G.day % C.everyN === 0 && cap - pop >= C.n && G.res.food >= C.foodNeed) {
+      for (let i = 0; i < C.n; i++) if (G.villagers.length < C.maxPop && G.villagers.length < Buildings.housingCap())
+        arrived.push(this.spawnArriver('Refugees flee the dark and join Dawnhold.'));
+    }
+    if (arrived.length) {
+      UI.toast(arrived[0], 'good');
+      this.reassign();
+    }
+  },
+
+  spawnArriver(msg) {
+    const p = World.edgePoint();
+    const v = Entities.makeVillager(p.x, p.y, 'idle', true);
+    G.villagers.push(v);
+    v.path = null;
+    this.log(`${v.name}${v.trait ? ' the ' + v.trait.name : ''} joins the settlement.`, 'good');
+    return msg;
+  },
+
+  /* ---------------- villager brain ---------------- */
+  updateVillager(v, dt) {
+    const C = CONFIG;
+    // hunger always ticks
+    v.hunger = Math.min(100, v.hunger + C.HUNGER.rate * dt);
+    if (v.hunger > C.HUNGER.mealAt && G.res.food >= C.HUNGER.mealCost) {
+      G.res.food -= C.HUNGER.mealCost;
+      v.hunger = Math.max(0, v.hunger - C.HUNGER.mealRestore);
+      this.float(v.x, v.y - .6, 'meal', '#e8a94b');
+    }
+    v.starving = v.hunger >= 99.5;
+    if (v.starving) {
+      v.hp -= C.HUNGER.starveDps * dt;
+      if (!v.starveWarned) { v.starveWarned = true; UI.toast(`${v.name} is starving!`, 'bad'); this.log(`${v.name} starves — the store is empty.`, 'bad'); }
+    } else if (v.hunger < 80) v.starveWarned = false;
+
+    if (v.atkCd > 0) v.atkCd -= dt;
+    if (v.fearT > 0) v.fearT -= dt;
+    v.aiT -= dt;
+    if (v.aiT <= 0) { v.aiT = 0.45 + Math.random() * 0.2; this.vThink(v); }
+
+    // movement
+    if (v.path && v.pi < v.path.length) {
+      const spd = Entities.villagerSpeed(v) * (v.state === 'flee' ? 1.25 : 1);
+      this.moveAlong(v, dt, spd);
+      v.anim += dt * 9;
+    } else {
+      v.anim = 0;
+      // working animation / progress
+      if (v.state === 'work' && (v.tgtTile || v.workB)) this.vWork(v, dt);
+    }
+  },
+
+  vThink(v) {
+    // arrivers walk to camp then join
+    if (v.state === 'arrive') {
+      if (!v.path) {
+        const c = World.center;
+        v.path = Path.find(v.x | 0, v.y | 0, c.x | 0, c.y | 0, { adjacent: true });
+        v.pi = 0;
+        if (!v.path) { v.state = 'idle'; }
+      }
+      if (!v.path || v.pi >= v.path.length) v.state = 'idle';
+      return;
+    }
+
+    // fear overrides work (non-guards)
+    if (v.job !== 'guard' && v.fearT <= 0) {
+      for (const m of G.monsters) {
+        if (!m.dead && U.dst2(v.x, v.y, m.x, m.y) < 12) {
+          v.fearT = 4.5; v.state = 'flee'; v.path = null;
+          break;
+        }
+      }
+    }
+
+    switch (v.state) {
+      case 'flee': {
+        if (v.fearT <= 0) { v.state = isNightLike() && v.job !== 'guard' ? 'shelter' : 'idle'; v.path = null; return; }
+        if (!v.path || v.pi >= v.path.length) {
+          // run to the store farthest from nearest monster
+          let m = null, bd = 1e9;
+          for (const mm of G.monsters) { const d = U.dst2(v.x, v.y, mm.x, mm.y); if (d < bd) { bd = d; m = mm; } }
+          let best = null, score = -1e9;
+          for (const s of Buildings.stores()) {
+            const sx = s.x + s.w / 2, sy = s.y + s.h / 2;
+            const sc = m ? U.dst2(m.x, m.y, sx, sy) - U.dst2(v.x, v.y, sx, sy) * .3 : 0;
+            if (sc > score) { score = sc; best = s; }
+          }
+          if (best) {
+            v.path = Path.find(v.x | 0, v.y | 0, (best.x + best.w / 2) | 0, (best.y + best.h / 2) | 0, { adjacent: true });
+            v.pi = 0;
+          }
+        }
+        return;
+      }
+      case 'shelter': {
+        if (!isNightLike()) { v.state = 'idle'; v.path = null; return; }
+        if (!v.path || v.pi >= v.path.length) {
+          const s = Buildings.nearestStore(v.x | 0, v.y | 0);
+          if (s && U.dst(v.x, v.y, s.x + s.w / 2, s.y + s.h / 2) > 2.2) {
+            v.path = Path.find(v.x | 0, v.y | 0, (s.x + s.w / 2) | 0, (s.y + s.h / 2) | 0, { adjacent: true });
+            v.pi = 0;
+          }
+        }
+        return;
+      }
+      case 'toWork': {
+        if (v.path && v.pi < v.path.length) return;
+        // arrived — verify target
+        this.vArriveWork(v);
+        return;
+      }
+      case 'toStore': {
+        if (v.path && v.pi < v.path.length) return;
+        // deposit
+        if (v.carry.amt > 0) {
+          G.res[v.carry.type] += v.carry.amt;
+          G.stats.gathered += v.carry.amt;
+          this.float(v.x, v.y - .7, '+' + v.carry.amt + ' ' + v.carry.type, v.carry.type === 'food' ? '#7dc95e' : v.carry.type === 'wood' ? '#c9964b' : '#a5a5ae');
+          v.carry.amt = 0; v.carry.type = null;
+        }
+        v.state = 'idle';
+        return;
+      }
+      case 'fight': {
+        const m = v.tgt;
+        if (!m || m.dead || m.hp <= 0 || U.dst(v.x, v.y, World.center.x, World.center.y) > CONFIG.GUARD.leash + 6) {
+          v.tgt = null; v.state = 'idle'; v.path = null; return;
+        }
+        const d = U.dst(v.x, v.y, m.x, m.y);
+        if (d < 1.0) {
+          v.path = null;
+          if (v.atkCd <= 0) {
+            v.atkCd = CONFIG.GUARD.atkT;
+            this.hitMonster(m, CONFIG.GUARD.dmg, v);
+            this.fx('spark', m.x, m.y, .25);
+          }
+        } else if (!v.path || v.pi >= v.path.length || (v.aiT > .3 && !v.path)) {
+          v.path = Path.find(v.x | 0, v.y | 0, m.x | 0, m.y | 0, { adjacent: true, monster: false });
+          v.pi = 0;
+        }
+        return;
+      }
+    }
+
+    // ----- idle: pick a task -----
+    if (v.state === 'work') return;
+    if (isNightLike() && v.job !== 'guard') { v.state = 'shelter'; return; }
+    let job = v.job;
+    // emergency forage
+    if (job === 'idle' && G.res.food < 8) job = 'forager';
+
+    if (job === 'guard') {
+      let best = null, bd = CONFIG.GUARD.aggro * CONFIG.GUARD.aggro;
+      for (const m of G.monsters) {
+        if (m.dead) continue;
+        const dm = U.dst2(v.x, v.y, m.x, m.y);
+        const dc = U.dst2(m.x, m.y, World.center.x, World.center.y);
+        if (dc < 30 * 30 && (dm < bd || dm < 64)) { bd = Math.min(bd, dm); best = m; }
+      }
+      if (best) { v.tgt = best; v.state = 'fight'; return; }
+      // idle patrol
+      if (Math.random() < .3) {
+        const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 3;
+        const tx = U.clamp((World.center.x + Math.cos(a) * r) | 0, 1, World.W - 2);
+        const ty = U.clamp((World.center.y + Math.sin(a) * r) | 0, 1, World.H - 2);
+        v.path = Path.find(v.x | 0, v.y | 0, tx, ty, { adjacent: true }); v.pi = 0;
+      }
+      return;
+    }
+
+    if (job === 'builder') {
+      // construction sites first
+      const sites = Buildings.unBuilt();
+      if (sites.length) {
+        let best = null, bd = 1e9;
+        for (const s of sites) {
+          const d = U.dst2(v.x, v.y, s.x + s.w / 2, s.y + s.h / 2) / (1 + s.progress * 2);
+          if (d < bd) { bd = d; best = s; }
+        }
+        // only 2 builders per site
+        const crew = G.villagers.filter(o => o !== v && o.state === 'work' && o.workB === best).length;
+        if (crew < 2 && this.sendToBuilding(v, best, 'build')) return;
+      }
+      // then repairs
+      const dmg = Buildings.damaged().filter(b => b.hp / b.maxHp < 0.75);
+      if (dmg.length) {
+        for (const b of dmg) {
+          if (this.repairable(b) && this.sendToBuilding(v, b, 'repair')) return;
+        }
+      }
+      return;
+    }
+
+    if (job === 'farmer') {
+      let ripe = null, grow = null;
+      for (const b of G.buildings) {
+        if (b.key !== 'farm' || !b.built) continue;
+        if (b.growth >= 1 && !ripe) ripe = b;
+        else if (b.growth < 0.92 && !grow) grow = b;
+      }
+      if (ripe) { if (this.sendToBuilding(v, ripe, 'harvest')) return; }
+      else if (grow) { if (this.sendToBuilding(v, grow, 'tend')) return; }
+      return;
+    }
+
+    // gatherers: forager / lumber / miner
+    if (job === 'forager' || job === 'lumber' || job === 'miner') {
+      const types = job === 'forager' ? [OBJ.BUSH] : job === 'lumber' ? [OBJ.TREE, OBJ.PINE] : [OBJ.ROCK];
+      const resType = job === 'forager' ? 'food' : job === 'lumber' ? 'wood' : 'stone';
+      if (v.carry.amt >= Entities.carryMax(v)) { this.sendToStore(v); return; }
+      const near = World.findNearestObj(v.x | 0, v.y | 0, types, 36);
+      if (near) {
+        const p = Path.find(v.x | 0, v.y | 0, near.x, near.y, { adjacent: true });
+        if (p) {
+          v.path = p; v.pi = 0;
+          v.state = 'toWork';
+          v.tgtTile = { x: near.x, y: near.y };
+          v.workKind = resType;
+          return;
+        }
+      }
+      // nothing in range — if carrying something, store it; else truly idle
+      if (v.carry.amt > 0) this.sendToStore(v);
+      return;
+    }
+  },
+
+  vArriveWork(v) {
+    if (v.workKind && v.tgtTile) {
+      const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
+      const want = v.workKind === 'food' ? OBJ.BUSH : v.workKind === 'wood' ? [OBJ.TREE, OBJ.PINE] : [OBJ.ROCK];
+      const ok = Array.isArray(want) ? want.includes(o) : o === want;
+      if (ok && World.amtAt(v.tgtTile.x, v.tgtTile.y) > 0) { v.state = 'work'; v.workT = 0; return; }
+      v.state = 'idle'; v.tgtTile = null;
+      return;
+    }
+    if (v.workB) {
+      const b = v.workB;
+      const alive = G.buildings.includes(b);
+      if (!alive) { v.workB = null; v.state = 'idle'; return; }
+      if (v.workMode === 'build' && !b.built) { v.state = 'work'; return; }
+      if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
+      if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
+      if (v.workMode === 'tend' && b.built && b.growth < 1) { v.state = 'work'; v.workT = 0; return; }
+      v.workB = null; v.state = 'idle';
+      return;
+    }
+    v.state = 'idle';
+  },
+
+  vWork(v, dt) {
+    const ws = Entities.workSpeed(v);
+    if (v.workKind && v.tgtTile) {
+      const { x, y } = v.tgtTile;
+      v.workT += dt * ws;
+      const jobKey = v.workKind === 'food' ? 'forager' : v.workKind === 'wood' ? 'lumber' : v.workKind === 'stone' ? 'miner' : v.job;
+      const interval = CONFIG.WORK_T[jobKey] || 0.9;
+      while (v.workT >= interval) {
+        v.workT -= interval;
+        const amt = World.amtAt(x, y);
+        if (amt <= 0) { v.state = 'idle'; v.tgtTile = null; break; }
+        World.amt[World.idx(x, y)] = amt - 1;
+        v.carry.type = v.workKind;
+        v.carry.amt++;
+        this.fx('spark', x + .5, y + .3, .2);
+        if (amt - 1 <= 0) {
+          World.deplete(x, y);
+          v.state = 'idle'; v.tgtTile = null;
+          break;
+        }
+        if (v.carry.amt >= Entities.carryMax(v)) { v.state = 'idle'; v.tgtTile = null; break; }
+      }
+      if (v.state === 'idle' && v.carry.amt > 0) this.sendToStore(v);
+      return;
+    }
+    const b = v.workB;
+    if (!b || !G.buildings.includes(b)) { v.workB = null; v.state = 'idle'; return; }
+    if (v.workMode === 'build' && !b.built) {
+      b.progress = Math.min(1, b.progress + dt * ws / b.def.time);
+      b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
+      if (b.progress >= 1) {
+        b.built = true; b.hp = b.maxHp;
+        this.fx('ring', b.x + b.w / 2, b.y + b.h / 2, .5);
+        if (b.key === 'beacon') this.beaconComplete(b);
+        else this.log(`${b.def.name} completed.`, 'good');
+        v.workB = null; v.state = 'idle';
+      }
+      return;
+    }
+    if (v.workMode === 'repair') {
+      if (b.hp >= b.maxHp) { v.workB = null; v.state = 'idle'; return; }
+      const hpBefore = b.hp;
+      b.hp = Math.min(b.maxHp, b.hp + CONFIG.REPAIR.rate * dt * ws);
+      b.repairDebt = (b.repairDebt || 0) + (b.hp - hpBefore);
+      while (b.repairDebt >= CONFIG.REPAIR.cost) {
+        b.repairDebt -= CONFIG.REPAIR.cost;
+        const rc = b.def.cost.wood ? 'wood' : 'stone';
+        if (G.res[rc] >= 1) G.res[rc] -= 1;
+        else { v.workB = null; v.state = 'idle'; return; }
+      }
+      return;
+    }
+    if (v.workMode === 'harvest' && b.growth >= 1) {
+      v.workT += dt * ws;
+      if (v.workT >= 1.4) {
+        b.growth = CONFIG.FARM.replant;
+        b.tendedT = 99;
+        v.carry.type = 'food';
+        v.carry.amt += CONFIG.FARM.yield;
+        this.fx('spark', b.x + 1, b.y + 1, .3);
+        v.workB = null; v.state = 'idle';
+        this.sendToStore(v);
+      }
+      return;
+    }
+    if (v.workMode === 'tend') {
+      b.tendedT = 0;
+      v.workT += dt;
+      if (v.workT > 7 || b.growth >= 1) { v.workB = null; v.state = 'idle'; }
+      return;
+    }
+    v.state = 'idle';
+  },
+
+  repairable(b) {
+    const rc = b.def.cost.wood ? 'wood' : 'stone';
+    return G.res[rc] >= 1;
+  },
+
+  sendToBuilding(v, b, mode) {
+    const tx = (b.x + b.w / 2) | 0, ty = (b.y + b.h / 2) | 0;
+    const p = Path.find(v.x | 0, v.y | 0, tx, ty, { adjacent: true });
+    if (!p) return false;
+    v.path = p; v.pi = 0;
+    v.state = 'toWork';
+    v.workB = b; v.workMode = mode; v.workKind = null; v.tgtTile = null;
+    if (mode === 'harvest' || mode === 'tend' || mode === 'build' || mode === 'repair') v.workT = 0;
+    return true;
+  },
+
+  sendToStore(v) {
+    const s = Buildings.nearestStore(v.x | 0, v.y | 0);
+    if (!s) return;
+    const p = Path.find(v.x | 0, v.y | 0, (s.x + s.w / 2) | 0, (s.y + s.h / 2) | 0, { adjacent: true });
+    if (!p) return;
+    v.path = p; v.pi = 0;
+    v.state = 'toStore';
+    v.tgtTile = null; v.workB = null;
+  },
+
+  /* ---------------- monsters ---------------- */
+  updateMonster(m, dt) {
+    if (m.burning > 0) {
+      m.burning -= dt;
+      m.hp -= 26 * dt;
+      if (Math.random() < dt * 6) this.fx('flame', m.x + (Math.random() - .5) * .6, m.y - Math.random() * .5, .4);
+      if (m.hp <= 0) { this.monsterDeath(m, 'dawn'); return; }
+      return;
+    }
+    if (m.atkCd > 0) m.atkCd -= dt;
+    m.aiT -= dt;
+    if (m.aiT <= 0) { m.aiT = 0.45 + Math.random() * 0.2; this.mThink(m); }
+
+    if (m.path && m.pi < m.path.length) {
+      // check if next waypoint is inside a solid building → attack it
+      const wp = m.path[m.pi];
+      const bt = World.bldAt(wp.x | 0, wp.y | 0);
+      if (bt && bt.built && bt.def.kind !== 'gate') {
+        const d = U.dst(m.x, m.y, wp.x, wp.y);
+        if (d < 1.25) {
+          if (m.atkCd <= 0) {
+            m.atkCd = m.atkT;
+            this.hitBuilding(bt, m.dmg * m.bld);
+          }
+          return;
+        }
+      }
+      this.moveAlong(m, dt, m.spd);
+      m.anim += dt * 8;
+    } else {
+      // direct attack checks when pathless/adjacent
+      if (m.tgtE && m.tgtE.hp > 0) {
+        const d = U.dst(m.x, m.y, m.tgtE.x, m.tgtE.y);
+        if (d < 1.0 && m.atkCd <= 0) {
+          m.atkCd = m.atkT;
+          this.hitVillager(m.tgtE, m.dmg);
+        }
+      }
+    }
+  },
+
+  mThink(m) {
+    // validate current targets
+    if (m.tgtE && (m.tgtE.hp <= 0 || !G.villagers.includes(m.tgtE))) m.tgtE = null;
+    if (m.tgtB && !G.buildings.includes(m.tgtB)) m.tgtB = null;
+
+    // pick target: stalker prefers villagers; others nearest villager then building
+    if (!m.tgtE && !m.tgtB) {
+      let bestV = null, bd = 1e9;
+      for (const v of G.villagers) {
+        const d = U.dst2(m.x, m.y, v.x, v.y);
+        if (d < bd) { bd = d; bestV = v; }
+      }
+      const preferV = m.type === 'stalker' || bd < 20 * 20;
+      if (bestV && preferV) m.tgtE = bestV;
+      else {
+        let bestB = null, bdd = 1e9;
+        for (const b of G.buildings) {
+          const d = U.dst2(m.x, m.y, b.x + b.w / 2, b.y + b.h / 2);
+          const w = b.key === 'camp' ? d * .6 : d; // drawn to the heart of the village
+          if (w < bdd) { bdd = w; bestB = b; }
+        }
+        if (bestB) m.tgtB = bestB;
+      }
+    }
+
+    // attack adjacent villager directly
+    if (m.tgtE) {
+      const d = U.dst(m.x, m.y, m.tgtE.x, m.tgtE.y);
+      if (d < 1.0) {
+        m.path = null;
+        if (m.atkCd <= 0) { m.atkCd = m.atkT; this.hitVillager(m.tgtE, m.dmg); }
+        return;
+      }
+    }
+
+    // (re)path
+    const goalE = m.tgtE;
+    const goalB = m.tgtB;
+    const gx = goalE ? goalE.x : goalB ? goalB.x + goalB.w / 2 : World.center.x;
+    const gy = goalE ? goalE.y : goalB ? goalB.y + goalB.h / 2 : World.center.y;
+    const needPath = !m.path || m.pi >= m.path.length || (m.pathT = (m.pathT || 0) + .5) > 2.5;
+    if (needPath) {
+      m.pathT = 0;
+      const p = Path.find(m.x | 0, m.y | 0, gx | 0, gy | 0, { adjacent: true, monster: true });
+      if (p) { m.path = p; m.pi = 0; }
+      else {
+        // fully sealed & unpathable — batter nearest wall
+        let best = null, bd = 1e9;
+        for (const b of G.buildings) {
+          if (!b.built || b.def.kind === 'torch' || b.def.kind === 'shrine') {
+            // torches/shrines get smashed too, but walls first
+          }
+          const d = U.dst2(m.x, m.y, b.x + b.w / 2, b.y + b.h / 2);
+          if (d < bd) { bd = d; best = b; }
+        }
+        m.tgtB = best; m.tgtE = null;
+        const p2 = best ? Path.find(m.x | 0, m.y | 0, (best.x + best.w / 2) | 0, (best.y + best.h / 2) | 0, { adjacent: true, monster: true }) : null;
+        if (p2) { m.path = p2; m.pi = 0; }
+      }
+    }
+  },
+
+  /* ---------------- combat ---------------- */
+  hitVillager(v, dmg) {
+    v.hp -= dmg;
+    v.fearT = Math.max(v.fearT, 4);
+    if (v.job !== 'guard') { v.state = 'flee'; v.path = null; }
+    this.fx('spark', v.x, v.y - .3, .25);
+    if (v.hp <= 0) this.villagerDeath(v, 'the horde');
+  },
+
+  hitMonster(m, dmg, src) {
+    m.hp -= dmg;
+    m.flash = .12;
+    if (m.hp <= 0) this.monsterDeath(m, 'slain');
+  },
+
+  monsterDeath(m, how) {
+    if (m.dead) return;
+    m.dead = true;
+    const ess = how === 'dawn' ? Math.ceil(m.ess / 2) : m.ess;
+    G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + ess);
+    G.stats.kills++;
+    this.float(m.x, m.y - .5, '+' + ess + ' essence', '#b48ae0');
+    for (let i = 0; i < 4; i++) this.fx('spark', m.x + (Math.random() - .5) * .8, m.y - Math.random() * .6, .35);
+    if (G.sel && G.sel.ref === m) { G.sel = null; UI.selHide(); }
+    if (G.boss === m) {
+      G.boss = null; UI.bossBar(null);
+      UI.toast('The Night Lord crumbles to ash!', 'good');
+      this.log('The Night Lord is destroyed by the defenders of Dawnhold!', 'good');
+      G.shake = Math.max(G.shake, 8);
+    }
+  },
+
+  villagerDeath(v, cause) {
+    const i = G.villagers.indexOf(v);
+    if (i < 0) return;
+    G.villagers.splice(i, 1);
+    G.stats.deaths++;
+    this.fx('corpse', v.x, v.y, 2.2, { look: v.look });
+    this.log(`${v.name}${v.trait ? ' the ' + v.trait.name : ''} (${v.job}) was lost to ${cause}.`, 'bad');
+    UI.toast(`${v.name} has died — ${cause}.`, 'bad');
+    if (G.follow === v) G.follow = null;
+    if (G.sel && G.sel.ref === v) { G.sel = null; UI.selHide(); }
+    this.reassign();
+  },
+
+  hitBuilding(b, dmg) {
+    if (!b || !G.buildings.includes(b)) return;
+    b.hp -= dmg;
+    this.fx('spark', b.x + b.w / 2 + (Math.random() - .5), b.y + b.h / 2 - Math.random(), .2);
+    if (b.hp <= 0) {
+      const wasStore = b.def.kind === 'store';
+      const wasBeacon = b.key === 'beacon';
+      this.fx('smoke', b.x + b.w / 2, b.y + b.h / 2, 1.0);
+      G.shake = Math.max(G.shake, 3);
+      Buildings.demolish(b, true);
+      if (wasBeacon) {
+        G.beaconLit = false;
+        UI.toast('THE BEACON HAS FALLEN! Rebuild it and try again.', 'bad');
+        this.log('The Great Beacon was smashed by the horde.', 'bad');
+      } else {
+        this.log(`${b.def.name} was destroyed.`, 'bad');
+      }
+    }
+  },
+
+  shootTower(b, m) {
+    const st = b.def.atk;
+    this.fx('arrow', b.x + .5, b.y - .6, .16, { tx: m.x, ty: m.y });
+    this.hitMonster(m, st.dmg);
+  },
+
+  beaconComplete(b) {
+    G.finalNight = true;
+    G.beaconLit = true;
+    b.lit = true;
+    UI.toast('THE BEACON IS LIT! Survive the Long Night to win.', 'magic');
+    this.log('The Great Beacon is lit. Its flame calls to the dark — everything comes, tonight.', 'magic');
+    G.shake = Math.max(G.shake, 6);
+    UI.refreshAll();
+  },
+
+  /* ---------------- helpers ---------------- */
+  moveAlong(e, dt, spd) {
+    if (!e.path || e.pi >= e.path.length) return;
+    let step = spd * dt;
+    while (step > 0 && e.pi < e.path.length) {
+      const wp = e.path[e.pi];
+      const d = U.dst(e.x, e.y, wp.x, wp.y);
+      if (d <= step || d < 0.03) {
+        e.x = wp.x; e.y = wp.y; e.pi++; step -= d;
+      } else {
+        e.x += (wp.x - e.x) / d * step;
+        e.y += (wp.y - e.y) / d * step;
+        e.facing = wp.x >= e.x ? 1 : -1;
+        step = 0;
+      }
+    }
+    // stuck watch
+    const d2 = e.pi < e.path.length ? U.dst2(e.x, e.y, e.path[e.pi].x, e.path[e.pi].y) : 0;
+    if (d2 > e.lastD - 0.0004 && e.pi < e.path.length) {
+      e.stuckT += dt;
+      if (e.stuckT > 1.4) { e.stuckT = 0; e.path = null; e.pi = 0; } // force rethink
+    } else { e.stuckT = 0; }
+    e.lastD = d2;
+  },
+
+  separate() {
+    const all = G.villagers;
+    const mons = G.monsters;
+    // push villagers apart so they don't stack
+    for (let i = 0; i < all.length; i++) {
+      const a = all[i];
+      for (let j = i + 1; j < all.length; j++) {
+        const b = all[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        if (Math.abs(dx) > .5 || Math.abs(dy) > .5) continue;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < .16 && d2 > 0.0001) {
+          const d = Math.sqrt(d2), push = (0.4 - d) * .5;
+          const ux = dx / d, uy = dy / d;
+          a.x -= ux * push; a.y -= uy * push;
+          b.x += ux * push; b.y += uy * push;
+        }
+      }
+    }
+    // keep monsters from perfectly stacking
+    for (let i = 0; i < mons.length; i++) {
+      const a = mons[i];
+      for (let j = i + 1; j < mons.length; j++) {
+        const b = mons[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        if (Math.abs(dx) > .6 || Math.abs(dy) > .6) continue;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < .2 && d2 > 0.0001) {
+          const d = Math.sqrt(d2), push = (0.45 - d) * .5;
+          const ux = dx / d, uy = dy / d;
+          a.x -= ux * push; a.y -= uy * push;
+          b.x += ux * push; b.y += uy * push;
+        }
+      }
+    }
+  },
+
+  fx(type, x, y, dur, extra) {
+    if (!G.settings.fx && (type === 'spark' || type === 'flame')) return;
+    G.effects.push(Object.assign({ type, x, y, t: 0, dur }, extra || {}));
+  },
+
+  float(x, y, text, col) {
+    G.floaters.push({ x, y, text, col: col || '#fff', t: 0 });
+  },
+
+  updateEffects(dt) {
+    for (let i = G.effects.length - 1; i >= 0; i--) {
+      const e = G.effects[i];
+      e.t += dt;
+      if (e.type === 'meteor' && !e.impactDone && e.t >= e.dur * 0.55) {
+        e.impactDone = true;
+        G.shake = Math.max(G.shake, 7);
+        Powers.meteorBoom(e.x, e.y);
+      }
+      if (e.t >= e.dur) G.effects.splice(i, 1);
+    }
+    for (let i = G.floaters.length - 1; i >= 0; i--) {
+      const f = G.floaters[i];
+      f.t += dt;
+      if (f.t > 1.3) G.floaters.splice(i, 1);
+    }
+    if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 12);
+  },
+
+  log(txt, k) {
+    G.chronicle.push({ d: G.day, txt, k: k || '' });
+    if (G.chronicle.length > 120) G.chronicle.shift();
+  },
+
+  reassign() {
+    // distribute villagers to match G.jobs counts, keeping current assignees first
+    const order = JOBS.filter(j => j !== 'idle');
+    for (const job of order) {
+      let have = G.villagers.filter(v => v.job === job);
+      const want = G.jobs[job] || 0;
+      if (have.length > want) {
+        for (let i = have.length - 1; i >= want; i--) this.setJob(have[i], 'idle');
+      } else if (have.length < want) {
+        const pool = G.villagers.filter(v => v.job === 'idle');
+        for (let i = 0; i < want - have.length && i < pool.length; i++) this.setJob(pool[i], job);
+      }
+    }
+  },
+
+  setJob(v, job) {
+    if (v.job === job) return;
+    v.job = job;
+    v.look.cloth = JOB_INFO[job].cloth;
+    v.look.guard = job === 'guard';
+    v.state = 'idle'; v.path = null; v.tgt = null; v.tgtTile = null; v.workB = null; v.workKind = null;
+    if (v.carry.amt > 0) { /* keep carry, will store on next think */ }
+  },
+
+  speedSet(n) {
+    G.speed = n; G.paused = n === 0;
+    UI.syncSpeedBtns();
+  },
+};
+
+// ---- debug/test hooks (also handy for tinkering) ----
+window.DBG = {
+  res(k, n) { G.res[k] += n; UI.updateHUD(); },
+  dusk() { if (G.phase === 'day') { G.time = CONFIG.DAY_LEN - 0.01; } },
+  night() { DBG.dusk(); },
+  day(n) { G.day = n; },
+  wave(n) {
+    const cnt = n || 8;
+    for (let i = 0; i < cnt; i++) { const p = World.edgePoint(); G.monsters.push(Entities.makeMonster(DBG.rollP(), p.x, p.y)); }
+  },
+  rollP() { return U.choice(['shade', 'shade', 'runner', 'brute', 'stalker']); },
+  vill(n) { for (let i = 0; i < (n || 3); i++) G.villagers.push(Entities.makeVillager(World.W / 2 + U.irnd(-3, 3), World.H / 2 + U.irnd(-3, 3), 'idle')); Sim.reassign(); },
+  build(key, tx, ty) { return Buildings.place(key, tx, ty); },
+  save() { SaveSys.save('auto'); },
+};
+;
+
+/* ===== Bundled from js/powers.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — powers.js
+   Guardian powers fueled by Essence: Mend, Smite, Meteor.
+   ============================================================ */
+
+const POWERS = {
+  mend: {
+    name: 'Mend', cost: CONFIG.POWERS.mend.cost, icon: 'essence', target: 'friendly',
+    desc: `Heal a villager, wall or tower for ${CONFIG.POWERS.mend.heal} health. Costs ${CONFIG.POWERS.mend.cost} essence.`,
+  },
+  smite: {
+    name: 'Smite', cost: CONFIG.POWERS.smite.cost, icon: 'spark', target: 'area', r: CONFIG.POWERS.smite.r,
+    desc: `Holy light burns ${CONFIG.POWERS.smite.dmg} damage in a small circle — wipes out shades. Costs ${CONFIG.POWERS.smite.cost} essence.`,
+  },
+  meteor: {
+    name: 'Meteor', cost: CONFIG.POWERS.meteor.cost, icon: 'meteor', target: 'area', r: CONFIG.POWERS.meteor.r, unlockDay: CONFIG.POWERS.meteor.unlockDay,
+    desc: `Call a falling star: ${CONFIG.POWERS.meteor.dmg} damage in a wide circle. Costs ${CONFIG.POWERS.meteor.cost} essence.`,
+  },
+};
+
+const Powers = {
+  unlocked(key) {
+    const p = POWERS[key];
+    if (!p) return false;
+    if (key === 'meteor') return G.day >= p.unlockDay || G.unlocks.__meteor || G.unlocks['__meteor'];
+    return true;
+  },
+  canAfford(key) { return G.res.essence >= POWERS[key].cost; },
+
+  cast(key, wx, wy) {
+    const p = POWERS[key];
+    if (!p || !this.unlocked(key) || !this.canAfford(key)) return false;
+    const C = CONFIG.POWERS[key];
+    if (key === 'mend') {
+      // nearest friendly entity within 1 tile
+      let healed = false;
+      let bestV = null, bd = 1.4;
+      for (const v of G.villagers) {
+        const d = U.dst(wx, wy, v.x, v.y);
+        if (d < bd) { bd = d; bestV = v; }
+      }
+      if (bestV && bestV.hp < bestV.maxHp) {
+        bestV.hp = Math.min(bestV.maxHp, bestV.hp + C.heal);
+        Sim.float(bestV.x, bestV.y - .8, '+' + C.heal, '#7dc95e');
+        healed = true;
+      } else {
+        let bestB = null, bbd = 1.6;
+        for (const b of G.buildings) {
+          if (!b.built) continue;
+          const d = U.dst(wx, wy, b.x + b.w / 2, b.y + b.h / 2) - (b.w + b.h) / 4;
+          if (d < bbd && b.hp < b.maxHp) { bbd = d; bestB = b; }
+        }
+        if (bestB) {
+          bestB.hp = Math.min(bestB.maxHp, bestB.hp + C.heal);
+          Sim.float(bestB.x + bestB.w / 2, bestB.y, '+' + C.heal, '#7dc95e');
+          healed = true;
+        }
+      }
+      if (!healed) { UI.toast('Nothing wounded to mend here.', ''); return false; }
+      Sim.fx('ring', wx, wy, .5, { col: '#7dc95e' });
+    } else if (key === 'smite') {
+      Sim.fx('ring', wx, wy, .5, { col: '#ffe9a0', r: C.r });
+      Sim.float(wx, wy - .8, 'SMITE', '#ffe9a0');
+      for (const m of G.monsters) {
+        if (U.dst(wx, wy, m.x, m.y) <= C.r) Sim.hitMonster(m, C.dmg);
+      }
+      G.shake = Math.max(G.shake, 2.5);
+    } else if (key === 'meteor') {
+      Sim.fx('meteor', wx, wy, 1.0, { r: C.r, dmg: C.dmg });
+      return true; // essence deducted, boom comes on impact
+    }
+    G.res.essence -= p.cost;
+    return true;
+  },
+
+  meteorBoom(x, y) {
+    const C = CONFIG.POWERS.meteor;
+    Sim.fx('ring', x, y, .6, { col: '#ff9a2e', r: C.r + .4 });
+    Sim.float(x, y - .8, 'BOOM', '#ff9a2e');
+    for (let i = 0; i < 8; i++) Sim.fx('flame', x + (Math.random() - .5) * C.r * 1.6, y + (Math.random() - .5) * C.r * 1.2, .5);
+    for (const m of G.monsters) {
+      if (U.dst(x, y, m.x, m.y) <= C.r) Sim.hitMonster(m, C.dmg);
+    }
+    UI.updateHUD();
+  },
+};
+;
+
+/* ===== Bundled from js/save.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — save.js
+   localStorage saves: 1 autosave + 3 manual slots.
+   World arrays are serialized verbatim (roads & depletion must
+   persist); villagers keep their identity (names, traits, looks).
+   ============================================================ */
+
+const SaveSys = {
+  KEY: 'dawnhold_save_',
+  ver: CONFIG.SAVE_V,
+
+  serialize() {
+    return {
+      v: this.ver,
+      seed: G.seed, day: G.day, time: G.time, phase: G.phase,
+      diff: G.diff, res: { ...G.res },
+      jobs: { ...G.jobs },
+      unlocks: { ...G.unlocks },
+      stats: { ...G.stats },
+      chronicle: G.chronicle.slice(-60),
+      tut: G.tut, tutOn: G.tutOn,
+      settings: { ...G.settings },
+      finalNight: G.finalNight, beaconLit: G.beaconLit, finalNightDay: G.finalNightDay || 0,
+      wave: G.wave ? { left: G.wave.left, comps: G.wave.comps, t: G.wave.t, window: G.wave.window } : null,
+      cam: { x: G.cam.x, y: G.cam.y, z: G.cam.z },
+      nextId: _id,
+      world: {
+        t: Array.from(World.t), obj: Array.from(World.obj), amt: Array.from(World.amt),
+        regrow: Array.from(G.regrow.entries()),
+      },
+      buildings: G.buildings.map(b => ({
+        key: b.key, x: b.x, y: b.y, hp: b.hp, built: b.built, progress: b.progress,
+        growth: b.growth, lit: b.lit,
+      })),
+      villagers: G.villagers.map(v => ({
+        name: v.name, trait: v.trait ? v.trait.key : null, look: { ...v.look },
+        job: v.job, x: v.x, y: v.y, hp: v.hp, maxHp: v.maxHp, hunger: v.hunger, state: v.state === 'arrive' ? 'arrive' : 'idle',
+        carry: { type: v.carry.type, amt: v.carry.amt },
+      })),
+      monsters: G.monsters.map(m => ({
+        type: m.type, x: m.x, y: m.y, hp: m.hp, burning: m.burning > 0,
+      })),
+    };
+  },
+
+  save(slot) {
+    try {
+      const data = this.serialize();
+      data.when = Date.now();
+      localStorage.setItem(this.KEY + slot, JSON.stringify(data));
+      if (slot !== 'auto') UI.toast('Game saved.', 'good');
+      return true;
+    } catch (e) {
+      UI.toast('Save failed (storage full?)', 'bad');
+      return false;
+    }
+  },
+
+  autosave() { this.save('auto'); },
+
+  readMeta(slot) {
+    try {
+      const raw = localStorage.getItem(this.KEY + slot);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return { day: d.day, diff: d.diff, pop: (d.villagers || []).length, when: d.when || 0, v: d.v };
+    } catch (e) { return null; }
+  },
+
+  has(slot) { return !!localStorage.getItem(this.KEY + slot); },
+
+  del(slot) { localStorage.removeItem(this.KEY + slot); },
+
+  load(slot) {
+    let d;
+    try { d = JSON.parse(localStorage.getItem(this.KEY + slot)); } catch (e) { return false; }
+    if (!d || d.v !== this.ver) { UI.toast('Save is incompatible.', 'bad'); return false; }
+
+    G.state = 'playing';
+    G.seed = d.seed; G.day = d.day; G.time = d.time; G.phase = d.phase;
+    G.diff = d.diff in CONFIG.DIFF ? d.diff : 'normal';
+    G.diffM = CONFIG.DIFF[G.diff];
+    G.res = { ...d.res };
+    G.jobs = { ...d.jobs };
+    G.unlocks = d.unlocks || {};
+    G.stats = { ...d.stats };
+    G.chronicle = d.chronicle || [];
+    G.tut = d.tut || 0; G.tutOn = !!d.tutOn;
+    G.settings = Object.assign({ fx: true, autosave: true }, d.settings);
+    G.finalNight = !!d.finalNight; G.beaconLit = !!d.beaconLit; G.finalNightDay = d.finalNightDay || 0;
+    G.wave = d.wave ? { ...d.wave } : null;
+    G.cam = { x: d.cam.x, y: d.cam.y, z: d.cam.z };
+    _id = d.nextId || 1000;
+
+    World.adopt(d.world);
+    G.regrow = new Map(d.world.regrow);
+
+    Buildings.byIdMap.clear();
+    G.buildings = [];
+    for (const bs of d.buildings) {
+      const b = Buildings.create(bs.key, bs.x, bs.y, bs.built);
+      b.hp = bs.hp; b.progress = bs.progress; b.growth = bs.growth; b.lit = !!bs.lit;
+      if (!b.built) b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
+    }
+
+    G.villagers = d.villagers.map(vs => {
+      const tr = TRAITS.find(t => t.key === vs.trait) || null;
+      const v = {
+        kind: 'v', id: NID(), name: vs.name, trait: tr,
+        look: vs.look, job: vs.job,
+        x: vs.x, y: vs.y, hp: vs.hp, maxHp: vs.maxHp || CONFIG.V.hp,
+        hunger: vs.hunger, state: vs.state, path: null, pi: 0, anim: 0,
+        tgt: null, tgtTile: null, workT: 0, workB: null,
+        carry: { type: vs.carry ? vs.carry.type : null, amt: vs.carry ? vs.carry.amt : 0 },
+        atkCd: 0, fearT: 0, stuckT: 0, lastD: 1e9, aiT: Math.random() * .5,
+        ate: false, starveWarned: false,
+      };
+      return v;
+    });
+
+    G.monsters = (d.monsters || []).map(ms => {
+      const m = Entities.makeMonster(ms.type, ms.x, ms.y);
+      m.hp = Math.min(m.maxHp, ms.hp);
+      if (ms.burning) m.burning = 1.5;
+      if (ms.type === 'lord') { G.boss = m; }
+      return m;
+    });
+    UI.bossBar(G.boss);
+
+    G.effects = []; G.floaters = [];
+    G.sel = null; G.follow = null; G.speed = 1; G.paused = false;
+    UI.refreshAll();
+    UI.toast(`Day ${G.day} — the story continues.`, 'good');
+    return true;
+  },
+};
+;
+
+/* ===== Bundled from js/render.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — render.js
+   Canvas renderer: camera, y-sorted world, water shimmer,
+   fireflies, night lighting (dark overlay with light holes),
+   effects, placement ghosts, minimap.
+   ============================================================ */
+
+const Render = {
+  cv: null, ctx: null, lightCv: null, lctx: null,
+  cw: 0, ch: 0, dpr: 1,
+  fireflies: [], _mmT: 0, _t: 0,
+
+  init() {
+    this.cv = document.getElementById('game');
+    this.ctx = this.cv.getContext('2d');
+    this.lightCv = document.createElement('canvas');
+    this.lctx = this.lightCv.getContext('2d');
+    this.resize();
+  },
+
+  resize() {
+    const vv = window.visualViewport;
+    this.cw = Math.round(vv ? vv.width : window.innerWidth);
+    this.ch = Math.round(vv ? vv.height : window.innerHeight);
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.cv.width = Math.round(this.cw * this.dpr);
+    this.cv.height = Math.round(this.ch * this.dpr);
+    this.lightCv.width = this.cv.width;
+    this.lightCv.height = this.cv.height;
+    this.ctx.imageSmoothingEnabled = false;
+  },
+
+  worldToScreen(wx, wy) {
+    return {
+      x: (wx - G.cam.x) * G.cam.z + this.cw / 2,
+      y: (wy - G.cam.y) * G.cam.z + this.ch / 2,
+    };
+  },
+  screenToWorld(sx, sy) {
+    return {
+      x: (sx - this.cw / 2) / G.cam.z + G.cam.x,
+      y: (sy - this.ch / 2) / G.cam.z + G.cam.y,
+    };
+  },
+
+  clampCam() {
+    const mw = World.W * CONFIG.TILE, mh = World.H * CONFIG.TILE;
+    const vw = this.cw / G.cam.z / 2, vh = this.ch / G.cam.z / 2;
+    G.cam.x = U.clamp(G.cam.x, Math.min(vw, mw / 2), Math.max(mw - vw, mw / 2));
+    G.cam.y = U.clamp(G.cam.y, Math.min(vh, mh / 2), Math.max(mh - vh, mh / 2));
+  },
+
+  frame(dt) {
+    this._t += dt;
+    const ctx = this.ctx;
+    // camera follow
+    if (G.follow) { G.cam.x = U.lerp(G.cam.x, G.follow.x * 16, Math.min(1, dt * 5)); G.cam.y = U.lerp(G.cam.y, G.follow.y * 16, Math.min(1, dt * 5)); }
+    this.clampCam();
+    const shX = G.shake > 0 ? (Math.random() - .5) * G.shake : 0;
+    const shY = G.shake > 0 ? (Math.random() - .5) * G.shake : 0;
+
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = '#0c0e14';
+    ctx.fillRect(0, 0, this.cw, this.ch);
+
+    ctx.translate(this.cw / 2 + shX, this.ch / 2 + shY);
+    ctx.scale(G.cam.z, G.cam.z);
+    ctx.translate(-G.cam.x, -G.cam.y);
+
+    // visible tile range
+    const z = G.cam.z;
+    const x0 = Math.max(0, ((G.cam.x - this.cw / 2 / z) / 16 | 0) - 1);
+    const y0 = Math.max(0, ((G.cam.y - this.ch / 2 / z) / 16 | 0) - 1);
+    const x1 = Math.min(World.W - 1, ((G.cam.x + this.cw / 2 / z) / 16 | 0) + 2);
+    const y1 = Math.min(World.H - 1, ((G.cam.y + this.ch / 2 / z) / 16 | 0) + 3);
+
+    ctx.drawImage(World.bakeCv, 0, 0);
+    this.waterSparkle(x0, y0, x1, y1);
+
+    // ---- gather y-sorted drawables ----
+    const draws = [];
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const o = World.obj[World.idx(tx, ty)];
+        if (!o || o === OBJ.FLOWER) continue;
+        let spr = null;
+        const h = U.hash2(tx, ty);
+        switch (o) {
+          case OBJ.TREE: spr = Art.s['tree' + ((h * 2) | 0)]; break;
+          case OBJ.PINE: spr = Art.s['pine' + ((h * 2) | 0)]; break;
+          case OBJ.BUSH: spr = World.amt[World.idx(tx, ty)] > 0 ? Art.s.bushF : Art.s.bushE; break;
+          case OBJ.ROCK: spr = Art.s['rock' + ((h * 2) | 0)]; break;
+          case OBJ.STUMP: spr = Art.s.stump; break;
+          case OBJ.SAPLING: spr = Art.s.sapling; break;
+        }
+        if (spr) draws.push({ y: ty * 16 + 16, fn: () => ctx.drawImage(spr, tx * 16, ty * 16) });
+      }
+      // flowers drawn flat (no sort needed)
+      for (let tx = x0; tx <= x1; tx++) {
+        if (World.obj[World.idx(tx, ty)] === OBJ.FLOWER) {
+          const spr = Art.s['flw' + ((U.hash2(tx, ty) * 2) | 0)];
+          ctx.drawImage(spr, tx * 16, ty * 16);
+        }
+      }
+    }
+
+    // buildings
+    for (const b of G.buildings) {
+      if (b.x > x1 || b.y > y1 || b.x + b.w < x0 || b.y + b.h < y0) continue;
+      draws.push({ y: (b.y + b.h) * 16, fn: () => this.drawBuilding(ctx, b) });
+    }
+    // villagers
+    for (const v of G.villagers) {
+      if (v.x * 16 < (x0 - 2) * 16 || v.x * 16 > (x1 + 2) * 16 || v.y * 16 < (y0 - 2) * 16 || v.y * 16 > (y1 + 2) * 16) continue;
+      draws.push({ y: v.y * 16, fn: () => this.drawVillager(ctx, v) });
+    }
+    // monsters
+    for (const m of G.monsters) {
+      if (m.x * 16 < (x0 - 3) * 16 || m.x * 16 > (x1 + 3) * 16 || m.y * 16 < (y0 - 3) * 16 || m.y * 16 > (y1 + 3) * 16) continue;
+      draws.push({ y: m.y * 16, fn: () => this.drawMonster(ctx, m) });
+    }
+
+    draws.sort((a, b) => a.y - b.y);
+    for (const d of draws) d.fn();
+
+    this.drawEffects(ctx);
+    this.drawGhost(ctx, x0, y0, x1, y1);
+
+    // ---- screen-space passes ----
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.lighting(shX, shY);
+    this.drawFloaters(shX, shY);
+  },
+
+  waterSparkle(x0, y0, x1, y1) {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(200,230,255,.5)';
+    const tf = (this._t * 1.5) | 0;
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const i = World.idx(tx, ty);
+        if (World.t[i] !== T.WATER) continue;
+        const h = U.hash2(tx + tf, ty);
+        if (h < .16) {
+          const px = tx * 16 + ((U.hash2(tx, ty + tf) * 13) | 0) + 1;
+          const py = ty * 16 + ((h * 60) | 0) % 15;
+          ctx.fillRect(px, py, 2, 1);
+        }
+      }
+    }
+  },
+
+  drawBuilding(ctx, b) {
+    const px = b.x * 16, py = (b.y + b.h) * 16; // anchor bottom of footprint
+    let spr;
+    if (b.key === 'farm') {
+      const st = b.growth >= 1 ? 3 : b.growth > .55 ? 2 : b.growth > .18 ? 1 : 0;
+      spr = Art.s['farm' + st];
+    } else if (b.key === 'torch') spr = Art.s['torch' + (((this._t * 6) | 0) % 2)];
+    else spr = Art.s[b.key];
+
+    if (!b.built) {
+      // scaffold tiling + phantom building
+      ctx.globalAlpha = 0.85;
+      for (let dy = 0; dy < b.h; dy++)
+        for (let dx = 0; dx < b.w; dx++) ctx.drawImage(Art.s.site, (b.x + dx) * 16, (b.y + dy) * 16);
+      ctx.globalAlpha = 0.45;
+      if (spr && spr.height > b.h * 16) ctx.drawImage(spr, px, py - spr.height);
+      else if (spr) ctx.drawImage(spr, px, py - b.h * 16);
+      ctx.globalAlpha = 1;
+      // progress bar
+      const bw = b.w * 16 - 4;
+      ctx.fillStyle = '#0d0f15';
+      ctx.fillRect(px + 2, py - b.h * 16 - 4, bw, 3);
+      ctx.fillStyle = '#6fb3e0';
+      ctx.fillRect(px + 2, py - b.h * 16 - 4, bw * b.progress, 3);
+      return;
+    }
+    if (spr) {
+      const hgt = spr.height > b.h * 16 ? spr.height : b.h * 16;
+      ctx.drawImage(spr, px, py - hgt);
+    }
+    if (b.key === 'beacon' && b.lit) {
+      const f = Art.s['beaconF' + (((this._t * 5) | 0) % 2)];
+      if (f) ctx.drawImage(f, px, py - 72);
+    }
+    // damage cracks/health bar
+    if (b.hp < b.maxHp - 1) {
+      const ratio = U.clamp(b.hp / b.maxHp, 0, 1);
+      const bw = b.w * 16 - 4;
+      ctx.fillStyle = 'rgba(13,15,21,.8)';
+      ctx.fillRect(px + 2, py - b.h * 16 - 3, bw, 2.5);
+      ctx.fillStyle = ratio > .5 ? '#7dc95e' : ratio > .25 ? '#e8a94b' : '#e05555';
+      ctx.fillRect(px + 2, py - b.h * 16 - 3, bw * ratio, 2.5);
+    }
+  },
+
+  drawVillager(ctx, v) {
+    const px = v.x * 16 - 8, py = v.y * 16 - 14;
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,.28)';
+    ctx.beginPath();
+    ctx.ellipse(v.x * 16, v.y * 16 + 1, 5, 2.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const frame = v.path && v.pi < v.path.length ? 1 + ((v.anim | 0) % 2) : 0;
+    const spr = Art.villager(v.look, frame);
+    ctx.drawImage(spr, px | 0, py | 0);
+    // carry icon
+    if (v.carry.amt > 0) {
+      const ic = v.carry.type === 'wood' ? Art.s.carryWood : v.carry.type === 'stone' ? Art.s.carryStone : Art.s.carryFood;
+      ctx.drawImage(ic, (v.x * 16 - 3) | 0, (v.y * 16 - 24) | 0);
+    }
+    // hp
+    if (v.hp < v.maxHp - 1) {
+      const ratio = U.clamp(v.hp / v.maxHp, 0, 1);
+      ctx.fillStyle = 'rgba(13,15,21,.8)';
+      ctx.fillRect(px + 2, py - 4, 12, 2);
+      ctx.fillStyle = ratio > .4 ? '#7dc95e' : '#e05555';
+      ctx.fillRect(px + 2, py - 4, 12 * ratio, 2);
+    }
+    // hunger pip
+    if (v.hunger > 85) {
+      ctx.fillStyle = '#e8a94b';
+      ctx.fillRect(px + 7, py - 8, 2, 3);
+    }
+    if (G.sel && G.sel.kind === 'v' && G.sel.ref === v) {
+      ctx.strokeStyle = '#ffe9a0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(v.x * 16, v.y * 16, 9, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  },
+
+  drawMonster(ctx, m) {
+    const big = m.type === 'lord';
+    const spr = Art.monster(m.type, ((m.anim | 0) % 2));
+    if (!spr) return;
+    const bob = (m.type === 'shade' || m.type === 'lord') ? Math.sin(this._t * 3 + m.id) * 1.6 : 0;
+    const px = m.x * 16 - spr.width / 2, py = m.y * 16 - spr.height + 2 + bob;
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
+    ctx.beginPath();
+    ctx.ellipse(m.x * 16, m.y * 16 + 1, big ? 9 : 5, big ? 4 : 2.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.drawImage(spr, px | 0, py | 0);
+    if (m.flash > 0) {
+      m.flash -= 0.016;
+      ctx.globalAlpha = Math.min(.7, m.flash * 6);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(px | 0, py | 0, spr.width, spr.height);
+      ctx.globalAlpha = 1;
+    }
+    if (m.hp < m.maxHp && !big) {
+      const ratio = U.clamp(m.hp / m.maxHp, 0, 1);
+      ctx.fillStyle = 'rgba(13,15,21,.8)';
+      ctx.fillRect(px + 1, py - 3, spr.width - 2, 2);
+      ctx.fillStyle = '#e05555';
+      ctx.fillRect(px + 1, py - 3, (spr.width - 2) * ratio, 2);
+    }
+    if (G.sel && G.sel.kind === 'm' && G.sel.ref === m) {
+      ctx.strokeStyle = '#ff8a8a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(m.x * 16, m.y * 16, big ? 12 : 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  },
+
+  drawEffects(ctx) {
+    for (const e of G.effects) {
+      const p = e.t / e.dur;
+      switch (e.type) {
+        case 'spark': {
+          const spr = Art.s.spark;
+          ctx.globalAlpha = 1 - p;
+          ctx.drawImage(spr, (e.x * 16 - 2) | 0, (e.y * 16 - p * 8) | 0);
+          ctx.globalAlpha = 1;
+          break;
+        }
+        case 'flame': {
+          const spr = Art.s['flame' + (((e.t * 10) | 0) % 3)];
+          ctx.globalAlpha = 1 - p * .7;
+          ctx.drawImage(spr, (e.x * 16 - 3) | 0, (e.y * 16 - 6 - p * 6) | 0);
+          ctx.globalAlpha = 1;
+          break;
+        }
+        case 'smoke': {
+          const spr = Art.s.smoke;
+          ctx.globalAlpha = (1 - p) * .6;
+          for (let i = 0; i < 3; i++) ctx.drawImage(spr, (e.x * 16 - 12 + i * 10) | 0, (e.y * 16 - 10 - p * 14 + i * 3) | 0);
+          ctx.globalAlpha = 1;
+          break;
+        }
+        case 'arrow': {
+          const ax = U.lerp(e.x, e.tx, p), ay = U.lerp(e.y, e.ty, p) - Math.sin(p * Math.PI) * .5;
+          ctx.drawImage(Art.s.arrow, (ax * 16 - 4) | 0, (ay * 16) | 0);
+          break;
+        }
+        case 'ring': {
+          ctx.strokeStyle = e.col || '#fff';
+          ctx.lineWidth = 1.5;
+          ctx.globalAlpha = 1 - p;
+          ctx.beginPath();
+          ctx.arc(e.x * 16, e.y * 16, (e.r ? e.r : 1) * 16 * (0.3 + p * 0.9), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          break;
+        }
+        case 'meteor': {
+          if (p < .55) {
+            const fall = p / .55;
+            const mx = e.x, my = e.y - (1 - fall) * 14;
+            ctx.drawImage(Art.s.meteor, (mx * 16 - 3) | 0, (my * 16 - 3) | 0);
+            ctx.strokeStyle = 'rgba(255,150,40,.6)';
+            ctx.beginPath(); ctx.moveTo(mx * 16, my * 16 - 20); ctx.lineTo(mx * 16, my * 16 - 4); ctx.stroke();
+            // target marker
+            ctx.strokeStyle = 'rgba(255,120,40,.5)';
+            ctx.beginPath(); ctx.arc(e.x * 16, e.y * 16, (CONFIG.POWERS.meteor.r) * 16 * .9, 0, Math.PI * 2); ctx.stroke();
+          }
+          break;
+        }
+        case 'corpse': {
+          ctx.globalAlpha = (1 - p) * .9;
+          const spr = Art.villager(e.look, 0);
+          ctx.save();
+          ctx.translate(e.x * 16, e.y * 16);
+          ctx.rotate(Math.PI / 2);
+          ctx.drawImage(spr, -8, -8);
+          ctx.restore();
+          ctx.globalAlpha = 1;
+          break;
+        }
+      }
+    }
+  },
+
+  drawGhost(ctx, x0, y0, x1, y1) {
+    const mode = UI.mode;
+    if (!mode || !UI.ghost) return;
+    const gx = UI.ghost.x, gy = UI.ghost.y; // tile ints
+    if (mode.type === 'build') {
+      const def = BUILD[mode.key];
+      if (!def) return;
+      const chk = Buildings.canPlace(mode.key, gx, gy);
+      const ok = chk.ok && Buildings.afford(mode.key);
+      for (let dy = 0; dy < def.h; dy++)
+        for (let dx = 0; dx < def.w; dx++) {
+          ctx.fillStyle = ok ? 'rgba(120,220,110,.30)' : 'rgba(230,80,80,.30)';
+          ctx.fillRect((gx + dx) * 16, (gy + dy) * 16, 16, 16);
+          ctx.strokeStyle = ok ? 'rgba(150,255,140,.8)' : 'rgba(255,110,110,.8)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect((gx + dx) * 16 + .5, (gy + dy) * 16 + .5, 15, 15);
+        }
+      if (ok && !def.terrain) {
+        ctx.globalAlpha = .6;
+        const spr = Art.s[mode.key === 'farm' ? 'farm0' : mode.key];
+        if (spr) {
+          const hgt = Math.max(spr.height, def.h * 16);
+          ctx.drawImage(spr, gx * 16, (gy + def.h) * 16 - hgt);
+        }
+        ctx.globalAlpha = 1;
+      }
+    } else if (mode.type === 'power') {
+      const p = POWERS[mode.key];
+      if (p && p.target === 'area') {
+        ctx.strokeStyle = 'rgba(220,160,255,.9)';
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.arc((gx + .5) * 16, (gy + .5) * 16, p.r * 16, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    } else if (mode.type === 'demolish') {
+      ctx.strokeStyle = 'rgba(255,110,110,.9)';
+      ctx.strokeRect(gx * 16 + .5, gy * 16 + .5, 15, 15);
+    }
+  },
+
+  lighting(shX, shY) {
+    const ctx = this.ctx;
+    const dark = darknessLevel();
+    const warm = (G.phase === 'dusk' ? G.time / CONFIG.TRANS : G.phase === 'dawn' ? 1 - G.time / CONFIG.TRANS : 0);
+
+    if (dark > 0.02) {
+      const lc = this.lightCv, lx = this.lctx;
+      lx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      lx.globalCompositeOperation = 'source-over';
+      lx.clearRect(0, 0, this.cw, this.ch);
+      lx.fillStyle = `rgba(8,10,32,${dark})`;
+      lx.fillRect(0, 0, this.cw, this.ch);
+      lx.globalCompositeOperation = 'destination-out';
+
+      const hole = (wx, wy, r, a) => { // wx, wy in tile units
+        const s = this.worldToScreen(wx * 16, wy * 16);
+        const rr = r * 16 * G.cam.z;
+        if (s.x < -rr || s.y < -rr || s.x > this.cw + rr || s.y > this.ch + rr) return;
+        const g = lx.createRadialGradient(s.x, s.y, rr * 0.15, s.x, s.y, rr);
+        g.addColorStop(0, `rgba(0,0,0,${a})`);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        lx.fillStyle = g;
+        lx.beginPath(); lx.arc(s.x, s.y, rr, 0, Math.PI * 2); lx.fill();
+      };
+      // building lights
+      for (const b of G.buildings) {
+        if (!b.built) continue;
+        let r = b.def.light;
+        if (!r) continue;
+        if (b.key === 'torch') r = 3.4 + Math.sin(this._t * 7 + b.id) * .12;
+        hole(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, r, 0.92);
+      }
+      if (G.beaconLit) {
+        const b = G.buildings.find(bb => bb.key === 'beacon' && bb.built);
+        if (b) hole(b.x + 1.5, b.y + .8, 15 + Math.sin(this._t * 3) * .8, 0.98);
+      }
+      // burning monsters glow faintly
+      for (const m of G.monsters) if (m.burning > 0) hole(m.x, m.y, 1.2, 0.5);
+      for (const e of G.effects) if (e.type === 'flame') hole(e.x, e.y, 1.6, 0.6);
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(lc, 0, 0);
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+      // warm additive glow on top of the carved light holes
+      ctx.globalCompositeOperation = 'lighter';
+      const warmGlow = (wx, wy, r) => {
+        const s = this.worldToScreen(wx * 16, wy * 16);
+        const rr = r * 16 * G.cam.z;
+        if (s.x < -rr || s.y < -rr || s.x > this.cw + rr || s.y > this.ch + rr) return;
+        const g = ctx.createRadialGradient(s.x, s.y, rr * 0.1, s.x, s.y, rr);
+        g.addColorStop(0, 'rgba(255,180,80,0.13)');
+        g.addColorStop(1, 'rgba(255,150,60,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(s.x, s.y, rr, 0, Math.PI * 2); ctx.fill();
+      };
+      for (const b of G.buildings) {
+        if (!b.built || !b.def.light) continue;
+        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, b.key === 'torch' ? 2.2 : b.def.light * 0.8);
+      }
+      if (G.beaconLit) {
+        const b = G.buildings.find(bb => bb.key === 'beacon' && bb.built);
+        if (b) warmGlow(b.x + 1.5, b.y + 0.8, 11);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      this.firefliesDraw();
+    }
+    if (warm > 0.02) {
+      ctx.fillStyle = `rgba(255,140,50,${warm * 0.14})`;
+      ctx.fillRect(0, 0, this.cw, this.ch);
+    }
+  },
+
+  firefliesDraw() {
+    const ctx = this.ctx;
+    const want = G.settings.fx ? 16 : 6;
+    while (this.fireflies.length < want) {
+      this.fireflies.push({
+        x: Math.random() * World.W, y: Math.random() * World.H,
+        vx: 0, vy: 0, ph: Math.random() * 6,
+      });
+    }
+    while (this.fireflies.length > want) this.fireflies.pop();
+    for (const f of this.fireflies) {
+      f.ph += 0.03;
+      f.vx += (Math.random() - .5) * .02; f.vy += (Math.random() - .5) * .02;
+      f.vx = U.clamp(f.vx, -.06, .06); f.vy = U.clamp(f.vy, -.06, .06);
+      f.x += f.vx; f.y += f.vy;
+      if (f.x < 2 || f.x > World.W - 2) f.vx *= -1;
+      if (f.y < 2 || f.y > World.H - 2) f.vy *= -1;
+      const a = 0.35 + Math.sin(f.ph) * 0.3;
+      if (a <= 0.05) continue;
+      const s = this.worldToScreen(f.x * 16, f.y * 16);
+      ctx.fillStyle = `rgba(220,255,140,${a})`;
+      ctx.fillRect(s.x - 1, s.y - 1, 2, 2);
+      ctx.fillStyle = `rgba(200,240,120,${a * 0.35})`;
+      ctx.fillRect(s.x - 2.5, s.y - 2.5, 5, 5);
+    }
+  },
+
+  drawFloaters(shX, shY) {
+    const ctx = this.ctx;
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    for (const f of G.floaters) {
+      const s = this.worldToScreen(f.x * 16, f.y * 16);
+      const rise = f.t * 18;
+      ctx.globalAlpha = U.clamp(1.4 - f.t, 0, 1);
+      ctx.fillStyle = '#000';
+      ctx.fillText(f.text, s.x + 1, s.y - rise + 1);
+      ctx.fillStyle = f.col;
+      ctx.fillText(f.text, s.x, s.y - rise);
+      ctx.globalAlpha = 1;
+    }
+    ctx.textAlign = 'left';
+  },
+
+  /* -------- minimap -------- */
+  minimap(dt) {
+    this._mmT -= dt;
+    if (this._mmT > 0) return;
+    this._mmT = 0.3;
+    const cv = document.getElementById('minimap');
+    if (!cv) return;
+    const x = cv.getContext('2d');
+    const W = World.W, H = World.H;
+    const img = x.createImageData(W, H);
+    const d = img.data;
+    const MM = Art.MM;
+    const col = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+    const cGrass = col(MM.grass), cWater = col(MM.water), cTree = col(MM.tree), cRoad = col(MM.road), cRock = col(MM.rock), cDirt = col(MM.dirt);
+    for (let i = 0; i < W * H; i++) {
+      let c = cGrass;
+      const t = World.t[i], o = World.obj[i];
+      if (t === T.WATER) c = cWater;
+      else if (t === T.ROAD) c = cRoad;
+      else if (t === T.DIRT) c = cDirt;
+      else if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.SAPLING) c = cTree;
+      else if (o === OBJ.ROCK) c = cRock;
+      d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 255;
+    }
+    // buildings
+    for (const b of G.buildings) {
+      const cc = col(MM.bld);
+      for (let dy = 0; dy < b.h; dy++) for (let dx = 0; dx < b.w; dx++) {
+        const i = (b.y + dy) * W + (b.x + dx);
+        if (i >= 0 && i < W * H) { d[i * 4] = cc[0]; d[i * 4 + 1] = cc[1]; d[i * 4 + 2] = cc[2]; }
+      }
+    }
+    x.putImageData(img, 0, 0);
+    // entities as dots (crisper on top)
+    x.fillStyle = '#fff';
+    for (const v of G.villagers) x.fillRect(v.x | 0, v.y | 0, 1, 1);
+    x.fillStyle = '#ff6060';
+    for (const m of G.monsters) x.fillRect((m.x | 0) - (m.type === 'lord' ? 1 : 0), (m.y | 0) - (m.type === 'lord' ? 1 : 0), m.type === 'lord' ? 3 : 1, m.type === 'lord' ? 3 : 1);
+    // viewport rect
+    const z = G.cam.z;
+    const vw = this.cw / z / 16, vh = this.ch / z / 16;
+    x.strokeStyle = 'rgba(255,255,255,.7)';
+    x.lineWidth = 1;
+    x.strokeRect(G.cam.x / 16 - vw / 2, G.cam.y / 16 - vh / 2, vw, vh);
+  },
+};
+;
+
+/* ===== Bundled from js/ui.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — ui.js
+   DOM UI + input. Touch-first: tap = select/place, drag = pan
+   (or paint walls/roads), pinch = zoom, plus zoom buttons and a
+   tappable minimap as alternatives (mobile best practice).
+   ============================================================ */
+
+const UI = {
+  mode: null,        // {type:'build',key} | {type:'demolish'} | {type:'power',key}
+  ghost: null,       // {x,y} tile under finger/cursor
+  open: null,        // open panel name
+  _pt: new Map(),    // active pointers
+  _pinch: null,
+  _panning: false,
+  _lastPhase: '',
+  _toastN: 0,
+  _hudT: 0,
+  _lastPlaceFail: 0,
+  els: {},
+
+  TUT: [
+    { text: 'Welcome, Guardian.<br>Your settlers depend on you: assign their <b>Jobs</b>, raise <b>shelter</b>, stock <b>food</b> — and hold back the shades each night. Goal: raise <b>The Beacon</b> and survive the Long Night.', btn: 'Begin' },
+    { text: 'Shelter first.<br>Open <b>Build</b> and place two <b>Tents</b> — your six settlers outnumber the beds they have.', done: () => Buildings.housingCap() >= 8 },
+    { text: 'Set the work.<br>Open <b>Jobs</b>: 2 Foragers, 2 Lumberjacks, 1 Miner, 1 Builder is a strong start. Add a <b>Guard</b> before dark.', done: () => G.jobs.guard >= 1 },
+    { text: 'Before nightfall...<br>Draw a <b>Palisade</b> ring around camp (drag to paint) and plant <b>Torches</b>. Towers unlock on day 3.', done: () => Buildings.count('wallW') + Buildings.count('wallS') >= 6 || G.day > 1 },
+    { text: 'The night is theirs — until it isn\u2019t.<br><b>Powers</b> burn Essence: <b>Smite</b> erases shades. Essence flows back from every kill. Watch your people; the dark goes for stragglers.', done: () => !isNightLike() && G.day > 1 },
+    { text: 'Grow, fortify, advance.<br>Wheat plots feed a village; stone walls laugh at brutes; new craft unlocks each dawn. The Beacon awaits on day 10.', done: () => G.day >= 2 },
+  ],
+
+  /* ================= init ================= */
+  init() {
+    const $ = id => document.getElementById(id);
+    this.els = {
+      hud: $('hud'), resRow: $('resRow'), dayLabel: $('dayLabel'), clockFill: $('clockFill'), clockBar: $('clockBar'),
+      phaseIcon: $('phaseIcon'), toasts: $('toasts'), tut: $('tut'), tutText: $('tutText'),
+      selCard: $('selCard'), dock: $('dock'), panel: $('panel'), panelTitle: $('panelTitle'), panelBody: $('panelBody'),
+      panelBack: $('panelBack'), modeChip: $('modeChip'), modeChipText: $('modeChipText'), mmWrap: $('mmWrap'),
+      zoomBtns: $('zoomBtns'), bossBar: $('bossBar'), bossHpFill: $('bossHpFill'),
+    };
+    $('btnPause').onclick = () => Sim.speedSet(G.paused ? 1 : 0);
+    $('btnSpd1').onclick = () => Sim.speedSet(1);
+    $('btnSpd2').onclick = () => Sim.speedSet(2);
+    $('btnSpd3').onclick = () => Sim.speedSet(3);
+    $('btnMenuTop').onclick = () => this.openPanel('menu');
+    $('dockBuild').onclick = () => this.openPanel('build');
+    $('dockJobs').onclick = () => this.openPanel('jobs');
+    $('dockPowers').onclick = () => this.openPanel('powers');
+    $('dockMap').onclick = () => { this.els.mmWrap.classList.toggle('hidden'); };
+    $('modeChipX').onclick = () => this.cancelMode();
+    $('zoomIn').onclick = () => this.zoomBy(0.4);
+    $('zoomOut').onclick = () => this.zoomBy(-0.4);
+    $('btnHelpClose').onclick = () => { $('helpScreen').classList.add('hidden'); if (G.state === 'title') $('titleScreen').classList.remove('hidden'); };
+    $('btnHelpT').onclick = () => { $('titleScreen').classList.add('hidden'); $('helpScreen').classList.remove('hidden'); };
+    $('btnNew').onclick = () => { $('diffPick').classList.remove('hidden'); $('btnNew').classList.add('hidden'); };
+    $('btnContinue').onclick = () => {
+      let ok = SaveSys.load('auto');
+      if (!ok) for (let i = 1; i <= 3; i++) if (SaveSys.has(i) && SaveSys.load(i)) { ok = true; break; }
+      if (ok) {
+        document.getElementById('titleScreen').classList.add('hidden');
+        document.getElementById('helpScreen').classList.add('hidden');
+        this.showGameUI();
+      }
+    };
+    document.querySelectorAll('.bigbtn.diff').forEach(b => {
+      b.onclick = () => {
+        $('titleScreen').classList.add('hidden');
+        Sim.newGame(b.dataset.diff);
+      };
+    });
+    $('tutSkip').onclick = () => { G.tutOn = false; this.els.tut.classList.add('hidden'); };
+    $('tutNext').onclick = () => this.tutAdvance(G.tut + 1);
+
+    // dock icons
+    const put = (id, name) => { const e = $(id); e.innerHTML = ''; e.appendChild(Art.iconEl(name)); };
+    put('icoBuild', 'build'); put('icoJobs', 'jobs'); put('icoPowers', 'powers'); put('icoMap', 'map');
+
+    this.buildResRow();
+    this.input();
+    this.helpFill();
+    window.addEventListener('keydown', e => {
+      if (G.state !== 'playing') return;
+      if (e.key === ' ') { e.preventDefault(); Sim.speedSet(G.paused ? 1 : 0); }
+      else if (e.key === '1') Sim.speedSet(1);
+      else if (e.key === '2') Sim.speedSet(2);
+      else if (e.key === '3') Sim.speedSet(3);
+      else if (e.key === 'Escape') { if (this.open) this.closePanel(); else this.cancelMode(); }
+    });
+    // continue button availability
+    if (SaveSys.has('auto') || SaveSys.has(1) || SaveSys.has(2) || SaveSys.has(3)) $('btnContinue').classList.remove('hidden');
+  },
+
+  /* ================= HUD ================= */
+  buildResRow() {
+    const row = this.els.resRow;
+    row.innerHTML = '';
+    const mk = (id, icon, title) => {
+      const d = document.createElement('div');
+      d.className = 'chip'; d.id = 'chip_' + id; d.title = title;
+      d.appendChild(Art.iconEl(icon));
+      const v = document.createElement('span'); v.id = 'val_' + id; v.textContent = '0';
+      d.appendChild(v);
+      row.appendChild(d);
+      return d;
+    };
+    mk('wood', 'wood', 'Wood — walls, tents, towers');
+    mk('stone', 'stone', 'Stone — stone walls, towers, the Beacon');
+    mk('food', 'food', 'Food — eaten by every villager');
+    const e = mk('essence', 'essence', 'Essence — fuels your Powers');
+    const bar = document.createElement('div'); bar.id = 'essBar'; bar.innerHTML = '<div id="essFill"></div>';
+    e.appendChild(bar); e.id = 'essChip';
+    mk('pop', 'pop', 'Villagers / housing capacity');
+  },
+
+  updateHUD() {
+    if (G.state !== 'playing' && G.state !== 'victory' && G.state !== 'defeat') return;
+    const set = (id, v) => { const e = document.getElementById('val_' + id); if (e) e.textContent = v; };
+    set('wood', Math.floor(G.res.wood));
+    set('stone', Math.floor(G.res.stone));
+    set('food', Math.floor(G.res.food));
+    set('essence', Math.floor(G.res.essence));
+    const cap = Buildings.housingCap();
+    set('pop', G.villagers.length + '/' + cap);
+    document.getElementById('chip_food').classList.toggle('low', G.res.food < 15 && G.villagers.length > 0);
+    document.getElementById('chip_pop').classList.toggle('low', G.villagers.length > cap);
+    const ef = document.getElementById('essFill');
+    if (ef) ef.style.width = (G.res.essence / CONFIG.ESSENCE.max * 100) + '%';
+    this.els.dayLabel.textContent = 'Day ' + G.day + (G.finalNight ? ' \u26a0' : '');
+    // clock
+    let frac;
+    const C = CONFIG;
+    if (G.phase === 'day') frac = G.time / C.DAY_LEN * 0.5;
+    else if (G.phase === 'dusk') frac = 0.5 + G.time / C.TRANS * (C.NIGHT_LEN * G.diffM.night) / (C.NIGHT_LEN * G.diffM.night + C.TRANS) * 0.5;
+    else if (G.phase === 'night') {
+      const nl = C.NIGHT_LEN * G.diffM.night;
+      frac = 0.5 + (C.TRANS + G.time) / (nl + C.TRANS) * 0.5;
+    } else frac = 0.98;
+    this.els.clockFill.style.width = (frac * 100).toFixed(1) + '%';
+    this.els.clockBar.classList.toggle('night', isNightLike());
+    if (this._lastPhase !== G.phase) { this._lastPhase = G.phase; this.drawPhaseIcon(); }
+    if (G.boss) this.els.bossHpFill.style.width = U.clamp(G.boss.hp / G.boss.maxHp * 100, 0, 100) + '%';
+    if (!this.els.selCard.classList.contains('hidden')) this.selRender();
+  },
+
+  drawPhaseIcon() {
+    const cv = this.els.phaseIcon, x = cv.getContext('2d');
+    x.clearRect(0, 0, 18, 18);
+    x.imageSmoothingEnabled = false;
+    const icon = G.phase === 'night' ? 'moon' : G.phase === 'day' ? 'sun' : 'dusk';
+    x.drawImage(Art.s['ic_' + icon], 0, 0);
+  },
+
+  syncSpeedBtns() {
+    const map = { btnPause: G.paused, btnSpd1: !G.paused && G.speed === 1, btnSpd2: !G.paused && G.speed === 2, btnSpd3: !G.paused && G.speed === 3 };
+    for (const id in map) document.getElementById(id).classList.toggle('active', map[id]);
+  },
+
+  bossBar(m) {
+    this.els.bossBar.classList.toggle('hidden', !m);
+    if (m) this.els.bossHpFill.style.width = '100%';
+  },
+
+  /* ================= toasts ================= */
+  toast(msg, kind) {
+    const t = document.createElement('div');
+    t.className = 'toast ' + (kind || '');
+    t.innerHTML = U.esc(msg).replace(/\u26a0/g, '\u26a0\ufe0f');
+    this.els.toasts.appendChild(t);
+    this._toastN++;
+    while (this.els.toasts.children.length > 4) this.els.toasts.firstChild.remove();
+    setTimeout(() => { t.classList.add('fadeout'); setTimeout(() => t.remove(), 650); }, 4200);
+  },
+
+  /* ================= tutorial ================= */
+  tutStart() { G.tut = 0; this.tutRender(); },
+  tutRender() {
+    if (!G.tutOn || G.tut >= this.TUT.length) { this.els.tut.classList.add('hidden'); return; }
+    const step = this.TUT[G.tut];
+    this.els.tutText.innerHTML = step.text;
+    document.getElementById('tutNext').style.display = step.done ? 'none' : '';
+    this.els.tut.classList.remove('hidden');
+  },
+  tutAdvance(n) { G.tut = n; this.tutRender(); },
+  tutCheck() {
+    if (!G.tutOn || G.tut >= this.TUT.length) return;
+    const step = this.TUT[G.tut];
+    if (step.done && step.done()) this.tutAdvance(G.tut + 1);
+  },
+
+  /* ================= selection ================= */
+  select(kind, ref) {
+    G.sel = { kind, ref };
+    this.els.selCard.classList.remove('hidden');
+    this.selRender();
+  },
+  selHide() { this.els.selCard.classList.add('hidden'); G.sel = null; },
+
+  selRender() {
+    const s = G.sel, el = this.els.selCard;
+    if (!s) { el.classList.add('hidden'); return; }
+    if (s.kind === 'v') {
+      const v = s.ref;
+      if (!G.villagers.includes(v)) return this.selHide();
+      const tr = v.trait ? ` <span style="color:var(--amber2)">the ${U.esc(v.trait.name)}</span>` : '';
+      let bars = `
+        <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(v.hp / v.maxHp * 100, 0, 100)}%"></div></div></div>
+        <div class="row"><span class="mLbl">Food</span><div class="meter mHun"><div style="width:${U.clamp(v.hunger, 0, 100)}%"></div></div></div>`;
+      const ji = JOBS.indexOf(v.job);
+      const jobRow = `
+        <div class="row" style="justify-content:space-between">
+          <span style="font-size:12px;color:var(--dim)">Duty</span>
+          <div class="jobArrows">
+            <button id="selJobDown">&minus;</button>
+            <b style="min-width:76px;text-align:center;font-size:13px;color:${JOB_INFO[v.job].cloth === '#e8e0d0' ? '#e8e0d0' : JOB_INFO[v.job].cloth}">${JOB_INFO[v.job].name}</b>
+            <button id="selJobUp">+</button>
+          </div>
+        </div>`;
+      const carry = v.carry.amt > 0 ? `<div class="sub">Carrying ${v.carry.amt} ${v.carry.type}</div>` : '';
+      const state = { idle: 'waiting', toWork: 'heading out', work: 'working', toStore: 'hauling', shelter: 'sheltering', flee: 'fleeing!', fight: 'fighting!', arrive: 'arriving' }[v.state] || v.state;
+      el.innerHTML = `
+        <div style="display:flex;gap:10px;align-items:center">
+          <canvas id="selPortrait" width="48" height="48"></canvas>
+          <div style="flex:1">
+            <h3>${U.esc(v.name)}${tr}</h3>
+            <div class="sub">${U.esc(state)}${v.trait ? ' \u00b7 ' + U.esc(v.trait.desc) : ''}</div>
+          </div>
+        </div>
+        ${bars}${jobRow}${carry}
+        <div class="selActs">
+          <button id="selFollow">${G.follow === v ? 'Unfollow' : 'Follow'}</button>
+          ${v.job !== 'guard' ? '<button id="selShelter">To shelter</button>' : ''}
+          <button id="selClose">Close</button>
+        </div>`;
+      const pc = document.getElementById('selPortrait').getContext('2d');
+      pc.imageSmoothingEnabled = false;
+      pc.drawImage(Art.villager(v.look, 0), 0, 0, 16, 16, 0, 0, 48, 48);
+      document.getElementById('selJobDown').onclick = () => this.cycleJob(v, -1);
+      document.getElementById('selJobUp').onclick = () => this.cycleJob(v, 1);
+      document.getElementById('selFollow').onclick = () => { G.follow = G.follow === v ? null : v; this.selRender(); };
+      const sh = document.getElementById('selShelter');
+      if (sh) sh.onclick = () => {
+        if (v.job === 'guard') return;
+        v.state = 'shelter'; v.path = null; v.tgt = null; v.workB = null; v.tgtTile = null; v.fearT = 0;
+        this.toast(`${v.name} heads for shelter.`, '');
+        this.selRender();
+      };
+      document.getElementById('selClose').onclick = () => this.selHide();
+    } else if (s.kind === 'm') {
+      const m = s.ref;
+      if (m.dead || !G.monsters.includes(m)) return this.selHide();
+      el.innerHTML = `
+        <h3 style="color:#ff9a9a">${U.esc(m.name)}</h3>
+        <div class="sub">Damage ${m.dmg} \u00b7 Speed ${m.spd.toFixed(1)} \u00b7 ${m.burning > 0 ? 'burning in the light!' : 'hungry for the village'}</div>
+        <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(m.hp / m.maxHp * 100, 0, 100)}%;background:#e05555"></div></div></div>
+        <div class="selActs"><button id="selClose">Close</button></div>`;
+      document.getElementById('selClose').onclick = () => this.selHide();
+    } else if (s.kind === 'b') {
+      const b = s.ref;
+      if (!G.buildings.includes(b)) return this.selHide();
+      let extra = '';
+      if (!b.built) extra = `<div class="row"><span class="mLbl">Build</span><div class="meter mProg"><div style="width:${(b.progress * 100).toFixed(0)}%"></div></div></div>`;
+      else if (b.key === 'farm') extra = `<div class="row"><span class="mLbl">Wheat</span><div class="meter mGrow"><div style="width:${(b.growth * 100).toFixed(0)}%"></div></div></div>`;
+      else if (b.def.kind === 'tower') extra = `<div class="sub">Damage ${b.def.atk.dmg} \u00b7 Range ${b.def.atk.range}</div>`;
+      else if (b.def.housing) extra = `<div class="sub">Shelters ${b.def.housing}</div>`;
+      else if (b.key === 'beacon') extra = `<div class="sub" style="color:var(--amber2)">${b.lit ? 'THE FLAME BURNS. Survive the Long Night!' : 'Unlit. Complete it to call the final dawn.'}</div>`;
+      const dem = b.key === 'camp' ? '' : `<button class="warn" id="selDem">Demolish</button>`;
+      el.innerHTML = `
+        <h3>${U.esc(b.def.name)}</h3>
+        <div class="sub">${U.esc(b.def.desc || '')}</div>
+        <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(b.hp / b.maxHp * 100, 0, 100)}%"></div></div></div>
+        ${extra}
+        <div class="selActs">${dem}<button id="selClose">Close</button></div>`;
+      if (dem) document.getElementById('selDem').onclick = () => {
+        Buildings.demolish(b);
+        this.toast(`Demolished ${b.def.name} — half the cost reclaimed.`, '');
+        this.selHide();
+      };
+      document.getElementById('selClose').onclick = () => this.selHide();
+    }
+  },
+
+  cycleJob(v, dir) {
+    const i = JOBS.indexOf(v.job);
+    let ni = U.clamp(i + dir, 0, JOBS.length - 1);
+    if (ni === i) return;
+    if (JOBS[i] !== 'idle') G.jobs[JOBS[i]] = Math.max(0, (G.jobs[JOBS[i]] || 0) - 1);
+    if (JOBS[ni] !== 'idle') G.jobs[JOBS[ni]] = (G.jobs[JOBS[ni]] || 0) + 1;
+    Sim.setJob(v, JOBS[ni]);
+    this.selRender();
+  },
+
+  /* ================= panels ================= */
+  openPanel(name) {
+    this.open = name;
+    this.els.panel.classList.remove('hidden');
+    this.els.panelBack.classList.remove('hidden');
+    const B = this.els.panelBody;
+    const T = this.els.panelTitle;
+    const xBtn = '<button class="x" id="panelX">\u2715</button>';
+    if (name === 'build') {
+      this._buildCat = this._buildCat || 'basics';
+      T.innerHTML = 'Build' + xBtn;
+      B.innerHTML = '';
+      B.appendChild(this.buildGrid(this._buildCat));
+    } else if (name === 'jobs') {
+      T.innerHTML = 'Jobs' + xBtn;
+      B.innerHTML = '';
+      B.appendChild(this.jobsList());
+    } else if (name === 'powers') {
+      T.innerHTML = 'Guardian Powers' + xBtn;
+      B.innerHTML = '';
+      B.appendChild(this.powersList());
+    } else if (name === 'menu') {
+      T.innerHTML = 'Menu' + xBtn;
+      B.innerHTML = '';
+      B.appendChild(this.menuList());
+    } else if (name === 'chronicle') {
+      T.innerHTML = 'Chronicle of Dawnhold' + xBtn;
+      B.innerHTML = '';
+      B.appendChild(this.chronicleList());
+    } else if (name === 'slots') {
+      T.innerHTML = (this._slotMode === 'save' ? 'Save Game' : 'Load Game') + xBtn;
+      B.innerHTML = '';
+      B.appendChild(this.slotsList());
+    } else if (name === 'settings') {
+      T.innerHTML = 'Settings' + xBtn;
+      B.innerHTML = '';
+      B.appendChild(this.settingsList());
+    }
+    const px = document.getElementById('panelX');
+    if (px) px.onclick = () => this.closePanel();
+  },
+
+  closePanel() {
+    this.open = null;
+    this.els.panel.classList.add('hidden');
+    this.els.panelBack.classList.add('hidden');
+  },
+
+  buildGrid(cat) {
+    const wrap = document.createElement('div');
+    // category tabs
+    const tabs = document.createElement('div');
+    tabs.className = 'catTabs';
+    [['basics', 'Basics'], ['defense', 'Defense'], ['mystic', 'Mystic']].forEach(([k, label]) => {
+      const b = document.createElement('button');
+      b.className = 'catTab' + (cat === k ? ' on' : '');
+      b.textContent = label;
+      b.onclick = () => { this._buildCat = k; this.openPanel('build'); };
+      tabs.appendChild(b);
+    });
+    wrap.appendChild(tabs);
+
+    const grid = document.createElement('div');
+    grid.className = 'bgrid';
+    const keys = Object.keys(BUILD).filter(k => BUILD[k].cat === cat);
+    if (cat === 'basics' || cat === 'defense') keys.push('__demolish');
+    for (const k of keys) {
+      if (k === '__demolish') {
+        const card = document.createElement('button');
+        card.className = 'bcard' + (this.mode && this.mode.type === 'demolish' ? ' sel' : '');
+        card.innerHTML = `<canvas width="16" height="16" style="background:#3a2020"></canvas>
+          <div><div class="bn">Demolish</div><div class="bc"><span>reclaims 50%</span></div>
+          <div class="bd">Remove a building; half its cost is refunded. Drag across walls to clear.</div></div>`;
+        card.onclick = () => { this.setMode({ type: 'demolish' }); this.closePanel(); };
+        this.drawCardIcon(card, 'wallW', true);
+        grid.appendChild(card);
+        continue;
+      }
+      const def = BUILD[k];
+      const unlocked = !!G.unlocks[k];
+      const afford = Buildings.afford(k);
+      const card = document.createElement('button');
+      card.className = 'bcard' + (unlocked ? '' : ' locked') + (this.mode && this.mode.type === 'build' && this.mode.key === k ? ' sel' : '');
+      const cost = Object.entries(def.cost).map(([r, n]) =>
+        `<span class="${G.res[r] < n ? 'costNo' : ''}">${n} ${r}</span>`).join('');
+      card.innerHTML = `
+        <div><div class="bn">${U.esc(def.name)}</div>
+        <div class="bc">${cost}</div>
+        <div class="bd">${U.esc(def.desc)}${unlocked ? '' : `<br><b style="color:var(--amber)">Unlocks day ${def.unlock}</b>`}</div></div>`;
+      this.drawCardIcon(card, k, !unlocked);
+      card.onclick = () => {
+        if (!unlocked) { this.toast(`Unlocks on day ${def.unlock}.`, ''); return; }
+        if (!afford) { this.toast(`Not enough resources for ${def.name}.`, 'bad'); return; }
+        this.setMode({ type: 'build', key: k });
+        this.closePanel();
+      };
+      grid.appendChild(card);
+    }
+    wrap.appendChild(grid);
+    return wrap;
+  },
+
+  drawCardIcon(card, key, locked) {
+    const cv = card.querySelector('canvas') || card.firstChild;
+    if (!(cv instanceof HTMLCanvasElement)) return;
+    const x = cv.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    if (locked) x.globalAlpha = 0.4;
+    let spr = Art.s[key === 'road' ? 'road0' : key === 'farm' ? 'farm3' : key];
+    if (key === '__demolish' || !spr) spr = Art.s.wallW;
+    const s = Math.min(38 / spr.width, 38 / spr.height);
+    const w = spr.width * s, h = spr.height * s;
+    x.drawImage(spr, (38 - w) / 2, (38 - h) / 2, w, h);
+    x.globalAlpha = 1;
+  },
+
+  jobsList() {
+    const wrap = document.createElement('div');
+    const pop = G.villagers.length;
+    const sum = JOBS.filter(j => j !== 'idle').reduce((s, j) => s + (G.jobs[j] || 0), 0);
+    const note = document.createElement('div');
+    note.className = 'jnote';
+    note.innerHTML = `Villagers: <b>${pop}</b> \u00b7 Assigned: <b>${Math.min(sum, pop)}</b> \u00b7 Resting: <b>${Math.max(0, pop - sum)}</b><br>Tap <b>+</b>/<b>&minus;</b> to move people between duties. They start at once.`;
+    wrap.appendChild(note);
+    for (const j of JOBS) {
+      if (j === 'idle') continue;
+      const info = JOB_INFO[j];
+      const row = document.createElement('div');
+      row.className = 'jrow';
+      const icon = document.createElement('canvas');
+      icon.width = 16; icon.height = 16;
+      const ix = icon.getContext('2d');
+      ix.imageSmoothingEnabled = false;
+      ix.drawImage(Art.villager({ skin: 1, hair: 1, cloth: info.cloth, guard: j === 'guard' }, 0), 0, 0);
+      row.appendChild(icon);
+      const txt = document.createElement('div');
+      txt.style.flex = '1';
+      txt.innerHTML = `<div class="jn">${info.name}</div><div class="jd">${info.desc}</div>`;
+      row.appendChild(txt);
+      const cnt = document.createElement('div');
+      cnt.className = 'cnt';
+      cnt.textContent = (G.jobs[j] || 0);
+      const minus = document.createElement('button');
+      minus.textContent = '\u2212';
+      minus.onclick = () => {
+        G.jobs[j] = Math.max(0, (G.jobs[j] || 0) - 1);
+        Sim.reassign(); this.openPanel('jobs'); this.updateHUD();
+      };
+      const plus = document.createElement('button');
+      plus.textContent = '+';
+      plus.onclick = () => {
+        const s2 = JOBS.filter(jj => jj !== 'idle').reduce((s, jj) => s + (G.jobs[jj] || 0), 0);
+        if (s2 >= pop) { this.toast('No one is resting — every soul has a duty.', ''); return; }
+        G.jobs[j] = (G.jobs[j] || 0) + 1;
+        Sim.reassign(); this.openPanel('jobs'); this.updateHUD();
+      };
+      row.appendChild(minus); row.appendChild(cnt); row.appendChild(plus);
+      wrap.appendChild(row);
+    }
+    return wrap;
+  },
+
+  powersList() {
+    const wrap = document.createElement('div');
+    const note = document.createElement('div');
+    note.className = 'jnote';
+    note.innerHTML = `Essence: <b style="color:var(--purple)">${Math.floor(G.res.essence)} / ${CONFIG.ESSENCE.max}</b> — seeps in with time, surges with every kill. Shrines (day 8) hasten it.`;
+    wrap.appendChild(note);
+    for (const k in POWERS) {
+      const p = POWERS[k];
+      const un = Powers.unlocked(k);
+      const afford = Powers.canAfford(k);
+      const card = document.createElement('button');
+      card.className = 'pcard' + (un ? '' : ' locked') + (this.mode && this.mode.type === 'power' && this.mode.key === k ? ' sel' : '');
+      card.innerHTML = `
+        <div><div class="pn">${p.name} <span class="cost">${p.cost} essence</span></div>
+        <div class="pd">${p.desc}${un ? '' : `<br><b style="color:var(--purple)">Unlocks day ${p.unlockDay}</b>`}</div></div>`;
+      const cv = document.createElement('canvas');
+      cv.width = 16; cv.height = 16;
+      const x = cv.getContext('2d');
+      x.imageSmoothingEnabled = false;
+      if (k === 'smite') x.drawImage(Art.s.spark, 0, 0, 4, 4, 1, 1, 14, 14);
+      else if (k === 'meteor') x.drawImage(Art.s.meteor, 0, 0, 7, 7, 1, 1, 14, 14);
+      else x.drawImage(Art.s.ic_essence, 0, 0);
+      card.prepend(cv);
+      card.onclick = () => {
+        if (!un) { this.toast(`Meteor unlocks on day ${p.unlockDay}.`, ''); return; }
+        if (!afford) { this.toast('Not enough essence.', 'bad'); return; }
+        this.setMode({ type: 'power', key: k });
+        this.closePanel();
+      };
+      wrap.appendChild(card);
+    }
+    return wrap;
+  },
+
+  menuList() {
+    const wrap = document.createElement('div');
+    const btn = (label, sub, fn, warn) => {
+      const b = document.createElement('button');
+      b.className = 'mbtn' + (warn ? ' warn' : '');
+      b.innerHTML = label + (sub ? `<small>${sub}</small>` : '');
+      b.onclick = fn;
+      wrap.appendChild(b);
+      return b;
+    };
+    const s = G.stats;
+    const stats = document.createElement('div');
+    stats.className = 'statgrid';
+    stats.innerHTML = `
+      <div class="stat"><div class="v">${G.day}</div><div class="l">Day</div></div>
+      <div class="stat"><div class="v">${G.villagers.length}</div><div class="l">Souls</div></div>
+      <div class="stat"><div class="v">${s.kills}</div><div class="l">Kills</div></div>
+      <div class="stat"><div class="v">${s.deaths}</div><div class="l">Lost</div></div>`;
+    wrap.appendChild(stats);
+    btn('Chronicle', 'The story so far', () => this.openPanel('chronicle'));
+    btn('Save Game', 'Three slots + auto at dawn', () => { this._slotMode = 'save'; this.openPanel('slots'); });
+    btn('Load Game', 'Return to a saved dawn', () => { this._slotMode = 'load'; this.openPanel('slots'); });
+    btn('How to Play', 'The full manual', () => { this.closePanel(); document.getElementById('helpScreen').classList.remove('hidden'); });
+    btn('Settings', 'Effects & autosave', () => this.openPanel('settings'));
+    btn('Quit to Title', 'Progress is autosaved at dawn', () => {
+      if (G.settings.autosave) SaveSys.autosave();
+      G.state = 'title';
+      this.closePanel();
+      document.getElementById('titleScreen').classList.remove('hidden');
+      this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden');
+      this.els.zoomBtns.classList.add('hidden'); this.els.mmWrap.classList.add('hidden');
+      this.selHide(); this.cancelMode();
+      document.getElementById('btnContinue').classList.remove('hidden');
+    });
+    btn('Abandon & New Game', 'Start over on a fresh map', () => {
+      if (!confirm('Abandon this village and start a new game?')) return;
+      this.closePanel();
+      G.state = 'title';
+      document.getElementById('titleScreen').classList.remove('hidden');
+      document.getElementById('diffPick').classList.remove('hidden');
+      document.getElementById('btnNew').classList.add('hidden');
+      this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden'); this.els.zoomBtns.classList.add('hidden');
+    }, true);
+    return wrap;
+  },
+
+  chronicleList() {
+    const wrap = document.createElement('div');
+    if (!G.chronicle.length) wrap.innerHTML = '<div class="jnote">The chronicle is still blank...</div>';
+    for (let i = G.chronicle.length - 1; i >= 0; i--) {
+      const c = G.chronicle[i];
+      const d = document.createElement('div');
+      d.className = 'chron ' + (c.k || '');
+      d.innerHTML = `<b>Day ${c.d}</b> — ${U.esc(c.txt)}`;
+      wrap.appendChild(d);
+    }
+    return wrap;
+  },
+
+  slotsList() {
+    const wrap = document.createElement('div');
+    const slots = ['auto', 1, 2, 3];
+    for (const s of slots) {
+      const meta = SaveSys.readMeta(s);
+      const row = document.createElement('div');
+      row.className = 'slotRow';
+      const label = s === 'auto' ? 'Autosave' : 'Slot ' + s;
+      const when = meta ? new Date(meta.when).toLocaleString() : '';
+      row.innerHTML = `<div class="info"><b>${label}</b><br>${meta ? `Day ${meta.day} \u00b7 ${meta.diff} \u00b7 ${meta.pop} souls \u00b7 ${when}` : 'empty'}</div>`;
+      if (this._slotMode === 'save') {
+        if (s !== 'auto') {
+          const b = document.createElement('button');
+          b.textContent = 'Save';
+          b.disabled = G.state !== 'playing';
+          b.onclick = () => { SaveSys.save(s); this.openPanel('slots'); };
+          row.appendChild(b);
+        }
+      } else {
+        if (meta && meta.v === CONFIG.SAVE_V) {
+          const b = document.createElement('button');
+          b.textContent = 'Load';
+          b.onclick = () => {
+            if (SaveSys.load(s)) {
+              this.closePanel();
+              document.getElementById('titleScreen').classList.add('hidden');
+              this.showGameUI();
+            }
+          };
+          row.appendChild(b);
+          const d = document.createElement('button');
+          d.textContent = '\u2715';
+          d.onclick = () => { SaveSys.del(s); this.openPanel('slots'); };
+          row.appendChild(d);
+        }
+      }
+      wrap.appendChild(row);
+    }
+    return wrap;
+  },
+
+  settingsList() {
+    const wrap = document.createElement('div');
+    const mk = (label, key) => {
+      const row = document.createElement('div');
+      row.className = 'toggleRow';
+      row.innerHTML = `<span>${label}</span>`;
+      const b = document.createElement('button');
+      b.className = 'togBtn' + (G.settings[key] ? ' on' : '');
+      b.onclick = () => { G.settings[key] = !G.settings[key]; b.classList.toggle('on', G.settings[key]); };
+      row.appendChild(b);
+      wrap.appendChild(row);
+    };
+    mk('Effects (fireflies, sparks, lighting detail)', 'fx');
+    mk('Autosave at dawn', 'autosave');
+    return wrap;
+  },
+
+  /* ================= mode / ghost ================= */
+  setMode(m) {
+    this.mode = m;
+    this.ghost = null;
+    const chip = this.els.modeChip;
+    if (!m) { chip.classList.add('hidden'); return; }
+    chip.classList.remove('hidden');
+    if (m.type === 'build') {
+      const def = BUILD[m.key];
+      this.els.modeChipText.textContent = `Placing: ${def.name}${def.paint ? ' — tap or drag' : ' — tap the map'}`;
+    } else if (m.type === 'demolish') {
+      this.els.modeChipText.textContent = 'Demolish — tap buildings';
+    } else if (m.type === 'power') {
+      this.els.modeChipText.textContent = `${POWERS[m.key].name} — tap target`;
+    }
+  },
+  cancelMode() { this.setMode(null); },
+
+  tryPlace(tileX, tileY) {
+    const m = this.mode;
+    if (!m) return;
+    if (m.type === 'build') {
+      const def = BUILD[m.key];
+      const gx = tileX - ((def.w - 1) >> 1), gy = tileY - ((def.h - 1) >> 1);
+      const chk = Buildings.canPlace(m.key, gx, gy);
+      if (!chk.ok) {
+        if (chk.reason && performance.now() - this._lastPlaceFail > 900) {
+          this._lastPlaceFail = performance.now();
+          this.toast(chk.reason, 'bad');
+        }
+        return;
+      }
+      if (!Buildings.afford(m.key)) {
+        if (performance.now() - this._lastPlaceFail > 900) {
+          this._lastPlaceFail = performance.now();
+          this.toast('Not enough resources.', 'bad');
+        }
+        return;
+      }
+      const r = Buildings.place(m.key, gx, gy);
+      if (r) {
+        this.updateHUD();
+        if (!def.paint && def.kind !== 'wall') this.toast(`${def.name} staked out — a Builder will raise it.`, '');
+      }
+    } else if (m.type === 'demolish') {
+      const b = World.bldAt(tileX, tileY);
+      if (b && b.key !== 'camp') {
+        Buildings.demolish(b);
+        this.updateHUD();
+      }
+    } else if (m.type === 'power') {
+      Powers.cast(m.key, tileX + 0.5, tileY + 0.5);
+      this.updateHUD();
+      if (G.res.essence < POWERS[m.key].cost) this.cancelMode();
+    }
+  },
+
+  /* ================= input ================= */
+  input() {
+    const cv = Render.cv;
+    cv.addEventListener('pointerdown', e => {
+      this._pt.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false });
+      try { cv.setPointerCapture(e.pointerId); } catch (err) { /* pointer may already be released */ }
+      if (this._pt.size === 2) {
+        const pts = [...this._pt.values()];
+        const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+        this._pinch = {
+          d0: Math.hypot(dx, dy) || 1, z0: G.cam.z,
+          mx: (pts[0].x + pts[1].x) / 2, my: (pts[0].y + pts[1].y) / 2,
+        };
+        this._panning = false;
+      }
+      e.preventDefault();
+    }, { passive: false });
+
+    cv.addEventListener('pointermove', e => {
+      const p = this._pt.get(e.pointerId);
+      if (!p) {
+        // hover ghost (desktop)
+        if (G.state === 'playing' && this.mode) {
+          const w = Render.screenToWorld(e.clientX, e.clientY);
+          this.ghost = { x: (w.x / 16) | 0, y: (w.y / 16) | 0 };
+        }
+        return;
+      }
+      const dxp = e.clientX - p.x, dyp = e.clientY - p.y; // delta since last event
+      const dx = e.clientX - p.sx, dy = e.clientY - p.sy;
+      if (Math.hypot(dx, dy) > 9) p.moved = true;
+      p.x = e.clientX; p.y = e.clientY;
+
+      if (this._pt.size === 2 && this._pinch) {
+        // pinch zoom + two-finger pan
+        const pts = [...this._pt.values()];
+        const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        const mx = (pts[0].x + pts[1].x) / 2, my = (pts[0].y + pts[1].y) / 2;
+        const before = Render.screenToWorld(mx, my);
+        G.cam.z = U.clamp(this._pinch.z0 * d / this._pinch.d0, CONFIG.ZOOM.min, CONFIG.ZOOM.max);
+        const after = Render.screenToWorld(mx, my);
+        G.cam.x += before.x - after.x;
+        G.cam.y += before.y - after.y;
+        G.cam.x -= (mx - this._pinch.mx) / G.cam.z;
+        G.cam.y -= (my - this._pinch.my) / G.cam.z;
+        this._pinch.mx = mx; this._pinch.my = my;
+        this._panning = true;
+        return;
+      }
+
+      if (p.moved) {
+        const paint = this.mode && this.mode.type === 'build' && BUILD[this.mode.key] && BUILD[this.mode.key].paint;
+        const demo = this.mode && this.mode.type === 'demolish';
+        if ((paint || demo) && G.state === 'playing') {
+          const w = Render.screenToWorld(e.clientX, e.clientY);
+          const tx = (w.x / 16) | 0, ty = (w.y / 16) | 0;
+          if (!this._lastTile || this._lastTile.x !== tx || this._lastTile.y !== ty) {
+            this._lastTile = { x: tx, y: ty };
+            this.ghost = { x: tx, y: ty };
+            this.tryPlace(tx, ty);
+          }
+        } else {
+          // pan (mouse and touch share the per-event delta)
+          G.cam.x -= dxp / G.cam.z;
+          G.cam.y -= dyp / G.cam.z;
+          this._panning = true;
+        }
+        if (G.state === 'playing' && this.mode) {
+          const w = Render.screenToWorld(e.clientX, e.clientY);
+          const tx = (w.x / 16) | 0, ty = (w.y / 16) | 0;
+          this.ghost = { x: tx - (this.mode.type === 'build' ? ((BUILD[this.mode.key].w - 1) >> 1) : 0), y: ty - (this.mode.type === 'build' ? ((BUILD[this.mode.key].h - 1) >> 1) : 0) };
+        }
+      }
+    }, { passive: false });
+
+    const up = e => {
+      const p = this._pt.get(e.pointerId);
+      this._pt.delete(e.pointerId);
+      if (this._pt.size < 2) this._pinch = null;
+      this._lastMx = undefined; this._lastMy = undefined;
+      this._lastTile = null;
+      if (!p) return;
+      const dt = performance.now() - p.t;
+      if (!p.moved && dt < 400 && G.state === 'playing') this.tap(e.clientX, e.clientY);
+    };
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+
+    cv.addEventListener('wheel', e => {
+      e.preventDefault();
+      const before = Render.screenToWorld(e.clientX, e.clientY);
+      G.cam.z = U.clamp(G.cam.z * (e.deltaY < 0 ? 1.12 : 0.89), CONFIG.ZOOM.min, CONFIG.ZOOM.max);
+      const after = Render.screenToWorld(e.clientX, e.clientY);
+      G.cam.x += before.x - after.x;
+      G.cam.y += before.y - after.y;
+    }, { passive: false });
+
+    // minimap tap/drag
+    const mm = document.getElementById('minimap');
+    const mmNav = e => {
+      const r = mm.getBoundingClientRect();
+      const fx = U.clamp((e.clientX - r.left) / r.width, 0, 1);
+      const fy = U.clamp((e.clientY - r.top) / r.height, 0, 1);
+      G.cam.x = fx * World.W * 16;
+      G.cam.y = fy * World.H * 16;
+      G.follow = null;
+    };
+    mm.addEventListener('pointerdown', e => { try { mm.setPointerCapture(e.pointerId); } catch (err) {} mmNav(e); });
+    mm.addEventListener('pointermove', e => { if (e.buttons) mmNav(e); });
+
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && G.state === 'playing' && !G.paused) Sim.speedSet(0);
+    });
+  },
+
+  tap(sx, sy) {
+    const w = Render.screenToWorld(sx, sy);
+    const wx = w.x / 16, wy = w.y / 16;
+    if (this.mode) {
+      const tx = wx | 0, ty = wy | 0;
+      this.ghost = { x: tx, y: ty };
+      this.tryPlace(tx, ty);
+      return;
+    }
+    // pick: monsters > villagers > buildings
+    let best = null, bd = 0.85;
+    for (const m of G.monsters) {
+      const d = U.dst(wx, wy, m.x, m.y);
+      if (d < bd) { bd = d; best = { kind: 'm', ref: m }; }
+    }
+    if (!best) {
+      bd = 0.7;
+      for (const v of G.villagers) {
+        const d = U.dst(wx, wy, v.x, v.y);
+        if (d < bd) { bd = d; best = { kind: 'v', ref: v }; }
+      }
+    }
+    if (!best) {
+      const b = World.bldAt(wx | 0, wy | 0);
+      if (b) best = { kind: 'b', ref: b };
+    }
+    if (best) { this.select(best.kind, best.ref); G.follow = null; }
+    else this.selHide();
+  },
+
+  zoomBy(dz) {
+    const before = Render.screenToWorld(Render.cw / 2, Render.ch / 2);
+    G.cam.z = U.clamp(G.cam.z + dz, CONFIG.ZOOM.min, CONFIG.ZOOM.max);
+    const after = Render.screenToWorld(Render.cw / 2, Render.ch / 2);
+    G.cam.x += before.x - after.x;
+    G.cam.y += before.y - after.y;
+  },
+
+  /* ================= screens ================= */
+  showGameUI() {
+    this.els.hud.classList.remove('hidden');
+    this.els.dock.classList.remove('hidden');
+    this.els.zoomBtns.classList.remove('hidden');
+    this.els.mmWrap.classList.remove('hidden');
+    this.syncSpeedBtns();
+    this.updateHUD();
+  },
+
+  refreshAll() {
+    this.updateHUD();
+    if (this.open) this.openPanel(this.open);
+  },
+
+  endScreen(kind) {
+    this.closePanel(); this.cancelMode(); this.selHide();
+    this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden');
+    this.els.zoomBtns.classList.add('hidden'); this.els.mmWrap.classList.add('hidden');
+    this.els.tut.classList.add('hidden');
+    const scr = document.getElementById('endScreen');
+    const c = document.getElementById('endContent');
+    const s = G.stats;
+    const stats = `
+      <div class="statgrid">
+        <div class="stat"><div class="v">${G.day}</div><div class="l">Days</div></div>
+        <div class="stat"><div class="v">${s.kills}</div><div class="l">Kills</div></div>
+        <div class="stat"><div class="v">${s.built}</div><div class="l">Built</div></div>
+        <div class="stat"><div class="v">${s.peakPop}</div><div class="l">Peak souls</div></div>
+      </div>`;
+    const chronBits = G.chronicle.slice(-4).map(cc => `<div class="sub2" style="font-size:12px">\u201c${U.esc(cc.txt)}\u201d</div>`).join('');
+    if (kind === 'victory') {
+      c.innerHTML = `
+        <canvas id="endArt" width="180" height="100"></canvas>
+        <h1 style="color:#ffd94a;text-shadow:0 3px 0 #6b4310,0 6px 18px rgba(255,217,74,.5)">DAWN ETERNAL</h1>
+        <div class="sub2">The Beacon roars, the dark breaks like a storm at sunrise, and the long night is over.<br>Your people will tell this story for a thousand years.</div>
+        ${stats}${chronBits}
+        <button class="bigbtn" id="endContinue">Keep Playing (Endless)</button>
+        <button class="bigbtn ghost" id="endNew">New Game</button>`;
+      document.getElementById('endContinue').onclick = () => {
+        G.state = 'playing'; G.finalNight = false;
+        scr.classList.add('hidden');
+        this.showGameUI();
+        this.toast('Endless mode — the nights keep coming. How long can Dawnhold stand?', 'magic');
+      };
+    } else {
+      c.innerHTML = `
+        <canvas id="endArt" width="180" height="100"></canvas>
+        <h1 style="color:#ff6a6a">DAWNHOLD HAS FALLEN</h1>
+        <div class="sub2">The last hearth goes cold, and the dark takes the valley.<br>But every ending is a lesson. Raise it again, Guardian.</div>
+        ${stats}${chronBits}
+        <button class="bigbtn" id="endNew">Try Again</button>
+        <button class="bigbtn ghost" id="endTitle">Title Screen</button>`;
+    }
+    const ea = document.getElementById('endArt');
+    if (ea) Art.titlePaint(ea, kind === 'victory' ? 'win' : 'lose');
+    document.getElementById('endNew').onclick = () => {
+      scr.classList.add('hidden');
+      document.getElementById('titleScreen').classList.remove('hidden');
+      document.getElementById('diffPick').classList.remove('hidden');
+      document.getElementById('btnNew').classList.add('hidden');
+      G.state = 'title';
+    };
+    const et = document.getElementById('endTitle');
+    if (et) et.onclick = () => {
+      scr.classList.add('hidden');
+      document.getElementById('titleScreen').classList.remove('hidden');
+      G.state = 'title';
+    };
+    scr.classList.remove('hidden');
+  },
+
+  helpFill() {
+    document.getElementById('helpBody').innerHTML = `
+      <h2>Your Goal</h2>
+      <p>You are the guardian spirit of a tiny settlement. Keep your villagers alive, grow the village, and raise <b>The Beacon</b> (unlocks day 10). Light it and survive the <b>Long Night</b> that follows — dawn returns forever. Lose only when every villager dies.</p>
+      <h2>The Rhythm</h2>
+      <p><b>Day (~3.5 min):</b> villagers with jobs gather food, wood and stone, build and repair.<br>
+      <b>Night (~1.5 min):</b> monsters attack. Villagers shelter indoors; guards and towers fight; you cast powers. Survivors of the dark burn away at dawn.</p>
+      <h2>Controls</h2>
+      <ul>
+        <li><b>Tap</b> a villager, monster or building to inspect it.</li>
+        <li><b>Drag</b> to pan. <b>Pinch</b> or use <b>+/&minus;</b> buttons to zoom. Tap the <b>minimap</b> (top right) to jump.</li>
+        <li><b>Build:</b> pick a building, then tap the map. Walls, gates and roads <b>paint as you drag</b>.</li>
+        <li>Speed: pause / 1\u00d7 / 2\u00d7 / 3\u00d7 (space bar pauses on desktop).</li>
+      </ul>
+      <h2>Jobs</h2>
+      <ul>
+        <li><b>Forager</b> — berries. Fast early food; bushes regrow daily.</li>
+        <li><b>Lumberjack</b> — wood for tents, palisades, towers.</li>
+        <li><b>Miner</b> — stone. Lodes are finite and richer far from camp.</li>
+        <li><b>Farmer</b> — tends wheat plots: the engine that feeds a big village.</li>
+        <li><b>Builder</b> — raises construction and repairs damage (costs materials).</li>
+        <li><b>Guard</b> — patrols and fights. Keep 1 early, more as nights grow.</li>
+      </ul>
+      <h2>Surviving the Night</h2>
+      <ul>
+        <li>Walls route the horde; they break gates and weak walls, so ring your camp and mind the gaps.</li>
+        <li><b>Watchtowers</b> (day 3) shoot automatically; <b>Ballistae</b> (day 7) pierce brutes.</li>
+        <li><b>Runners</b> are fast and fragile, <b>Brutes</b> (day 6) smash walls, <b>Stalkers</b> (day 9) hunt villagers.</li>
+        <li><b>Powers</b>: Mend heals, Smite erases shades, Meteor (day 6) wipes waves. Essence refills over time and from kills.</li>
+        <li>Food alarms mean idle villagers emergency-forage — but farms before day 4 is the reliable path.</li>
+      </ul>
+      <h2>People</h2>
+      <p>Villagers are named individuals with traits (Hardy, Swift, Diligent, Strong Back). New folks arrive at dawn if there's <b>housing and food</b>. Starvation kills — keep the store above ~10.</p>
+      <h2>Saving</h2>
+      <p>Autosaves at every dawn, plus three manual slots (Menu \u2192 Save). Saves live in this browser.</p>`;
+  },
+};
+;
+
+/* ===== Bundled from js/main.js ===== */
+'use strict';
+/* ============================================================
+   Dawnhold — main.js
+   Boot + requestAnimationFrame loop. Fixed render cadence with
+   speed-scaled simulation ticks.
+   ============================================================ */
+
+(function boot() {
+  Art.init();
+  Render.init();
+  UI.init();
+
+  // title screen vignette
+  const tcv = document.getElementById('titleArt');
+  Art.titlePaint(tcv, 'title');
+
+  // expose for tinkering in the console (see README)
+  window.G = G; window.Sim = Sim; window.DBG = DBG;
+
+  let last = performance.now();
+  let hudT = 0;
+
+  function loop(now) {
+    const dt = Math.min((now - last) / 1000, 0.1);
+    last = now;
+
+    if (G.state === 'playing' && !G.paused) {
+      // subdivide fast-forward so AI/collision stay stable at 3x
+      const total = dt * G.speed;
+      const steps = Math.max(1, Math.ceil(total / 0.05));
+      for (let i = 0; i < steps && G.state === 'playing'; i++) Sim.tick(total / steps);
+    }
+
+    if (G.state !== 'title') Render.frame(dt);
+
+    hudT -= dt;
+    if (hudT <= 0) { hudT = 0.2; UI.updateHUD(); }
+
+    if (G.state === 'playing' && !UI.els.mmWrap.classList.contains('hidden')) Render.minimap(dt);
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  const onResize = () => { Render.resize(); };
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
+})();
+;
+</script>
 </body>
 </html>

@@ -1,10 +1,10 @@
 # DAWNHOLD — a colony survival RTS
 
 A complete, mobile-first single-player colony-survival RTS in the spirit of
-**Rise to Ruins, RimWorld, Oddrealm and Final Outpost** — pure HTML/CSS/JS,
-every sprite hand-painted procedurally in code (no assets, no sound, no
-dependencies). Build a village by day, hold back the horde by night, and light
-the Great Beacon to bring back the dawn.
+**Rise to Ruins, RimWorld, Oddrealm and Final Outpost** — delivered as one
+self-contained HTML file with no assets, sound, or dependencies. Every sprite
+is hand-painted procedurally in code. Build a village by day, hold back the
+horde by night, and light the Great Beacon to bring back the dawn.
 
 ---
 
@@ -68,7 +68,7 @@ This game was designed from a review-driven audit of its inspirations.
 
 ---
 
-## Balance model (all numbers in `js/core.js` → `CONFIG`)
+## Balance model (search `index.html` for `CONFIG`)
 
 - **Food:** villager eats ~2 meals/day (~4.3 food). Bush yields 7 (regrows
   ~3 min); wheat plot yields 15 per ~95s of sun (farmer tends to boost 20%).
@@ -90,23 +90,11 @@ Every knob is one edit in `CONFIG` — tune freely.
 
 ## Architecture
 
-```
-index.html          shell: canvas + HUD/panel/screen DOM
-css/style.css       mobile-first dark UI, safe areas, touch targets
-js/core.js          CONFIG (all balance), enums, utils, global state G
-js/art.js           every sprite painted procedurally (16px), title art
-js/world.js         seeded map gen (noise), guarantees, baking, queries
-js/path.js          A* (binary heap, 8-dir); monsters path *through* walls
-                    at high cost (prefer gaps, batter when sealed)
-js/buildings.js     BUILD defs; placement/construction/farms/towers/repair
-js/entities.js      villager & monster factories, names, traits
-js/game.js          Sim: day cycle, job AI, waves, combat, events, win/lose
-js/powers.js        Mend / Smite / Meteor
-js/save.js          localStorage: autosave + 3 slots
-js/render.js        camera, y-sorted draw, night lighting, minimap, fx
-js/ui.js            touch/mouse input, panels, selection, tutorial, screens
-js/main.js          boot + fixed-cadence RAF loop (stable at 3× speed)
-```
+`index.html` contains the canvas and interface markup, mobile-first styles,
+balance configuration, procedural artwork, world generation, pathfinding,
+simulation, powers, local saves, rendering, input, and the fixed-cadence game
+loop. Labeled source-boundary comments keep each embedded subsystem easy to
+find and edit while preserving the original load order.
 
 **Console hooks** for tinkering: `DBG.res('wood',100)`, `DBG.dusk()`,
 `DBG.wave(8)`, `DBG.vill(3)`, `DBG.day(9)`, plus `G`, `Sim`, `BUILD`,
