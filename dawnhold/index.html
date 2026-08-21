@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14161c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Dawnhold — Colony Survival</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- ============ TOP HUD ============ -->
+  <div id="hud" class="hidden">
+    <div id="hudTop">
+      <div id="clockWrap">
+        <canvas id="phaseIcon" width="18" height="18"></canvas>
+        <div id="dayLabel">Day 1</div>
+        <div id="clockBar"><div id="clockFill"></div></div>
+      </div>
+      <div id="hudBtns">
+        <button class="hbtn" id="btnPause" title="Pause">&#10073;&#10073;</button>
+        <button class="hbtn spd" id="btnSpd1" title="Normal speed">&#9654;</button>
+        <button class="hbtn spd" id="btnSpd2" title="Fast">&#9654;&#9654;</button>
+        <button class="hbtn spd" id="btnSpd3" title="Very fast">&#9654;&#9654;&#9654;</button>
+        <button class="hbtn" id="btnMenuTop" title="Menu">&#9776;</button>
+      </div>
+    </div>
+    <div id="resRow"></div>
+  </div>
+
+  <!-- boss bar -->
+  <div id="bossBar" class="hidden"><div id="bossName">Night Lord</div><div id="bossHp"><div id="bossHpFill"></div></div></div>
+
+  <!-- toasts + chronicle ticker -->
+  <div id="toasts"></div>
+  <div id="tut" class="hidden">
+    <div id="tutText"></div>
+    <div id="tutBtns"><button id="tutNext" class="tbtn">Next</button><button id="tutSkip" class="tbtn2">Hide tips</button></div>
+  </div>
+
+  <!-- selection card -->
+  <div id="selCard" class="hidden"></div>
+
+  <!-- ghost mode chip -->
+  <div id="modeChip" class="hidden"><span id="modeChipText"></span><button id="modeChipX">&#10005;</button></div>
+
+  <!-- ============ BOTTOM DOCK ============ -->
+  <div id="dock" class="hidden">
+    <button class="dbtn" id="dockBuild"><span class="dico" id="icoBuild"></span>Build</button>
+    <button class="dbtn" id="dockJobs"><span class="dico" id="icoJobs"></span>Jobs</button>
+    <button class="dbtn" id="dockPowers"><span class="dico" id="icoPowers"></span>Powers</button>
+    <button class="dbtn" id="dockMap"><span class="dico" id="icoMap"></span>Map</button>
+  </div>
+
+  <!-- slide-up panel -->
+  <div id="panelBack" class="hidden"></div>
+  <div id="panel" class="hidden"><div id="panelTitle"></div><div id="panelBody"></div></div>
+
+  <!-- zoom buttons (mobile alternative to pinch) -->
+  <div id="zoomBtns" class="hidden">
+    <button id="zoomIn">+</button>
+    <button id="zoomOut">&minus;</button>
+  </div>
+
+  <!-- minimap -->
+  <div id="mmWrap" class="hidden"><canvas id="minimap" width="72" height="72"></canvas></div>
+
+  <!-- ============ FULL SCREENS ============ -->
+  <div id="titleScreen" class="screen">
+    <canvas id="titleArt" width="360" height="200"></canvas>
+    <div class="titleInner">
+      <h1>DAWNHOLD</h1>
+      <div class="subtitle">a colony survival rts</div>
+      <div class="tagline">The sun is failing. Raise a village, hold the night, and light the Great Beacon.</div>
+      <button id="btnContinue" class="bigbtn hidden">Continue</button>
+      <button id="btnNew" class="bigbtn">New Game</button>
+      <button id="btnHelpT" class="bigbtn ghost">How to Play</button>
+      <div id="diffPick" class="hidden">
+        <div class="diffTitle">Choose a difficulty</div>
+        <button class="bigbtn diff" data-diff="peaceful"><b>Peaceful</b><span>No attacks. Learn the loop.</span></button>
+        <button class="bigbtn diff" data-diff="easy"><b>Easy</b><span>Gentle nights.</span></button>
+        <button class="bigbtn diff" data-diff="normal"><b>Normal</b><span>The intended challenge.</span></button>
+        <button class="bigbtn diff" data-diff="hard"><b>Hard</b><span>The dark hungers.</span></button>
+      </div>
+      <div class="verText">v1.0 &middot; saves in this browser</div>
+    </div>
+  </div>
+
+  <div id="helpScreen" class="screen hidden">
+    <div class="helpInner"><div id="helpBody"></div>
+      <button id="btnHelpClose" class="bigbtn">Close</button></div>
+  </div>
+
+  <div id="endScreen" class="screen hidden">
+    <div class="endInner" id="endContent"></div>
+  </div>
+</div>
+<noscript><div style="color:#fff;font-family:monospace;padding:2em">Dawnhold needs JavaScript enabled.</div></noscript>
+<script src="js/core.js"></script>
+<script src="js/art.js"></script>
+<script src="js/world.js"></script>
+<script src="js/path.js"></script>
+<script src="js/buildings.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+<script src="js/powers.js"></script>
+<script src="js/save.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
