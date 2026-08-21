@@ -1,17 +1,22 @@
 # DAWNHOLD — a colony survival RTS
 
 A complete, mobile-first single-player colony-survival RTS in the spirit of
-**Rise to Ruins, RimWorld, Oddrealm and Final Outpost** — delivered as one
-self-contained HTML file with no assets, sound, or dependencies. Every sprite
-is hand-painted procedurally in code. Build a village by day, hold back the
-horde by night, and light the Great Beacon to bring back the dawn.
+**Rise to Ruins, RimWorld, Oddrealm and Final Outpost** — available as an
+editable HTML/CSS/JS source tree and as one self-contained HTML file. It has no
+assets, sound, or dependencies, and every sprite is hand-painted procedurally
+in code. Build a village by day, hold back the horde by night, and light the
+Great Beacon to bring back the dawn.
 
 ---
 
 ## Run it
 
-- **Easiest:** double-click `index.html`. Saves live in your browser's
-  localStorage. Works in Chrome, Edge, Firefox, Safari (desktop & mobile).
+- **Editable build:** double-click `index.html`; it loads the files in `css/`
+  and `js/`.
+- **Single-file build:** double-click or share `onefile.html`; all CSS and
+  JavaScript are embedded inside it.
+- Saves live in your browser's localStorage. Both builds work in Chrome, Edge,
+  Firefox, and Safari on desktop and mobile.
 - **Or serve it** (nicer for full-screen mobile): `python -m http.server 8137`
   in this folder, then open `http://localhost:8137`.
 - On your phone: open the URL, then "Add to Home Screen" for fullscreen play.
@@ -68,7 +73,7 @@ This game was designed from a review-driven audit of its inspirations.
 
 ---
 
-## Balance model (search `index.html` for `CONFIG`)
+## Balance model (see `js/core.js` → `CONFIG`)
 
 - **Food:** villager eats ~2 meals/day (~4.3 food). Bush yields 7 (regrows
   ~3 min); wheat plot yields 15 per ~95s of sun (farmer tends to boost 20%).
@@ -90,11 +95,26 @@ Every knob is one edit in `CONFIG` — tune freely.
 
 ## Architecture
 
-`index.html` contains the canvas and interface markup, mobile-first styles,
-balance configuration, procedural artwork, world generation, pathfinding,
-simulation, powers, local saves, rendering, input, and the fixed-cadence game
-loop. Labeled source-boundary comments keep each embedded subsystem easy to
-find and edit while preserving the original load order.
+```text
+index.html          shell: canvas + HUD/panel/screen DOM
+onefile.html        portable build with the same CSS and JavaScript embedded
+css/style.css       mobile-first dark UI, safe areas, touch targets
+js/core.js          CONFIG (all balance), enums, utils, global state G
+js/art.js           every sprite painted procedurally (16px), title art
+js/world.js         seeded map gen (noise), guarantees, baking, queries
+js/path.js          A* (binary heap, 8-dir); monsters path through walls
+js/buildings.js     BUILD defs; placement/construction/farms/towers/repair
+js/entities.js      villager & monster factories, names, traits
+js/game.js          simulation, day cycle, jobs, waves, combat, events
+js/powers.js        Mend / Smite / Meteor
+js/save.js          localStorage autosave and three slots
+js/render.js        camera, y-sorted draw, lighting, minimap, effects
+js/ui.js            touch/mouse input, panels, selection, tutorial, screens
+js/main.js          boot and fixed-cadence game loop
+```
+
+The labeled source-boundary comments inside `onefile.html` mirror this load
+order, so the portable build remains navigable.
 
 **Console hooks** for tinkering: `DBG.res('wood',100)`, `DBG.dusk()`,
 `DBG.wave(8)`, `DBG.vill(3)`, `DBG.day(9)`, plus `G`, `Sim`, `BUILD`,
