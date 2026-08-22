@@ -226,45 +226,41 @@ Terrain is baked once to an offscreen canvas; entities are capped
 a half-resolution destination-out pass with capped light count; the minimap
 redraws at ~3Hz.
 
-## Ideas if you want to extend it (research-backed)
+## Ideas if you want to extend it — production chains & the balancing act
 
-Distilled from reviews, postmortems and community hubs for Rise to Ruins,
-They Are Billions, Kingdom Two Crowns, Northgard, Against the Storm, Odd Realm
-and Final Outpost. The genre's #1 churn cause is **late-game stagnation**
-("early game defined by change, late game by stagnation" — r/RimWorld); the
-best-proven fixes are structured goals, fail-forward progression, and
-recurring pressure cycles.
+The Rise to Ruins lesson: one-off building costs never catch up to a growing
+economy. The fix is recurring consumption and intermediate goods — jobs get
+broken into raw → crafted → consumed chains (its Bottler, its smith-maintained
+tools), and defense itself becomes a supply line. Every surplus should be an
+input that something else hungers for.
 
-- **Deeds & challenge runs** — optional scored goals ("survive night 5 with
-  no walls", "pop 20 by day 8") and a seeded daily challenge; Kingdom's free
-  Challenge Islands update is the genre's proven retention fix.
-- **Fail-forward meta** — defeat still grants Insight for permanent altar
-  unlocks, so losses advance you (Against the Storm's citadel progression).
-- **Seasons** — winter days freeze farms and shore fishing and demand
-  firewood; Northgard: "even more than dragons or undead, foul weather is the
-  greatest threat."
-- **Wandering trader** — a peddler at dawn buys surplus wood/stone for
-  essence and rare goods: a material sink and a coin-toss decision every day
-  (Kingdom's one visible currency; Rise to Ruins' marketplace).
-- **Founders/clans** — pick a starting clan (Masons build cheap, Hunters hit
-  hard, Shepherds eat less) so each run plans out differently (Northgard's
-  asymmetric clans).
-- **Fire** — brutes torch adjacent wooden buildings and builders douse them:
-  cascading stakes you can watch and contain (They Are Billions' domino
-  tension, minus its unfair one-breach spiral).
-- **Noise** — night combat, demolition and building draw stragglers from the
-  wilds; quiet, fast clears become a real tactic (They Are Billions' noise
-  discipline).
-- **Trap synergies** — tar pits slow into spikes, oil + Smite ignites, stasis
-  + ballista volleys: combos give the defense toybox mastery depth (Orcs Must
-  Die's trap synergies).
-- **Map secrets** — a wishing well, a faded shrine, a hermit's hut: small
-  one-time boons that reward exploring past the treeline (Kingdom Two Crowns'
-  wordless discovery).
-- **Sound & life** — procedural WebAudio ambience (no assets needed),
-  villager speech bubbles, elite monsters with names and grudges, a dawn
-  festival after each blood moon — the chronicle's story, made audible and
-  visible (Odd Realm's standing "achievements?" request; juice is retention).
+- **Fletcher** — turns wood into arrows & ballista bolts; towers and guards
+  burn them per shot and per raid. Nights stop being free: every wave fought
+  costs wood by design.
+- **Smith & tool wear** — a Smithy forges tools (wood + stone); every
+  gatherer, farmer and builder needs one and wears it out. Workforce size
+  sets your drain rate — hiring now has a materials cost.
+- **Cook & meals** — a Kitchen turns 3 food + 1 wood (firewood) into 2 meals
+  worth double hunger; raw berries become the inefficient fallback. Fixes
+  food stockpiling.
+- **Brewer & tavern nights** — surplus food + herbs brew into ale; a drink at
+  dusk grants +10% work speed the next day. A happy sink with a rhythm.
+- **Charcoal kiln & lamp oil** — kilns cook wood into charcoal (smith fuel),
+  a press renders lamp oil so torches and towers light the night. Two linked
+  drains on the same tree.
+- **Building upgrades** — tower II/III, stone-faced walls, irrigated farms:
+  same footprints, escalating 3–5× cost tiers (RtR's towers run ×10).
+- **Weathering & upkeep** — walls weather and torches gutter; builders
+  auto-maintain them for materials. A village becomes a machine with a fuel
+  bill.
+- **Storage caps** — granaries and storehouses hold a cap; food spoils past
+  it and vermin nibble the overflow. Hoarding costs buildings, not nothing.
+- **Comfort tiers** — bedroll → real bed → cottage; discontent villagers work
+  slower or wander off at dawn. Population growth becomes a materials
+  decision, not just a food one.
+- **Trade post** — sell surplus wood/stone for essence, or buy tools and
+  arrows when a chain backs up: the pressure valve (RtR's marketplace).
 
-Still on the bench: villager relationships/morale, scenario maps, cloud
-saves, a snowbound second map theme, seasonal crop rotations.
+Job roster grows from 9 to ~13 (Fletcher, Smith, Cook, Brewer) and the
+balancing act emerges on its own: more workers → more tools → more wood →
+more arrows → more nights survived.
