@@ -271,8 +271,14 @@ const UI = {
             <button id="selClose">Close</button>
           </div>`;
         document.getElementById('selRaid').onclick = () => {
-          G.raidTarget = raiding ? null : b;
-          this.toast(raiding ? 'The guards stand down.' : 'Guards: RAID THE MONOLITH!', raiding ? '' : 'good');
+          if (raiding) { G.raidTarget = null; this.toast('The guards stand down.', ''); }
+          else {
+            // refuse orders the guards physically can't reach
+            const route = Path.find(World.center.x | 0, World.center.y | 0, b.x, b.y, { adjacent: true });
+            if (!route) { this.toast('No route to that lair — the wilds are too thick.', 'bad'); return; }
+            G.raidTarget = b;
+            this.toast('Guards: RAID THE MONOLITH!', 'good');
+          }
           this.selRender();
         };
         document.getElementById('selClose').onclick = () => this.selHide();

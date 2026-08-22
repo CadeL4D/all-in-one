@@ -35,7 +35,7 @@ const Path = {
     g[si] = 0; came[si] = -1;
     open.push(si, this.h(sx, sy, tx, ty));
     let best = si, bestH = this.h(sx, sy, tx, ty);
-    let nodes = 0, maxNodes = opts.maxNodes || 5000;
+    let nodes = 0, maxNodes = opts.maxNodes || 9000; // > 72×72 tiles: full-map paths always resolve completely
 
     while (open.len && nodes < maxNodes) {
       const cur = open.pop();
@@ -67,8 +67,9 @@ const Path = {
 
     // build path from best node (exact or closest reached)
     if (best === si && si !== ti) {
-      // no progress at all — try direct adjacent fallback
-      if (!adjacent) return null;
+      // no progress toward the goal at all — unreachable (a degenerate
+      // start-only path here used to freeze guards mid-chase forever)
+      return null;
     }
     const pts = [];
     let n = best;

@@ -320,10 +320,17 @@ const Sim = {
       w.left--;
       let px, py;
       if (lairs.length) {
-        // crawl out of a living lair (with a little jitter)
+        // crawl out of a living lair (with a little jitter), snapped onto
+        // walkable in-bounds ground so guards always have a route to it
         const l = U.choice(lairs);
         px = l.x + .5 + (Math.random() - .5) * 1.6;
         py = l.y + .5 + (Math.random() - .5) * 1.6;
+        let sx = U.clamp(px | 0, 1, World.W - 2), sy = U.clamp(py | 0, 1, World.H - 2);
+        if (!World.walkable(sx, sy)) {
+          const sp = Path.nearbyFree(sx, sy, true, 3);
+          if (sp) { sx = sp.x; sy = sp.y; }
+        }
+        px = sx + .5; py = sy + .5;
       } else {
         const p = World.edgePoint(G.nextSides);
         px = p.x; py = p.y;
@@ -411,10 +418,11 @@ const Sim = {
       return;
     }
 
-    // fear overrides work (non-guards)
+    // fear overrides work (non-guards) — workers no longer shelter at night,
+    // so they spook from a wider radius after dark
     if (v.job !== 'guard' && v.fearT <= 0) {
       for (const m of G.monsters) {
-        if (!m.dead && U.dst2(v.x, v.y, m.x, m.y) < 12) {
+        if (!m.dead && U.dst2(v.x, v.y, m.x, m.y) < (isNightLike() ? 30 : 12)) {
           v.fearT = 4.5; v.state = 'flee'; v.path = null;
           break;
         }
@@ -423,7 +431,7 @@ const Sim = {
 
     switch (v.state) {
       case 'flee': {
-        if (v.fearT <= 0) { v.state = isNightLike() && v.job !== 'guard' ? 'shelter' : 'idle'; v.path = null; return; }
+        if (v.fearT <= 0) { v.state = 'idle'; v.path = null; return; }
         if (!v.path || v.pi >= v.path.length) {
           // run to the store farthest from nearest monster
           let m = null, bd = 1e9;
@@ -442,14 +450,9 @@ const Sim = {
         return;
       }
       case 'shelter': {
-        if (!isNightLike()) { v.state = 'idle'; v.path = null; return; }
-        if (!v.path || v.pi >= v.path.length) {
-          const s = Buildings.nearestStore(v.x | 0, v.y | 0);
-          if (s && U.dst(v.x, v.y, s.x + s.w / 2, s.y + s.h / 2) > 2.2) {
-            v.path = Path.find(v.x | 0, v.y | 0, (s.x + s.w / 2) | 0, (s.y + s.h / 2) | 0, { adjacent: true });
-            v.pi = 0;
-          }
-        }
+        // sheltering retired — villagers work through the night and only flee
+        // from nearby monsters (loaded saves just resume their duties)
+        v.state = 'idle'; v.path = null;
         return;
       }
       case 'toWork': {
@@ -483,9 +486,15 @@ const Sim = {
             this.hitMonster(m, this.guardDmg(), v);
             this.fx('spark', m.x, m.y, .25);
           }
-        } else if (!v.path || v.pi >= v.path.length || (v.aiT > .3 && !v.path)) {
-          v.path = Path.find(v.x | 0, v.y | 0, m.x | 0, m.y | 0, { adjacent: true, monster: false });
-          v.pi = 0;
+        } else if (!v.path || v.pi >= v.path.length) {
+          const p = Path.find(v.x | 0, v.y | 0, m.x | 0, m.y | 0, { adjacent: true, monster: false });
+          if (p) { v.path = p; v.pi = 0; v.noPathT = 0; }
+          else {
+            // unreachable quarry — don't freeze on it; give up after ~2s of failed tries
+            v.path = null;
+            v.noPathT = (v.noPathT || 0) + 0.5;
+            if (v.noPathT > 2) { v.tgt = null; v.state = 'idle'; v.noPathT = 0; }
+          }
         }
         return;
       }
@@ -493,7 +502,6 @@ const Sim = {
 
     // ----- idle: pick a task -----
     if (v.state === 'work') return;
-    if (isNightLike() && v.job !== 'guard') { v.state = 'shelter'; return; }
     let job = v.job;
     // emergency forage
     if (job === 'idle' && G.res.food < 8) job = 'forager';
@@ -506,7 +514,7 @@ const Sim = {
         const dc = U.dst2(m.x, m.y, World.center.x, World.center.y);
         if (dc < 30 * 30 && (dm < bd || dm < 64)) { bd = Math.min(bd, dm); best = m; }
       }
-      if (best) { v.tgt = best; v.state = 'fight'; return; }
+      if (best) { v.tgt = best; v.state = 'fight'; v.noPathT = 0; return; }
       // raid order: march on a dark monolith and tear it down
       if (G.raidTarget && G.buildings.includes(G.raidTarget)) {
         const rt = G.raidTarget;
@@ -519,8 +527,15 @@ const Sim = {
             this.fx('spark', rt.x + .5, rt.y + .3, .3);
           }
         } else if (!v.path || v.pi >= v.path.length) {
-          v.path = Path.find(v.x | 0, v.y | 0, rt.x, rt.y, { adjacent: true });
-          v.pi = 0;
+          const p = Path.find(v.x | 0, v.y | 0, rt.x, rt.y, { adjacent: true });
+          if (p) { v.path = p; v.pi = 0; }
+          else {
+            // lair unreachable — call off the raid instead of stranding the guards
+            G.raidTarget = null;
+            v.path = null; v.state = 'idle';
+            this.log('The guards cannot reach that lair — the raid is called off.', 'bad');
+            UI.toast('Raid called off: no route to the lair.', 'bad');
+          }
         }
         return;
       }

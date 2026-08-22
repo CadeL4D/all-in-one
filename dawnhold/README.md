@@ -61,6 +61,14 @@ Great Beacon to bring back the dawn.
   raised across their route, get shoved inside solid tiles by each other, or
   "work" a target across the map when their path is cut — they repath cleanly
   (and a villager caught inside a new wall simply steps out).
+- **Fixed (stuck guards):** chasing a quarry with no route (across water or
+  sealed behind walls) used to hand guards a degenerate one-tile path they
+  followed forever while the horde rolled in. Unreachable targets now return
+  no path: guards give the monster up after ~2s and re-pick, unreachable raid
+  orders are refused or called off with a notice, monster spawns are clamped
+  to reachable ground, and A* node budget covers the whole map so long lair
+  approaches always resolve. Unassign/reassign is never needed to unstick a
+  guard again.
 
 ### v1.0 — First Light
 - Initial release: day/night survival loop, 8 jobs, 15 buildings, 5 monsters,
@@ -90,11 +98,12 @@ Fisher, Medic, Builder, Guard) and they work autonomously.
 - **Day (~3.5 min):** gather berries/wood/stone/herbs, build, farm, fish,
   repair.
 - **Dusk:** you're told how many monsters are coming **and from which lair**.
-  Non-guards head for shelter. Every 5th night is a **blood moon** (+50% horde,
-  double essence from kills).
+  Every 5th night is a **blood moon** (+50% horde, double essence from kills).
 - **Night (~1.5 min):** the horde crawls out of its **Dark Monoliths** (pink
   crosses on the minimap). Guards and towers fight; you spend **Essence** on
-  god powers (Mend / Smite / Stasis / Meteor). Survivors burn at dawn.
+  god powers (Mend / Smite / Stasis / Meteor). Workers keep their jobs after
+  dark — they only break and run when monsters get close. Survivors burn at
+  dawn.
 - **Raids:** tap a monolith and press **Raid** — your guards march out and
   tear it down (+25 essence, that lair never spawns again; wipe all three and
   nights shrink to stragglers from the wilds).
