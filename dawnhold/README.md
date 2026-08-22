@@ -226,7 +226,45 @@ Terrain is baked once to an offscreen canvas; entities are capped
 a half-resolution destination-out pass with capped light count; the minimap
 redraws at ~3Hz.
 
-## Ideas if you want to extend it
-Weather (rain slows foraging), wandering traders, villager
-relationships/morale, scenario maps, cloud saves, a second map theme
-(snowbound valley), seasonal crop rotations.
+## Ideas if you want to extend it (research-backed)
+
+Distilled from reviews, postmortems and community hubs for Rise to Ruins,
+They Are Billions, Kingdom Two Crowns, Northgard, Against the Storm, Odd Realm
+and Final Outpost. The genre's #1 churn cause is **late-game stagnation**
+("early game defined by change, late game by stagnation" — r/RimWorld); the
+best-proven fixes are structured goals, fail-forward progression, and
+recurring pressure cycles.
+
+- **Deeds & challenge runs** — optional scored goals ("survive night 5 with
+  no walls", "pop 20 by day 8") and a seeded daily challenge; Kingdom's free
+  Challenge Islands update is the genre's proven retention fix.
+- **Fail-forward meta** — defeat still grants Insight for permanent altar
+  unlocks, so losses advance you (Against the Storm's citadel progression).
+- **Seasons** — winter days freeze farms and shore fishing and demand
+  firewood; Northgard: "even more than dragons or undead, foul weather is the
+  greatest threat."
+- **Wandering trader** — a peddler at dawn buys surplus wood/stone for
+  essence and rare goods: a material sink and a coin-toss decision every day
+  (Kingdom's one visible currency; Rise to Ruins' marketplace).
+- **Founders/clans** — pick a starting clan (Masons build cheap, Hunters hit
+  hard, Shepherds eat less) so each run plans out differently (Northgard's
+  asymmetric clans).
+- **Fire** — brutes torch adjacent wooden buildings and builders douse them:
+  cascading stakes you can watch and contain (They Are Billions' domino
+  tension, minus its unfair one-breach spiral).
+- **Noise** — night combat, demolition and building draw stragglers from the
+  wilds; quiet, fast clears become a real tactic (They Are Billions' noise
+  discipline).
+- **Trap synergies** — tar pits slow into spikes, oil + Smite ignites, stasis
+  + ballista volleys: combos give the defense toybox mastery depth (Orcs Must
+  Die's trap synergies).
+- **Map secrets** — a wishing well, a faded shrine, a hermit's hut: small
+  one-time boons that reward exploring past the treeline (Kingdom Two Crowns'
+  wordless discovery).
+- **Sound & life** — procedural WebAudio ambience (no assets needed),
+  villager speech bubbles, elite monsters with names and grudges, a dawn
+  festival after each blood moon — the chronicle's story, made audible and
+  visible (Odd Realm's standing "achievements?" request; juice is retention).
+
+Still on the bench: villager relationships/morale, scenario maps, cloud
+saves, a snowbound second map theme, seasonal crop rotations.
