@@ -10,12 +10,12 @@ Great Beacon to bring back the dawn.
 > **v1.1 — The Wilds Update:** biome map overhaul (dark forests, meadows,
 > highlands, sand shores) with fully redrawn, readable tree & rock art;
 > **3 raidable Dark Monolith lairs** the horde crawls out of each night;
-> **blood moons** every 5th night; two new jobs (**Fisher**, **Herbalist**) with
-> herbs & healing huts; **Fishing Docks, Mine Shafts, Windmills, Spike Traps,
+> **blood moons** every 5th night; two new jobs (**Fisher**, **Medic**) with
+> herbs & a **Hospital**; **Fishing Docks, Mine Shafts, Windmills, Spike Traps,
 > Barracks**; three new monsters (**Bonecasters** that snipe from range,
 > **Wraiths** that drift through walls, endless-mode **Colossi**); the
-> **Stasis** power; ancient ruins & essence crystals to salvage; and graves
-> that remember the fallen.
+> **Stasis** power; **builder land-clearing & timed demolition**; ancient ruins
+> & essence crystals to salvage; and graves that remember the fallen.
 
 ---
 
@@ -27,18 +27,29 @@ Great Beacon to bring back the dawn.
   (6 stone + 8 essence) to salvage out in the wilds.
 - **Art:** fully redrawn, outlined, more recognizable trees (oak, pine, birch,
   dead tree) and rocks (boulder, small rock, crystal); mushrooms, tall grass,
-  and graves as new set dressing.
+  and graves as new set dressing; fixed the cottage's upside-down roof and
+  added a Hospital sprite to match.
 - **Lairs & raids:** three raidable Dark Monoliths spawn the night horde;
   select one and press **Raid** to send guards to destroy it (+25 essence,
   permanently smaller nights). Pink crosses mark them on the minimap.
 - **Blood moons:** every 5th night the horde grows 50% — but kills pay double
   essence.
-- **New jobs:** Fisher (works shore docks) and Herbalist (gathers herbs; the
-  Herbalist Hut consumes them to auto-heal the wounded).
+- **New jobs:** Fisher (works shore docks) and Medic (gathers herbs to stock
+  the Hospital, which mends the wounded nearby — the duty itself is locked
+  until a Hospital is built, available after night one).
 - **New buildings:** Fishing Dock (needs water), Windmill (+35% farm growth
   within 6 tiles), Spike Traps (drag-paintable, wound + slow, wear out), Mine
   Shaft (endless slow stone, built on a boulder), Barracks (+30% guard damage,
-  one allowed).
+  one allowed), Hospital (day 2; heals 6 hp/s nearby, 1 herb per 5 hp; unlocks
+  the Medic job).
+- **Land clearing:** buildings can be staked straight over trees, boulders,
+  ruins and crystals — builders clear the footprint first (half the yield is
+  salvaged) and then raise it. A **Clear Land** tool in the Build menu queues
+  individual wild tiles for builders; tap again to cancel an order.
+- **Timed demolition:** Demolish no longer removes a building instantly —
+  builders tear it down at the same pace they build, then half the cost is
+  refunded. Tap a marked building again to cancel. Unstarted sites still go
+  instantly.
 - **New monsters:** Bonecaster (day 7, ranged), Wraith (day 11, phases
   through walls), Colossus (day 15, endless-mode siege titan).
 - **New power:** Stasis (day 5) freezes monsters in a circle for 5s.
@@ -74,7 +85,7 @@ Great Beacon to bring back the dawn.
 
 You are the guardian spirit of six settlers. **You never directly control
 villagers** — you assign their **Jobs** (Forager, Lumberjack, Miner, Farmer,
-Fisher, Herbalist, Builder, Guard) and they work autonomously.
+Fisher, Medic, Builder, Guard) and they work autonomously.
 
 - **Day (~3.5 min):** gather berries/wood/stone/herbs, build, farm, fish,
   repair.
@@ -148,7 +159,7 @@ This game was designed from a review-driven audit of its inspirations.
 - **Essence:** starts 40, cap 120, ~0.1/s day · 0.05/s night (×difficulty),
   +2 per kill (double on blood moons; lairs +25, crystals +8, boss +40),
   shrines +0.06/s. Mend 12, Smite 22, Stasis 30 (day 5), Meteor 65 (day 6).
-- **Herbs:** bush yields 5 (regrows ~3.5 min); the hut heals 6 hp/s nearby,
+- **Herbs:** bush yields 5 (regrows ~3.5 min); the Hospital heals 6 hp/s nearby,
   1 herb per 5 hp mended.
 - **Growth:** wanderer at dawn if food ≥ 14 and beds free (65% chance);
   refugees ×2 every 3rd day; pop cap 44.

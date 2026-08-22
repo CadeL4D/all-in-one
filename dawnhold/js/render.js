@@ -135,6 +135,7 @@ const Render = {
     draws.sort((a, b) => a.y - b.y);
     for (const d of draws) d.fn();
 
+    this.drawClearMarks(ctx, x0, y0, x1, y1);
     this.drawEffects(ctx);
     this.drawGhost(ctx, x0, y0, x1, y1);
 
@@ -189,6 +190,21 @@ const Render = {
       ctx.fillStyle = '#0d0f15';
       ctx.fillRect(px + 2, py - b.h * 16 - 4, bw, 3);
       ctx.fillStyle = '#6fb3e0';
+      ctx.fillRect(px + 2, py - b.h * 16 - 4, bw * b.progress, 3);
+      return;
+    }
+    if (b.demo) {
+      // being torn down — faded building with a red de-progress bar
+      if (spr) {
+        const hgt = spr.height > b.h * 16 ? spr.height : b.h * 16;
+        ctx.globalAlpha = 0.55;
+        ctx.drawImage(spr, px, py - hgt);
+        ctx.globalAlpha = 1;
+      }
+      const bw = b.w * 16 - 4;
+      ctx.fillStyle = '#0d0f15';
+      ctx.fillRect(px + 2, py - b.h * 16 - 4, bw, 3);
+      ctx.fillStyle = '#e05555';
       ctx.fillRect(px + 2, py - b.h * 16 - 4, bw * b.progress, 3);
       return;
     }
@@ -403,7 +419,26 @@ const Render = {
     } else if (mode.type === 'demolish') {
       ctx.strokeStyle = 'rgba(255,110,110,.9)';
       ctx.strokeRect(gx * 16 + .5, gy * 16 + .5, 15, 15);
+    } else if (mode.type === 'clear') {
+      ctx.strokeStyle = 'rgba(150,255,140,.9)';
+      ctx.strokeRect(gx * 16 + .5, gy * 16 + .5, 15, 15);
     }
+  },
+
+  // amber X over tiles queued for clearing
+  drawClearMarks(ctx, x0, y0, x1, y1) {
+    if (!G.clearJobs || !G.clearJobs.length) return;
+    ctx.strokeStyle = 'rgba(255,196,107,.95)';
+    ctx.lineWidth = 2;
+    for (const t of G.clearJobs) {
+      if (t.x < x0 - 1 || t.x > x1 + 1 || t.y < y0 - 1 || t.y > y1 + 1) continue;
+      const px = t.x * 16, py = t.y * 16;
+      ctx.beginPath();
+      ctx.moveTo(px + 4, py + 4); ctx.lineTo(px + 12, py + 12);
+      ctx.moveTo(px + 12, py + 4); ctx.lineTo(px + 4, py + 12);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1;
   },
 
   lighting(shX, shY) {

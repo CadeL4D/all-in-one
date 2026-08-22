@@ -19,7 +19,8 @@ const CONFIG = {
 
   // --- work ---
   CARRY: 8,                       // units hauled per trip
-  WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0, herbalist: 0.8 },
+  WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0, medic: 0.8 },
+  CLEAR: { time: 1.3 },           // builder work-seconds per cleared tile (half the yield is salvaged)
   FARM: { grow: 95, yield: 15, tendBoost: 1.2 },
   REPAIR: { rate: 22, cost: 24 }, // hp/s while repairing, hp per 1 resource
 
@@ -91,7 +92,7 @@ const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6,
 const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4 };
 
 // ---- jobs ----
-const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'herbalist', 'builder', 'guard'];
+const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'medic', 'builder', 'guard'];
 const JOB_INFO = {
   idle:     { name: 'Resting',  cloth: '#e8e0d0', desc: 'No duty. They haul nothing and stay near camp. Idle folk will emergency-forage if food runs dry.' },
   forager:  { name: 'Forager',  cloth: '#4a8f3c', desc: 'Pick berries from bushes. Fast food early on; bushes regrow each day.' },
@@ -99,7 +100,7 @@ const JOB_INFO = {
   miner:    { name: 'Miner',    cloth: '#7d7d85', desc: 'Mine stone from boulders and lodes, salvage ancient ruins, crack essence crystals.' },
   farmer:   { name: 'Farmer',   cloth: '#d9a036', desc: 'Tend and harvest wheat plots. The reliable food engine for a growing village.' },
   fisher:   { name: 'Fisher',   cloth: '#5a8fc9', desc: 'Works a Fishing Dock on the shore — steady food, no land used.' },
-  herbalist:{ name: 'Herbalist', cloth: '#3f9d84', desc: 'Gathers healing herbs; an Herbalist Hut turns them into mending for the wounded.' },
+  medic:   { name: 'Medic',    cloth: '#3f9d84', desc: 'Gathers healing herbs to stock the Hospital, which mends the wounded nearby. Requires a Hospital.' },
   builder:  { name: 'Builder',  cloth: '#e07030', desc: 'Raises new buildings and repairs damaged walls and towers.' },
   guard:    { name: 'Guard',    cloth: '#c03030', desc: 'Patrols the village and fights the shades. Keep at least one after night one.' },
 };
@@ -143,8 +144,9 @@ const G = {
   diff: 'normal', diffM: CONFIG.DIFF.normal,
   res: { wood: 0, stone: 0, food: 0, essence: 0, herbs: 0 },
   villagers: [], monsters: [], buildings: [],
+  clearJobs: [],           // queued land-clearing tiles {x, y} for builders
   effects: [], floaters: [],
-  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, herbalist: 0, builder: 1, guard: 0 },
+  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0 },
   regrow: new Map(),       // tileIdx -> {t, kind}
   unlocks: {},             // buildKey -> true (granted)
   stats: { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: 6 },

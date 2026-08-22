@@ -17,9 +17,9 @@ const Sim = {
     G.diff = diff in C.DIFF ? diff : 'normal';
     G.diffM = C.DIFF[G.diff];
     G.res = { wood: C.START.wood, stone: C.START.stone, food: C.START.food, essence: C.START.essence };
-    G.villagers = []; G.monsters = []; G.buildings = [];
+    G.villagers = []; G.monsters = []; G.buildings = []; G.clearJobs = [];
     G.effects = []; G.floaters = [];
-    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, builder: 1, guard: 0 };
+    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0 };
     G.regrow = new Map();
     G.stats = { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: C.VIL_START };
     G.chronicle = [];
@@ -547,11 +547,38 @@ const Sim = {
         const crew = G.villagers.filter(o => o !== v && o.state === 'work' && o.workB === best).length;
         if (crew < 2 && this.sendToBuilding(v, best, 'build')) return;
       }
+      // then ordered demolitions
+      const demos = Buildings.demoSites();
+      if (demos.length) {
+        let best = null, bd = 1e9;
+        for (const s of demos) {
+          const d = U.dst2(v.x, v.y, s.x + s.w / 2, s.y + s.h / 2);
+          if (d < bd) { bd = d; best = s; }
+        }
+        const crew = G.villagers.filter(o => o !== v && o.state === 'work' && o.workB === best).length;
+        if (crew < 2 && this.sendToBuilding(v, best, 'demolish')) return;
+      }
       // then repairs
       const dmg = Buildings.damaged().filter(b => b.hp / b.maxHp < 0.75);
       if (dmg.length) {
         for (const b of dmg) {
           if (this.repairable(b) && this.sendToBuilding(v, b, 'repair')) return;
+        }
+      }
+      // then queued land clearing
+      if (G.clearJobs.length) {
+        let best = null, bd = 1e9;
+        for (const t of G.clearJobs) {
+          const d = U.dst2(v.x, v.y, t.x + .5, t.y + .5);
+          if (d < bd) { bd = d; best = t; }
+        }
+        const p = Path.find(v.x | 0, v.y | 0, best.x, best.y, { adjacent: true });
+        if (p) {
+          v.path = p; v.pi = 0;
+          v.state = 'toWork';
+          v.tgtTile = { x: best.x, y: best.y };
+          v.workKind = 'clear'; v.workB = null;
+          return;
         }
       }
       return;
@@ -585,8 +612,8 @@ const Sim = {
       return;
     }
 
-    // gatherers: forager / lumber / miner / herbalist
-    if (job === 'forager' || job === 'lumber' || job === 'miner' || job === 'herbalist') {
+    // gatherers: forager / lumber / miner / medic
+    if (job === 'forager' || job === 'lumber' || job === 'miner' || job === 'medic') {
       const types = job === 'forager' ? [OBJ.BUSH]
         : job === 'lumber' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
           : job === 'miner' ? [OBJ.ROCK, OBJ.RUIN, OBJ.CRYSTAL]
@@ -631,6 +658,15 @@ const Sim = {
         v.state = 'idle'; v.tgtTile = null;
         return;
       }
+      // land clearing: any wild growth still standing is fair game
+      if (v.workKind === 'clear') {
+        const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
+        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING;
+        if (wild) { v.state = 'work'; v.workT = 0; return; }
+        this.dropClearJob(v.tgtTile.x, v.tgtTile.y);
+        v.state = 'idle'; v.tgtTile = null;
+        return;
+      }
       const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
       const want = v.workKind === 'food' ? [OBJ.BUSH]
         : v.workKind === 'wood' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
@@ -650,6 +686,7 @@ const Sim = {
         return;
       }
       if (v.workMode === 'build' && !b.built) { v.state = 'work'; return; }
+      if (v.workMode === 'demolish' && b.built && b.demo) { v.state = 'work'; return; }
       if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
       if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
       if (v.workMode === 'tend' && b.built && b.growth < 1) { v.state = 'work'; v.workT = 0; return; }
@@ -664,8 +701,18 @@ const Sim = {
     const ws = Entities.workSpeed(v);
     if (v.workKind && v.tgtTile) {
       const { x, y } = v.tgtTile;
+      // land clearing: one burst of labor, salvage half the yield, tile goes bare
+      if (v.workKind === 'clear') {
+        v.workT += dt * ws;
+        if (v.workT >= CONFIG.CLEAR.time) {
+          this.grantClear(x, y, v);
+          this.dropClearJob(x, y);
+          v.tgtTile = null; v.state = 'idle';
+        }
+        return;
+      }
       v.workT += dt * ws;
-      const jobKey = v.workKind === 'food' ? 'forager' : v.workKind === 'wood' ? 'lumber' : v.workKind === 'stone' ? 'miner' : v.workKind === 'herbs' ? 'herbalist' : v.job;
+      const jobKey = v.workKind === 'food' ? 'forager' : v.workKind === 'wood' ? 'lumber' : v.workKind === 'stone' ? 'miner' : v.workKind === 'herbs' ? 'medic' : v.job;
       const interval = CONFIG.WORK_T[jobKey] || 0.9;
       while (v.workT >= interval) {
         v.workT -= interval;
@@ -721,6 +768,16 @@ const Sim = {
       return;
     }
     if (v.workMode === 'build' && !b.built) {
+      // wild growth staked under the footprint gets cleared before construction
+      if (b.clearTiles && b.clearTiles.length) {
+        v.workT += dt * ws;
+        if (v.workT >= CONFIG.CLEAR.time) {
+          v.workT = 0;
+          const t = b.clearTiles.shift();
+          this.grantClear(t.x, t.y, v);
+        }
+        return;
+      }
       b.progress = Math.min(1, b.progress + dt * ws / b.def.time);
       b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
       if (b.progress >= 1) {
@@ -728,6 +785,16 @@ const Sim = {
         this.fx('ring', b.x + b.w / 2, b.y + b.h / 2, .5);
         if (b.key === 'beacon') this.beaconComplete(b);
         else this.log(`${b.def.name} completed.`, 'good');
+        v.workB = null; v.state = 'idle';
+      }
+      return;
+    }
+    if (v.workMode === 'demolish' && b.built && b.demo) {
+      b.progress -= dt * ws / b.def.time;
+      b.hp = Math.max(1, b.maxHp * b.progress);
+      if (b.progress <= 0) {
+        this.log(`${b.def.name} torn down — half its cost reclaimed.`, '');
+        Buildings.demolish(b);       // grants the 50% refund
         v.workB = null; v.state = 'idle';
       }
       return;
@@ -770,6 +837,43 @@ const Sim = {
   repairable(b) {
     const rc = b.def.cost.wood ? 'wood' : 'stone';
     return G.res[rc] >= 1;
+  },
+
+  // remove the wild object at (x,y); hasty clearing salvages half the yield
+  grantClear(x, y, v) {
+    const o = World.objAt(x, y);
+    const amt = World.amtAt(x, y) || 0;
+    const gain = amt > 0 ? Math.ceil(amt / 2) : 0;
+    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE) {
+      G.res.wood += gain; G.stats.gathered += gain;
+      this.float(x + .5, y + .3, '+' + gain + ' wood', '#c9964b');
+    } else if (o === OBJ.ROCK || o === OBJ.RUIN) {
+      G.res.stone += gain; G.stats.gathered += gain;
+      this.float(x + .5, y + .3, '+' + gain + ' stone', '#a5a5ae');
+    } else if (o === OBJ.CRYSTAL) {
+      G.res.stone += gain; G.stats.gathered += gain;
+      G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.CRYSTAL.essence);
+      this.float(x + .5, y + .3, '+' + gain + ' stone, +' + CONFIG.CRYSTAL.essence + ' essence', '#b48ae0');
+    }
+    World.setObj(x, y, OBJ.NONE, 0);
+    World.bakeTile(x, y);
+    this.fx('spark', x + .5, y + .3, .25);
+  },
+
+  dropClearJob(x, y) {
+    const i = G.clearJobs.findIndex(t => t.x === x && t.y === y);
+    if (i >= 0) G.clearJobs.splice(i, 1);
+  },
+
+  // flag a built building for teardown — builders un-build it, then half the cost is refunded
+  orderDemolish(b) {
+    if (!b || b.key === 'lair' || b.key === 'camp' || !b.built) return false;
+    b.demo = !b.demo;
+    if (!b.demo) {
+      b.hp = b.maxHp; b.progress = Math.max(b.progress, 1);
+      for (const v of G.villagers) if (v.workB === b && v.workMode === 'demolish') { v.workB = null; v.state = 'idle'; v.path = null; }
+    }
+    return true;
   },
 
   sendToBuilding(v, b, mode) {
@@ -1171,7 +1275,9 @@ const Sim = {
     const order = JOBS.filter(j => j !== 'idle');
     for (const job of order) {
       let have = G.villagers.filter(v => v.job === job);
-      const want = G.jobs[job] || 0;
+      // medics need a built Hospital — without one the duty cannot be staffed
+      let want = G.jobs[job] || 0;
+      if (job === 'medic' && !Buildings.hospitals().length) want = 0;
       if (have.length > want) {
         for (let i = have.length - 1; i >= want; i--) this.setJob(have[i], 'idle');
       } else if (have.length < want) {

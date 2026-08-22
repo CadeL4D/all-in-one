@@ -81,10 +81,15 @@ const BUILD = {
     kind: 'trap', paint: true, unlock: 5,
     desc: 'Wounds and slows monsters that walk over it. Wears out. Drag to lay rows.',
   },
-  herbalistHut: {
-    name: 'Herbalist Hut', cat: 'basics', w: 1, h: 1, hp: 180, cost: { wood: 10, stone: 4 }, time: 26,
-    kind: 'healer', light: 2.0, tall: 6, unlock: 6,
-    desc: 'Herbalists stock it with herbs; the hut slowly mends wounded villagers nearby.',
+  hospital: {
+    name: 'Hospital', cat: 'basics', w: 2, h: 2, hp: 320, cost: { wood: 14, stone: 10 }, time: 40,
+    kind: 'healer', light: 2.6, tall: 8, unlock: 2,
+    desc: 'Mends wounded villagers nearby, one herb at a time. Unlocks the Medic job. Buildable after your first night.',
+  },
+  herbalistHut: { // legacy — no longer buildable, but old saves keep working
+    name: 'Herbalist Hut', cat: null, w: 1, h: 1, hp: 180, cost: { wood: 10, stone: 4 }, time: 26,
+    kind: 'healer', light: 2.0, tall: 6, unlock: 99,
+    desc: 'Gathered herbs slowly mend wounded villagers nearby.',
   },
   mine: {
     name: 'Mine Shaft', cat: 'basics', w: 1, h: 1, hp: 260, cost: { wood: 12 }, time: 30,
@@ -159,6 +164,9 @@ const Buildings = {
     if (def.onRock) {
       if (World.objAt(tx, ty) !== OBJ.ROCK) return { ok: false, reason: 'Place on a boulder' };
     }
+    // real buildings may be staked over wild growth — builders clear it first
+    const clearable = def.time > 0;
+    const clearTiles = [];
     for (let dy = 0; dy < def.h; dy++) {
       for (let dx = 0; dx < def.w; dx++) {
         const x = tx + dx, y = ty + dy;
@@ -176,12 +184,16 @@ const Buildings = {
         if (t !== T.GRASS && t !== T.DIRT && t !== T.SAND) return { ok: false, reason: 'Bad ground' };
         if (def.grassOnly && t !== T.GRASS) return { ok: false, reason: 'Needs grass' };
         const o = World.obj[i];
-        const blocking = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.BUSH || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.GRAVE;
-        if (blocking && !(def.onRock && o === OBJ.ROCK)) return { ok: false, reason: 'Blocked — clear first' };
+        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE;
+        const blocking = wild || o === OBJ.BUSH || o === OBJ.GRAVE;
+        if (blocking && !(def.onRock && o === OBJ.ROCK)) {
+          if (!(clearable && wild)) return { ok: false, reason: 'Blocked — clear first' };
+          clearTiles.push({ x, y });
+        }
         if (World.occ[i]) return { ok: false, reason: 'Occupied' };
       }
     }
-    return { ok: true, reason: '' };
+    return { ok: true, reason: '', clearTiles };
   },
 
   afford(key) {
@@ -218,6 +230,7 @@ const Buildings = {
         if (World.obj[i] === OBJ.FLOWER || World.obj[i] === OBJ.STUMP) World.obj[i] = OBJ.NONE;
       }
     const b = this.create(key, tx, ty, false);
+    if (chk.clearTiles && chk.clearTiles.length) b.clearTiles = chk.clearTiles; // builders clear these first
     if (def.onRock) World.setObj(tx, ty, OBJ.NONE, 0); // shaft swallows the boulder
     G.stats.built++;
     // nudge villagers out of footprint
@@ -261,6 +274,8 @@ const Buildings = {
   lairs() { return G.buildings.filter(b => b.key === 'lair'); },
   fisherHuts() { return G.buildings.filter(b => b.built && b.def.kind === 'fisher'); },
   mines() { return G.buildings.filter(b => b.built && b.def.kind === 'mine'); },
+  hospitals() { return G.buildings.filter(b => b.key === 'hospital' && b.built); },
+  demoSites() { return G.buildings.filter(b => b.built && b.demo); },
 
   nearestStore(tx, ty) {
     let best = null, bd = 1e9;
@@ -274,7 +289,7 @@ const Buildings = {
   count(key) { let n = 0; for (const b of G.buildings) if (b.key === key) n++; return n; },
 
   damaged() {
-    return G.buildings.filter(b => b.built && b.hp < b.maxHp - 0.5)
+    return G.buildings.filter(b => b.built && !b.demo && b.hp < b.maxHp - 0.5)
       .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
   },
 
@@ -298,11 +313,11 @@ const Buildings = {
         }
         b.growth = Math.min(1, b.growth + dt * boost * breeze / CONFIG.FARM.grow);
       }
-      // herbalist hut mends wounded villagers nearby, consuming stored herbs
+      // hospital mends wounded villagers nearby, consuming stored herbs
       if (b.def.kind === 'healer' && b.built && G.res.herbs >= 1) {
         let patient = null;
         for (const v of G.villagers) {
-          if (v.hp < v.maxHp - 1 && U.dst2(v.x, v.y, b.x + .5, b.y + .5) < 16) { patient = v; break; }
+          if (v.hp < v.maxHp - 1 && U.dst2(v.x, v.y, b.x + b.w / 2, b.y + b.h / 2) < 25) { patient = v; break; }
         }
         if (patient) {
           patient.hp = Math.min(patient.maxHp, patient.hp + CONFIG.HERB.healRate * dt);

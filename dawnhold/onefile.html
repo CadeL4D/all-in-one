@@ -329,7 +329,8 @@ const CONFIG = {
 
   // --- work ---
   CARRY: 8,                       // units hauled per trip
-  WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0, herbalist: 0.8 },
+  WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0, medic: 0.8 },
+  CLEAR: { time: 1.3 },           // builder work-seconds per cleared tile (half the yield is salvaged)
   FARM: { grow: 95, yield: 15, tendBoost: 1.2 },
   REPAIR: { rate: 22, cost: 24 }, // hp/s while repairing, hp per 1 resource
 
@@ -401,7 +402,7 @@ const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6,
 const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4 };
 
 // ---- jobs ----
-const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'herbalist', 'builder', 'guard'];
+const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'medic', 'builder', 'guard'];
 const JOB_INFO = {
   idle:     { name: 'Resting',  cloth: '#e8e0d0', desc: 'No duty. They haul nothing and stay near camp. Idle folk will emergency-forage if food runs dry.' },
   forager:  { name: 'Forager',  cloth: '#4a8f3c', desc: 'Pick berries from bushes. Fast food early on; bushes regrow each day.' },
@@ -409,7 +410,7 @@ const JOB_INFO = {
   miner:    { name: 'Miner',    cloth: '#7d7d85', desc: 'Mine stone from boulders and lodes, salvage ancient ruins, crack essence crystals.' },
   farmer:   { name: 'Farmer',   cloth: '#d9a036', desc: 'Tend and harvest wheat plots. The reliable food engine for a growing village.' },
   fisher:   { name: 'Fisher',   cloth: '#5a8fc9', desc: 'Works a Fishing Dock on the shore — steady food, no land used.' },
-  herbalist:{ name: 'Herbalist', cloth: '#3f9d84', desc: 'Gathers healing herbs; an Herbalist Hut turns them into mending for the wounded.' },
+  medic:   { name: 'Medic',    cloth: '#3f9d84', desc: 'Gathers healing herbs to stock the Hospital, which mends the wounded nearby. Requires a Hospital.' },
   builder:  { name: 'Builder',  cloth: '#e07030', desc: 'Raises new buildings and repairs damaged walls and towers.' },
   guard:    { name: 'Guard',    cloth: '#c03030', desc: 'Patrols the village and fights the shades. Keep at least one after night one.' },
 };
@@ -453,8 +454,9 @@ const G = {
   diff: 'normal', diffM: CONFIG.DIFF.normal,
   res: { wood: 0, stone: 0, food: 0, essence: 0, herbs: 0 },
   villagers: [], monsters: [], buildings: [],
+  clearJobs: [],           // queued land-clearing tiles {x, y} for builders
   effects: [], floaters: [],
-  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, herbalist: 0, builder: 1, guard: 0 },
+  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0 },
   regrow: new Map(),       // tileIdx -> {t, kind}
   unlocks: {},             // buildKey -> true (granted)
   stats: { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: 6 },
@@ -489,7 +491,6 @@ function darknessLevel() {
   }
   return 0;
 }
-
 </script>
 <!-- ==== js/art.js ==== -->
 <script>
@@ -872,9 +873,12 @@ const Art = {
       R(x, 10, 16, 1, 12, PAL.stoneD); R(x, 21, 16, 1, 12, PAL.stoneD);
       // timber gable
       R(x, 13, 10, 6, 6, PAL.plank); R(x, 13, 10, 1, 6, PAL.plankD); R(x, 18, 10, 1, 6, PAL.plankD);
-      // thatch roof
-      for (let i = 0; i < 9; i++) { R(x, 2 + i, 2 + i, 13 - i, 1, i % 2 ? PAL.thatchD : PAL.thatch); R(x, 17, 2 + i, 13 - i, 1, i % 2 ? PAL.thatchD : PAL.thatch); }
-      R(x, 2, 11, 28, 1, PAL.thatchD); R(x, 15, 1, 2, 3, PAL.thatchD);
+      // thatch roof — ridge at the top, eaves wide at the bottom
+      for (let i = 0; i < 9; i++) {
+        const w = 4 + i * 3, sx = 16 - (w >> 1);
+        R(x, sx, 2 + i, w, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      }
+      R(x, 2, 11, 28, 1, PAL.thatchD); R(x, 13, 1, 6, 2, PAL.thatchD);
       R(x, 13, 22, 6, 6, PAL.door); R(x, 13, 22, 6, 1, '#7a5a34');
       R(x, 6, 20, 4, 4, '#2c2c34'); R(x, 22, 20, 4, 4, '#2c2c34');
       S.cottage = c;
@@ -1129,6 +1133,36 @@ const Art = {
       R(x, 13, 12, 1, 8, '#7a5a34'); R(x, 13, 12, 3, 1, '#7a5a34');
       R(x, 14, 13, 1, 2, '#3fa88c'); R(x, 15, 13, 1, 3, '#3fa88c');
       S.herbalist = c;
+    }
+    // --- hospital 2x2 ---
+    {
+      const { c, x } = mkc(32, 36);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 33, 24, 2);
+      R(x, 4, 15, 24, 18, '#e6dfd0');                     // plaster walls
+      R(x, 4, 15, 24, 1, '#f2ecdd');
+      for (let i = 0; i < 5; i++) R(x, 4, 19 + i * 3, 24, 1, '#d6cdb8');
+      R(x, 4, 15, 1, 18, '#d6cdb8'); R(x, 27, 15, 1, 18, '#d6cdb8');
+      // slate roof — ridge at top, eaves wide at bottom
+      for (let i = 0; i < 8; i++) {
+        const w = 6 + i * 3, sx = 16 - (w >> 1);
+        R(x, sx, 4 + i, w, 1, i % 2 ? '#57687c' : '#61728a');
+      }
+      R(x, 2, 12, 28, 2, '#46586c');                      // eave board
+      R(x, 13, 3, 6, 2, '#46586c');                       // ridge cap
+      // red cross sign
+      R(x, 13, 17, 6, 2, '#d84040'); R(x, 15, 15, 2, 6, '#d84040');
+      // door + stone step
+      R(x, 13, 26, 6, 7, PAL.door); R(x, 13, 26, 6, 1, '#7a5a34');
+      R(x, 11, 33, 10, 1, PAL.stoneD);
+      // lit windows
+      R(x, 6, 20, 4, 4, PAL.win); R(x, 6, 20, 4, 1, '#b58a2e');
+      R(x, 22, 20, 4, 4, PAL.win); R(x, 22, 20, 4, 1, '#b58a2e');
+      // herb planters
+      R(x, 5, 28, 4, 3, PAL.wood); R(x, 5, 28, 4, 1, PAL.woodD);
+      R(x, 6, 27, 1, 1, '#3fa88c'); R(x, 7, 27, 1, 1, '#5cc4a4');
+      R(x, 23, 28, 4, 3, PAL.wood); R(x, 23, 28, 4, 1, PAL.woodD);
+      R(x, 24, 27, 1, 1, '#3fa88c'); R(x, 25, 27, 1, 1, '#5cc4a4');
+      S.hospital = c;
     }
     // --- barracks 2x2 ---
     {
@@ -1445,7 +1479,6 @@ const Art = {
     x.fillStyle = vg; x.fillRect(0, 0, w, h);
   },
 };
-
 </script>
 <!-- ==== js/world.js ==== -->
 <script>
@@ -1830,7 +1863,6 @@ const World = {
     return { x: this.W / 2, y: 1.5 };
   },
 };
-
 </script>
 <!-- ==== js/path.js ==== -->
 <script>
@@ -1971,7 +2003,6 @@ class Heap {
     return top;
   }
 }
-
 </script>
 <!-- ==== js/buildings.js ==== -->
 <script>
@@ -2058,10 +2089,15 @@ const BUILD = {
     kind: 'trap', paint: true, unlock: 5,
     desc: 'Wounds and slows monsters that walk over it. Wears out. Drag to lay rows.',
   },
-  herbalistHut: {
-    name: 'Herbalist Hut', cat: 'basics', w: 1, h: 1, hp: 180, cost: { wood: 10, stone: 4 }, time: 26,
-    kind: 'healer', light: 2.0, tall: 6, unlock: 6,
-    desc: 'Herbalists stock it with herbs; the hut slowly mends wounded villagers nearby.',
+  hospital: {
+    name: 'Hospital', cat: 'basics', w: 2, h: 2, hp: 320, cost: { wood: 14, stone: 10 }, time: 40,
+    kind: 'healer', light: 2.6, tall: 8, unlock: 2,
+    desc: 'Mends wounded villagers nearby, one herb at a time. Unlocks the Medic job. Buildable after your first night.',
+  },
+  herbalistHut: { // legacy — no longer buildable, but old saves keep working
+    name: 'Herbalist Hut', cat: null, w: 1, h: 1, hp: 180, cost: { wood: 10, stone: 4 }, time: 26,
+    kind: 'healer', light: 2.0, tall: 6, unlock: 99,
+    desc: 'Gathered herbs slowly mend wounded villagers nearby.',
   },
   mine: {
     name: 'Mine Shaft', cat: 'basics', w: 1, h: 1, hp: 260, cost: { wood: 12 }, time: 30,
@@ -2136,6 +2172,9 @@ const Buildings = {
     if (def.onRock) {
       if (World.objAt(tx, ty) !== OBJ.ROCK) return { ok: false, reason: 'Place on a boulder' };
     }
+    // real buildings may be staked over wild growth — builders clear it first
+    const clearable = def.time > 0;
+    const clearTiles = [];
     for (let dy = 0; dy < def.h; dy++) {
       for (let dx = 0; dx < def.w; dx++) {
         const x = tx + dx, y = ty + dy;
@@ -2153,12 +2192,16 @@ const Buildings = {
         if (t !== T.GRASS && t !== T.DIRT && t !== T.SAND) return { ok: false, reason: 'Bad ground' };
         if (def.grassOnly && t !== T.GRASS) return { ok: false, reason: 'Needs grass' };
         const o = World.obj[i];
-        const blocking = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.BUSH || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.GRAVE;
-        if (blocking && !(def.onRock && o === OBJ.ROCK)) return { ok: false, reason: 'Blocked — clear first' };
+        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE;
+        const blocking = wild || o === OBJ.BUSH || o === OBJ.GRAVE;
+        if (blocking && !(def.onRock && o === OBJ.ROCK)) {
+          if (!(clearable && wild)) return { ok: false, reason: 'Blocked — clear first' };
+          clearTiles.push({ x, y });
+        }
         if (World.occ[i]) return { ok: false, reason: 'Occupied' };
       }
     }
-    return { ok: true, reason: '' };
+    return { ok: true, reason: '', clearTiles };
   },
 
   afford(key) {
@@ -2195,6 +2238,7 @@ const Buildings = {
         if (World.obj[i] === OBJ.FLOWER || World.obj[i] === OBJ.STUMP) World.obj[i] = OBJ.NONE;
       }
     const b = this.create(key, tx, ty, false);
+    if (chk.clearTiles && chk.clearTiles.length) b.clearTiles = chk.clearTiles; // builders clear these first
     if (def.onRock) World.setObj(tx, ty, OBJ.NONE, 0); // shaft swallows the boulder
     G.stats.built++;
     // nudge villagers out of footprint
@@ -2238,6 +2282,8 @@ const Buildings = {
   lairs() { return G.buildings.filter(b => b.key === 'lair'); },
   fisherHuts() { return G.buildings.filter(b => b.built && b.def.kind === 'fisher'); },
   mines() { return G.buildings.filter(b => b.built && b.def.kind === 'mine'); },
+  hospitals() { return G.buildings.filter(b => b.key === 'hospital' && b.built); },
+  demoSites() { return G.buildings.filter(b => b.built && b.demo); },
 
   nearestStore(tx, ty) {
     let best = null, bd = 1e9;
@@ -2251,7 +2297,7 @@ const Buildings = {
   count(key) { let n = 0; for (const b of G.buildings) if (b.key === key) n++; return n; },
 
   damaged() {
-    return G.buildings.filter(b => b.built && b.hp < b.maxHp - 0.5)
+    return G.buildings.filter(b => b.built && !b.demo && b.hp < b.maxHp - 0.5)
       .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
   },
 
@@ -2275,11 +2321,11 @@ const Buildings = {
         }
         b.growth = Math.min(1, b.growth + dt * boost * breeze / CONFIG.FARM.grow);
       }
-      // herbalist hut mends wounded villagers nearby, consuming stored herbs
+      // hospital mends wounded villagers nearby, consuming stored herbs
       if (b.def.kind === 'healer' && b.built && G.res.herbs >= 1) {
         let patient = null;
         for (const v of G.villagers) {
-          if (v.hp < v.maxHp - 1 && U.dst2(v.x, v.y, b.x + .5, b.y + .5) < 16) { patient = v; break; }
+          if (v.hp < v.maxHp - 1 && U.dst2(v.x, v.y, b.x + b.w / 2, b.y + b.h / 2) < 25) { patient = v; break; }
         }
         if (patient) {
           patient.hp = Math.min(patient.maxHp, patient.hp + CONFIG.HERB.healRate * dt);
@@ -2323,7 +2369,6 @@ const Buildings = {
     return out;
   },
 };
-
 </script>
 <!-- ==== js/entities.js ==== -->
 <script>
@@ -2407,7 +2452,6 @@ const Entities = {
 
   farmYield(v) { return CONFIG.FARM.yield; },
 };
-
 </script>
 <!-- ==== js/game.js ==== -->
 <script>
@@ -2430,9 +2474,9 @@ const Sim = {
     G.diff = diff in C.DIFF ? diff : 'normal';
     G.diffM = C.DIFF[G.diff];
     G.res = { wood: C.START.wood, stone: C.START.stone, food: C.START.food, essence: C.START.essence };
-    G.villagers = []; G.monsters = []; G.buildings = [];
+    G.villagers = []; G.monsters = []; G.buildings = []; G.clearJobs = [];
     G.effects = []; G.floaters = [];
-    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, builder: 1, guard: 0 };
+    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0 };
     G.regrow = new Map();
     G.stats = { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: C.VIL_START };
     G.chronicle = [];
@@ -2960,11 +3004,38 @@ const Sim = {
         const crew = G.villagers.filter(o => o !== v && o.state === 'work' && o.workB === best).length;
         if (crew < 2 && this.sendToBuilding(v, best, 'build')) return;
       }
+      // then ordered demolitions
+      const demos = Buildings.demoSites();
+      if (demos.length) {
+        let best = null, bd = 1e9;
+        for (const s of demos) {
+          const d = U.dst2(v.x, v.y, s.x + s.w / 2, s.y + s.h / 2);
+          if (d < bd) { bd = d; best = s; }
+        }
+        const crew = G.villagers.filter(o => o !== v && o.state === 'work' && o.workB === best).length;
+        if (crew < 2 && this.sendToBuilding(v, best, 'demolish')) return;
+      }
       // then repairs
       const dmg = Buildings.damaged().filter(b => b.hp / b.maxHp < 0.75);
       if (dmg.length) {
         for (const b of dmg) {
           if (this.repairable(b) && this.sendToBuilding(v, b, 'repair')) return;
+        }
+      }
+      // then queued land clearing
+      if (G.clearJobs.length) {
+        let best = null, bd = 1e9;
+        for (const t of G.clearJobs) {
+          const d = U.dst2(v.x, v.y, t.x + .5, t.y + .5);
+          if (d < bd) { bd = d; best = t; }
+        }
+        const p = Path.find(v.x | 0, v.y | 0, best.x, best.y, { adjacent: true });
+        if (p) {
+          v.path = p; v.pi = 0;
+          v.state = 'toWork';
+          v.tgtTile = { x: best.x, y: best.y };
+          v.workKind = 'clear'; v.workB = null;
+          return;
         }
       }
       return;
@@ -2998,8 +3069,8 @@ const Sim = {
       return;
     }
 
-    // gatherers: forager / lumber / miner / herbalist
-    if (job === 'forager' || job === 'lumber' || job === 'miner' || job === 'herbalist') {
+    // gatherers: forager / lumber / miner / medic
+    if (job === 'forager' || job === 'lumber' || job === 'miner' || job === 'medic') {
       const types = job === 'forager' ? [OBJ.BUSH]
         : job === 'lumber' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
           : job === 'miner' ? [OBJ.ROCK, OBJ.RUIN, OBJ.CRYSTAL]
@@ -3044,6 +3115,15 @@ const Sim = {
         v.state = 'idle'; v.tgtTile = null;
         return;
       }
+      // land clearing: any wild growth still standing is fair game
+      if (v.workKind === 'clear') {
+        const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
+        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING;
+        if (wild) { v.state = 'work'; v.workT = 0; return; }
+        this.dropClearJob(v.tgtTile.x, v.tgtTile.y);
+        v.state = 'idle'; v.tgtTile = null;
+        return;
+      }
       const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
       const want = v.workKind === 'food' ? [OBJ.BUSH]
         : v.workKind === 'wood' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
@@ -3063,6 +3143,7 @@ const Sim = {
         return;
       }
       if (v.workMode === 'build' && !b.built) { v.state = 'work'; return; }
+      if (v.workMode === 'demolish' && b.built && b.demo) { v.state = 'work'; return; }
       if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
       if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
       if (v.workMode === 'tend' && b.built && b.growth < 1) { v.state = 'work'; v.workT = 0; return; }
@@ -3077,8 +3158,18 @@ const Sim = {
     const ws = Entities.workSpeed(v);
     if (v.workKind && v.tgtTile) {
       const { x, y } = v.tgtTile;
+      // land clearing: one burst of labor, salvage half the yield, tile goes bare
+      if (v.workKind === 'clear') {
+        v.workT += dt * ws;
+        if (v.workT >= CONFIG.CLEAR.time) {
+          this.grantClear(x, y, v);
+          this.dropClearJob(x, y);
+          v.tgtTile = null; v.state = 'idle';
+        }
+        return;
+      }
       v.workT += dt * ws;
-      const jobKey = v.workKind === 'food' ? 'forager' : v.workKind === 'wood' ? 'lumber' : v.workKind === 'stone' ? 'miner' : v.workKind === 'herbs' ? 'herbalist' : v.job;
+      const jobKey = v.workKind === 'food' ? 'forager' : v.workKind === 'wood' ? 'lumber' : v.workKind === 'stone' ? 'miner' : v.workKind === 'herbs' ? 'medic' : v.job;
       const interval = CONFIG.WORK_T[jobKey] || 0.9;
       while (v.workT >= interval) {
         v.workT -= interval;
@@ -3134,6 +3225,16 @@ const Sim = {
       return;
     }
     if (v.workMode === 'build' && !b.built) {
+      // wild growth staked under the footprint gets cleared before construction
+      if (b.clearTiles && b.clearTiles.length) {
+        v.workT += dt * ws;
+        if (v.workT >= CONFIG.CLEAR.time) {
+          v.workT = 0;
+          const t = b.clearTiles.shift();
+          this.grantClear(t.x, t.y, v);
+        }
+        return;
+      }
       b.progress = Math.min(1, b.progress + dt * ws / b.def.time);
       b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
       if (b.progress >= 1) {
@@ -3141,6 +3242,16 @@ const Sim = {
         this.fx('ring', b.x + b.w / 2, b.y + b.h / 2, .5);
         if (b.key === 'beacon') this.beaconComplete(b);
         else this.log(`${b.def.name} completed.`, 'good');
+        v.workB = null; v.state = 'idle';
+      }
+      return;
+    }
+    if (v.workMode === 'demolish' && b.built && b.demo) {
+      b.progress -= dt * ws / b.def.time;
+      b.hp = Math.max(1, b.maxHp * b.progress);
+      if (b.progress <= 0) {
+        this.log(`${b.def.name} torn down — half its cost reclaimed.`, '');
+        Buildings.demolish(b);       // grants the 50% refund
         v.workB = null; v.state = 'idle';
       }
       return;
@@ -3183,6 +3294,43 @@ const Sim = {
   repairable(b) {
     const rc = b.def.cost.wood ? 'wood' : 'stone';
     return G.res[rc] >= 1;
+  },
+
+  // remove the wild object at (x,y); hasty clearing salvages half the yield
+  grantClear(x, y, v) {
+    const o = World.objAt(x, y);
+    const amt = World.amtAt(x, y) || 0;
+    const gain = amt > 0 ? Math.ceil(amt / 2) : 0;
+    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE) {
+      G.res.wood += gain; G.stats.gathered += gain;
+      this.float(x + .5, y + .3, '+' + gain + ' wood', '#c9964b');
+    } else if (o === OBJ.ROCK || o === OBJ.RUIN) {
+      G.res.stone += gain; G.stats.gathered += gain;
+      this.float(x + .5, y + .3, '+' + gain + ' stone', '#a5a5ae');
+    } else if (o === OBJ.CRYSTAL) {
+      G.res.stone += gain; G.stats.gathered += gain;
+      G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.CRYSTAL.essence);
+      this.float(x + .5, y + .3, '+' + gain + ' stone, +' + CONFIG.CRYSTAL.essence + ' essence', '#b48ae0');
+    }
+    World.setObj(x, y, OBJ.NONE, 0);
+    World.bakeTile(x, y);
+    this.fx('spark', x + .5, y + .3, .25);
+  },
+
+  dropClearJob(x, y) {
+    const i = G.clearJobs.findIndex(t => t.x === x && t.y === y);
+    if (i >= 0) G.clearJobs.splice(i, 1);
+  },
+
+  // flag a built building for teardown — builders un-build it, then half the cost is refunded
+  orderDemolish(b) {
+    if (!b || b.key === 'lair' || b.key === 'camp' || !b.built) return false;
+    b.demo = !b.demo;
+    if (!b.demo) {
+      b.hp = b.maxHp; b.progress = Math.max(b.progress, 1);
+      for (const v of G.villagers) if (v.workB === b && v.workMode === 'demolish') { v.workB = null; v.state = 'idle'; v.path = null; }
+    }
+    return true;
   },
 
   sendToBuilding(v, b, mode) {
@@ -3584,7 +3732,9 @@ const Sim = {
     const order = JOBS.filter(j => j !== 'idle');
     for (const job of order) {
       let have = G.villagers.filter(v => v.job === job);
-      const want = G.jobs[job] || 0;
+      // medics need a built Hospital — without one the duty cannot be staffed
+      let want = G.jobs[job] || 0;
+      if (job === 'medic' && !Buildings.hospitals().length) want = 0;
       if (have.length > want) {
         for (let i = have.length - 1; i >= want; i--) this.setJob(have[i], 'idle');
       } else if (have.length < want) {
@@ -3730,7 +3880,6 @@ const Powers = {
     UI.updateHUD();
   },
 };
-
 </script>
 <!-- ==== js/save.js ==== -->
 <script>
@@ -3768,7 +3917,10 @@ const SaveSys = {
       buildings: G.buildings.map(b => ({
         key: b.key, x: b.x, y: b.y, hp: b.hp, built: b.built, progress: b.progress,
         growth: b.growth, lit: b.lit,
+        demo: !!b.demo,
+        clear: (b.clearTiles || []).map(t => [t.x, t.y]),
       })),
+      clears: (G.clearJobs || []).map(t => [t.x, t.y]),
       villagers: G.villagers.map(v => ({
         name: v.name, trait: v.trait ? v.trait.key : null, look: { ...v.look },
         job: v.job, x: v.x, y: v.y, hp: v.hp, maxHp: v.maxHp, hunger: v.hunger, state: v.state === 'arrive' ? 'arrive' : 'idle',
@@ -3818,8 +3970,9 @@ const SaveSys = {
     G.diff = d.diff in CONFIG.DIFF ? d.diff : 'normal';
     G.diffM = CONFIG.DIFF[G.diff];
     G.res = { wood: d.res.wood || 0, stone: d.res.stone || 0, food: d.res.food || 0, essence: d.res.essence || 0, herbs: d.res.herbs || 0 };
-    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, herbalist: 0, builder: 0, guard: 0 };
+    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, medic: 0, builder: 0, guard: 0 };
     for (const k of JOBS) if (k !== 'idle') G.jobs[k] = d.jobs[k] || 0;
+    if (d.jobs.herbalist) G.jobs.medic = (G.jobs.medic || 0) + d.jobs.herbalist; // v1.1: herbalist → medic
     G.unlocks = d.unlocks || {};
     G.stats = { ...d.stats };
     G.chronicle = d.chronicle || [];
@@ -3838,14 +3991,17 @@ const SaveSys = {
     for (const bs of d.buildings) {
       const b = Buildings.create(bs.key, bs.x, bs.y, bs.built);
       b.hp = bs.hp; b.progress = bs.progress; b.growth = bs.growth; b.lit = !!bs.lit;
+      b.demo = !!bs.demo;
+      if (bs.clear && bs.clear.length) b.clearTiles = bs.clear.map(([x, y]) => ({ x, y }));
       if (!b.built) b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
     }
+    G.clearJobs = (d.clears || []).map(([x, y]) => ({ x, y }));
 
     G.villagers = d.villagers.map(vs => {
       const tr = TRAITS.find(t => t.key === vs.trait) || null;
       const v = {
         kind: 'v', id: NID(), name: vs.name, trait: tr,
-        look: vs.look, job: vs.job,
+        look: vs.look, job: vs.job === 'herbalist' ? 'medic' : vs.job,
         x: vs.x, y: vs.y, hp: vs.hp, maxHp: vs.maxHp || CONFIG.V.hp,
         hunger: vs.hunger, state: vs.state, path: null, pi: 0, anim: 0,
         tgt: null, tgtTile: null, workT: 0, workB: null,
@@ -3872,7 +4028,6 @@ const SaveSys = {
     return true;
   },
 };
-
 </script>
 <!-- ==== js/render.js ==== -->
 <script>
@@ -4013,6 +4168,7 @@ const Render = {
     draws.sort((a, b) => a.y - b.y);
     for (const d of draws) d.fn();
 
+    this.drawClearMarks(ctx, x0, y0, x1, y1);
     this.drawEffects(ctx);
     this.drawGhost(ctx, x0, y0, x1, y1);
 
@@ -4067,6 +4223,21 @@ const Render = {
       ctx.fillStyle = '#0d0f15';
       ctx.fillRect(px + 2, py - b.h * 16 - 4, bw, 3);
       ctx.fillStyle = '#6fb3e0';
+      ctx.fillRect(px + 2, py - b.h * 16 - 4, bw * b.progress, 3);
+      return;
+    }
+    if (b.demo) {
+      // being torn down — faded building with a red de-progress bar
+      if (spr) {
+        const hgt = spr.height > b.h * 16 ? spr.height : b.h * 16;
+        ctx.globalAlpha = 0.55;
+        ctx.drawImage(spr, px, py - hgt);
+        ctx.globalAlpha = 1;
+      }
+      const bw = b.w * 16 - 4;
+      ctx.fillStyle = '#0d0f15';
+      ctx.fillRect(px + 2, py - b.h * 16 - 4, bw, 3);
+      ctx.fillStyle = '#e05555';
       ctx.fillRect(px + 2, py - b.h * 16 - 4, bw * b.progress, 3);
       return;
     }
@@ -4281,7 +4452,26 @@ const Render = {
     } else if (mode.type === 'demolish') {
       ctx.strokeStyle = 'rgba(255,110,110,.9)';
       ctx.strokeRect(gx * 16 + .5, gy * 16 + .5, 15, 15);
+    } else if (mode.type === 'clear') {
+      ctx.strokeStyle = 'rgba(150,255,140,.9)';
+      ctx.strokeRect(gx * 16 + .5, gy * 16 + .5, 15, 15);
     }
+  },
+
+  // amber X over tiles queued for clearing
+  drawClearMarks(ctx, x0, y0, x1, y1) {
+    if (!G.clearJobs || !G.clearJobs.length) return;
+    ctx.strokeStyle = 'rgba(255,196,107,.95)';
+    ctx.lineWidth = 2;
+    for (const t of G.clearJobs) {
+      if (t.x < x0 - 1 || t.x > x1 + 1 || t.y < y0 - 1 || t.y > y1 + 1) continue;
+      const px = t.x * 16, py = t.y * 16;
+      ctx.beginPath();
+      ctx.moveTo(px + 4, py + 4); ctx.lineTo(px + 12, py + 12);
+      ctx.moveTo(px + 12, py + 4); ctx.lineTo(px + 4, py + 12);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1;
   },
 
   lighting(shX, shY) {
@@ -4460,7 +4650,6 @@ const Render = {
     x.strokeRect(G.cam.x / 16 - vw / 2, G.cam.y / 16 - vh / 2, vw, vh);
   },
 };
-
 </script>
 <!-- ==== js/ui.js ==== -->
 <script>
@@ -4768,10 +4957,16 @@ const UI = {
 
   cycleJob(v, dir) {
     const i = JOBS.indexOf(v.job);
-    let ni = U.clamp(i + dir, 0, JOBS.length - 1);
+    let ni = i + dir;
+    // the Medic duty needs a built Hospital — skip over it in the cycle
+    while (JOBS[ni] === 'medic' && !Buildings.hospitals().length) ni += dir;
+    if (ni < 0 || ni >= JOBS.length) {
+      if (!Buildings.hospitals().length) this.toast('The Medic duty needs a built Hospital.', '');
+      return;
+    }
     if (ni === i) return;
     if (JOBS[i] !== 'idle') G.jobs[JOBS[i]] = Math.max(0, (G.jobs[JOBS[i]] || 0) - 1);
-    if (JOBS[ni] !== 'idle') G.jobs[JOBS[ni]] = (G.jobs[JOBS[ni]] || 0) + 1;
+    if (JOBS[ni] !== 'idle') G.jobs[JOBS[ni]] = (G.jobs[ni] || 0) + 1;
     Sim.setJob(v, JOBS[ni]);
     this.selRender();
   },
@@ -4842,15 +5037,27 @@ const UI = {
     grid.className = 'bgrid';
     const keys = Object.keys(BUILD).filter(k => BUILD[k].cat === cat);
     if (cat === 'basics' || cat === 'defense') keys.push('__demolish');
+    if (cat === 'basics') keys.push('__clear');
     for (const k of keys) {
       if (k === '__demolish') {
         const card = document.createElement('button');
         card.className = 'bcard' + (this.mode && this.mode.type === 'demolish' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#3a2020"></canvas>
           <div><div class="bn">Demolish</div><div class="bc"><span>reclaims 50%</span></div>
-          <div class="bd">Remove a building; half its cost is refunded. Drag across walls to clear.</div></div>`;
+          <div class="bd">Builders tear the building down and half its cost is refunded. Tap again to cancel an order. Drag across walls.</div></div>`;
         card.onclick = () => { this.setMode({ type: 'demolish' }); this.closePanel(); };
         this.drawCardIcon(card, 'wallW', true);
+        grid.appendChild(card);
+        continue;
+      }
+      if (k === '__clear') {
+        const card = document.createElement('button');
+        card.className = 'bcard' + (this.mode && this.mode.type === 'clear' ? ' sel' : '');
+        card.innerHTML = `<canvas width="16" height="16" style="background:#2a3320"></canvas>
+          <div><div class="bn">Clear Land</div><div class="bc"><span>builders</span></div>
+          <div class="bd">Mark trees, boulders, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap again to cancel.</div></div>`;
+        card.onclick = () => { this.setMode({ type: 'clear' }); this.closePanel(); };
+        this.drawCardIcon(card, 'tree0', true);
         grid.appendChild(card);
         continue;
       }
@@ -4904,6 +5111,7 @@ const UI = {
     for (const j of JOBS) {
       if (j === 'idle') continue;
       const info = JOB_INFO[j];
+      const medLocked = j === 'medic' && !Buildings.hospitals().length;
       const row = document.createElement('div');
       row.className = 'jrow';
       const icon = document.createElement('canvas');
@@ -4914,7 +5122,7 @@ const UI = {
       row.appendChild(icon);
       const txt = document.createElement('div');
       txt.style.flex = '1';
-      txt.innerHTML = `<div class="jn">${info.name}</div><div class="jd">${info.desc}</div>`;
+      txt.innerHTML = `<div class="jn">${medLocked ? info.name + ' 🔒' : info.name}</div><div class="jd">${medLocked ? 'Requires a built Hospital (buildable after night one).' : info.desc}</div>`;
       row.appendChild(txt);
       const cnt = document.createElement('div');
       cnt.className = 'cnt';
@@ -4928,6 +5136,7 @@ const UI = {
       const plus = document.createElement('button');
       plus.textContent = '+';
       plus.onclick = () => {
+        if (medLocked) { this.toast('Build a Hospital first — it unlocks after night one.', 'bad'); return; }
         const s2 = JOBS.filter(jj => jj !== 'idle').reduce((s, jj) => s + (G.jobs[jj] || 0), 0);
         if (s2 >= pop) { this.toast('No one is resting — every soul has a duty.', ''); return; }
         G.jobs[j] = (G.jobs[j] || 0) + 1;
@@ -5102,6 +5311,8 @@ const UI = {
       this.els.modeChipText.textContent = `Placing: ${def.name}${def.paint ? ' — tap or drag' : ' — tap the map'}`;
     } else if (m.type === 'demolish') {
       this.els.modeChipText.textContent = 'Demolish — tap buildings';
+    } else if (m.type === 'clear') {
+      this.els.modeChipText.textContent = 'Clear Land — tap trees & rocks';
     } else if (m.type === 'power') {
       this.els.modeChipText.textContent = `${POWERS[m.key].name} — tap target`;
     }
@@ -5136,10 +5347,30 @@ const UI = {
       }
     } else if (m.type === 'demolish') {
       const b = World.bldAt(tileX, tileY);
-      if (b && b.key !== 'camp') {
-        Buildings.demolish(b);
-        this.updateHUD();
+      if (!b || b.key === 'camp') return;
+      if (!b.built) { Buildings.demolish(b); this.updateHUD(); return; } // unstarted sites go instantly
+      if (b.demo) {
+        b.demo = false; b.hp = b.maxHp; b.progress = Math.max(b.progress, 1);
+        for (const v of G.villagers) if (v.workB === b && v.workMode === 'demolish') { v.workB = null; v.state = 'idle'; v.path = null; }
+        this.toast(`${b.def.name}: demolition cancelled.`, '');
+      } else {
+        Sim.orderDemolish(b);
+        this.toast(`${b.def.name} marked for demolition — a Builder will tear it down.`, '');
       }
+      this.updateHUD();
+    } else if (m.type === 'clear') {
+      const o = World.objAt(tileX, tileY);
+      const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING;
+      if (!wild) return;
+      const queued = G.clearJobs.some(t => t.x === tileX && t.y === tileY);
+      if (queued) {
+        Sim.dropClearJob(tileX, tileY);
+        this.toast('Clearing order cancelled.', '');
+      } else {
+        G.clearJobs.push({ x: tileX, y: tileY });
+        this.toast('A Builder will clear this tile.', '');
+      }
+      this.updateHUD();
     } else if (m.type === 'power') {
       Powers.cast(m.key, tileX + 0.5, tileY + 0.5);
       this.updateHUD();
@@ -5422,7 +5653,6 @@ const UI = {
       <p>Autosaves at every dawn, plus three manual slots (Menu \u2192 Save). Saves live in this browser.</p>`;
   },
 };
-
 </script>
 <!-- ==== js/main.js ==== -->
 <script>
@@ -5475,7 +5705,6 @@ const UI = {
   window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 })();
-
 </script>
 </body>
 </html>

@@ -302,10 +302,16 @@ const UI = {
 
   cycleJob(v, dir) {
     const i = JOBS.indexOf(v.job);
-    let ni = U.clamp(i + dir, 0, JOBS.length - 1);
+    let ni = i + dir;
+    // the Medic duty needs a built Hospital — skip over it in the cycle
+    while (JOBS[ni] === 'medic' && !Buildings.hospitals().length) ni += dir;
+    if (ni < 0 || ni >= JOBS.length) {
+      if (!Buildings.hospitals().length) this.toast('The Medic duty needs a built Hospital.', '');
+      return;
+    }
     if (ni === i) return;
     if (JOBS[i] !== 'idle') G.jobs[JOBS[i]] = Math.max(0, (G.jobs[JOBS[i]] || 0) - 1);
-    if (JOBS[ni] !== 'idle') G.jobs[JOBS[ni]] = (G.jobs[JOBS[ni]] || 0) + 1;
+    if (JOBS[ni] !== 'idle') G.jobs[JOBS[ni]] = (G.jobs[ni] || 0) + 1;
     Sim.setJob(v, JOBS[ni]);
     this.selRender();
   },
@@ -376,15 +382,27 @@ const UI = {
     grid.className = 'bgrid';
     const keys = Object.keys(BUILD).filter(k => BUILD[k].cat === cat);
     if (cat === 'basics' || cat === 'defense') keys.push('__demolish');
+    if (cat === 'basics') keys.push('__clear');
     for (const k of keys) {
       if (k === '__demolish') {
         const card = document.createElement('button');
         card.className = 'bcard' + (this.mode && this.mode.type === 'demolish' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#3a2020"></canvas>
           <div><div class="bn">Demolish</div><div class="bc"><span>reclaims 50%</span></div>
-          <div class="bd">Remove a building; half its cost is refunded. Drag across walls to clear.</div></div>`;
+          <div class="bd">Builders tear the building down and half its cost is refunded. Tap again to cancel an order. Drag across walls.</div></div>`;
         card.onclick = () => { this.setMode({ type: 'demolish' }); this.closePanel(); };
         this.drawCardIcon(card, 'wallW', true);
+        grid.appendChild(card);
+        continue;
+      }
+      if (k === '__clear') {
+        const card = document.createElement('button');
+        card.className = 'bcard' + (this.mode && this.mode.type === 'clear' ? ' sel' : '');
+        card.innerHTML = `<canvas width="16" height="16" style="background:#2a3320"></canvas>
+          <div><div class="bn">Clear Land</div><div class="bc"><span>builders</span></div>
+          <div class="bd">Mark trees, boulders, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap again to cancel.</div></div>`;
+        card.onclick = () => { this.setMode({ type: 'clear' }); this.closePanel(); };
+        this.drawCardIcon(card, 'tree0', true);
         grid.appendChild(card);
         continue;
       }
@@ -438,6 +456,7 @@ const UI = {
     for (const j of JOBS) {
       if (j === 'idle') continue;
       const info = JOB_INFO[j];
+      const medLocked = j === 'medic' && !Buildings.hospitals().length;
       const row = document.createElement('div');
       row.className = 'jrow';
       const icon = document.createElement('canvas');
@@ -448,7 +467,7 @@ const UI = {
       row.appendChild(icon);
       const txt = document.createElement('div');
       txt.style.flex = '1';
-      txt.innerHTML = `<div class="jn">${info.name}</div><div class="jd">${info.desc}</div>`;
+      txt.innerHTML = `<div class="jn">${medLocked ? info.name + ' 🔒' : info.name}</div><div class="jd">${medLocked ? 'Requires a built Hospital (buildable after night one).' : info.desc}</div>`;
       row.appendChild(txt);
       const cnt = document.createElement('div');
       cnt.className = 'cnt';
@@ -462,6 +481,7 @@ const UI = {
       const plus = document.createElement('button');
       plus.textContent = '+';
       plus.onclick = () => {
+        if (medLocked) { this.toast('Build a Hospital first — it unlocks after night one.', 'bad'); return; }
         const s2 = JOBS.filter(jj => jj !== 'idle').reduce((s, jj) => s + (G.jobs[jj] || 0), 0);
         if (s2 >= pop) { this.toast('No one is resting — every soul has a duty.', ''); return; }
         G.jobs[j] = (G.jobs[j] || 0) + 1;
@@ -636,6 +656,8 @@ const UI = {
       this.els.modeChipText.textContent = `Placing: ${def.name}${def.paint ? ' — tap or drag' : ' — tap the map'}`;
     } else if (m.type === 'demolish') {
       this.els.modeChipText.textContent = 'Demolish — tap buildings';
+    } else if (m.type === 'clear') {
+      this.els.modeChipText.textContent = 'Clear Land — tap trees & rocks';
     } else if (m.type === 'power') {
       this.els.modeChipText.textContent = `${POWERS[m.key].name} — tap target`;
     }
@@ -670,10 +692,30 @@ const UI = {
       }
     } else if (m.type === 'demolish') {
       const b = World.bldAt(tileX, tileY);
-      if (b && b.key !== 'camp') {
-        Buildings.demolish(b);
-        this.updateHUD();
+      if (!b || b.key === 'camp') return;
+      if (!b.built) { Buildings.demolish(b); this.updateHUD(); return; } // unstarted sites go instantly
+      if (b.demo) {
+        b.demo = false; b.hp = b.maxHp; b.progress = Math.max(b.progress, 1);
+        for (const v of G.villagers) if (v.workB === b && v.workMode === 'demolish') { v.workB = null; v.state = 'idle'; v.path = null; }
+        this.toast(`${b.def.name}: demolition cancelled.`, '');
+      } else {
+        Sim.orderDemolish(b);
+        this.toast(`${b.def.name} marked for demolition — a Builder will tear it down.`, '');
       }
+      this.updateHUD();
+    } else if (m.type === 'clear') {
+      const o = World.objAt(tileX, tileY);
+      const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING;
+      if (!wild) return;
+      const queued = G.clearJobs.some(t => t.x === tileX && t.y === tileY);
+      if (queued) {
+        Sim.dropClearJob(tileX, tileY);
+        this.toast('Clearing order cancelled.', '');
+      } else {
+        G.clearJobs.push({ x: tileX, y: tileY });
+        this.toast('A Builder will clear this tile.', '');
+      }
+      this.updateHUD();
     } else if (m.type === 'power') {
       Powers.cast(m.key, tileX + 0.5, tileY + 0.5);
       this.updateHUD();

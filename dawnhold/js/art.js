@@ -377,9 +377,12 @@ const Art = {
       R(x, 10, 16, 1, 12, PAL.stoneD); R(x, 21, 16, 1, 12, PAL.stoneD);
       // timber gable
       R(x, 13, 10, 6, 6, PAL.plank); R(x, 13, 10, 1, 6, PAL.plankD); R(x, 18, 10, 1, 6, PAL.plankD);
-      // thatch roof
-      for (let i = 0; i < 9; i++) { R(x, 2 + i, 2 + i, 13 - i, 1, i % 2 ? PAL.thatchD : PAL.thatch); R(x, 17, 2 + i, 13 - i, 1, i % 2 ? PAL.thatchD : PAL.thatch); }
-      R(x, 2, 11, 28, 1, PAL.thatchD); R(x, 15, 1, 2, 3, PAL.thatchD);
+      // thatch roof — ridge at the top, eaves wide at the bottom
+      for (let i = 0; i < 9; i++) {
+        const w = 4 + i * 3, sx = 16 - (w >> 1);
+        R(x, sx, 2 + i, w, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      }
+      R(x, 2, 11, 28, 1, PAL.thatchD); R(x, 13, 1, 6, 2, PAL.thatchD);
       R(x, 13, 22, 6, 6, PAL.door); R(x, 13, 22, 6, 1, '#7a5a34');
       R(x, 6, 20, 4, 4, '#2c2c34'); R(x, 22, 20, 4, 4, '#2c2c34');
       S.cottage = c;
@@ -634,6 +637,36 @@ const Art = {
       R(x, 13, 12, 1, 8, '#7a5a34'); R(x, 13, 12, 3, 1, '#7a5a34');
       R(x, 14, 13, 1, 2, '#3fa88c'); R(x, 15, 13, 1, 3, '#3fa88c');
       S.herbalist = c;
+    }
+    // --- hospital 2x2 ---
+    {
+      const { c, x } = mkc(32, 36);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 33, 24, 2);
+      R(x, 4, 15, 24, 18, '#e6dfd0');                     // plaster walls
+      R(x, 4, 15, 24, 1, '#f2ecdd');
+      for (let i = 0; i < 5; i++) R(x, 4, 19 + i * 3, 24, 1, '#d6cdb8');
+      R(x, 4, 15, 1, 18, '#d6cdb8'); R(x, 27, 15, 1, 18, '#d6cdb8');
+      // slate roof — ridge at top, eaves wide at bottom
+      for (let i = 0; i < 8; i++) {
+        const w = 6 + i * 3, sx = 16 - (w >> 1);
+        R(x, sx, 4 + i, w, 1, i % 2 ? '#57687c' : '#61728a');
+      }
+      R(x, 2, 12, 28, 2, '#46586c');                      // eave board
+      R(x, 13, 3, 6, 2, '#46586c');                       // ridge cap
+      // red cross sign
+      R(x, 13, 17, 6, 2, '#d84040'); R(x, 15, 15, 2, 6, '#d84040');
+      // door + stone step
+      R(x, 13, 26, 6, 7, PAL.door); R(x, 13, 26, 6, 1, '#7a5a34');
+      R(x, 11, 33, 10, 1, PAL.stoneD);
+      // lit windows
+      R(x, 6, 20, 4, 4, PAL.win); R(x, 6, 20, 4, 1, '#b58a2e');
+      R(x, 22, 20, 4, 4, PAL.win); R(x, 22, 20, 4, 1, '#b58a2e');
+      // herb planters
+      R(x, 5, 28, 4, 3, PAL.wood); R(x, 5, 28, 4, 1, PAL.woodD);
+      R(x, 6, 27, 1, 1, '#3fa88c'); R(x, 7, 27, 1, 1, '#5cc4a4');
+      R(x, 23, 28, 4, 3, PAL.wood); R(x, 23, 28, 4, 1, PAL.woodD);
+      R(x, 24, 27, 1, 1, '#3fa88c'); R(x, 25, 27, 1, 1, '#5cc4a4');
+      S.hospital = c;
     }
     // --- barracks 2x2 ---
     {
