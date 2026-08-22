@@ -24,8 +24,8 @@ const UI = {
     { text: 'Shelter first.<br>Open <b>Build</b> and place two <b>Tents</b> — your six settlers outnumber the beds they have.', done: () => Buildings.housingCap() >= 8 },
     { text: 'Set the work.<br>Open <b>Jobs</b>: 2 Foragers, 2 Lumberjacks, 1 Miner, 1 Builder is a strong start. Add a <b>Guard</b> before dark.', done: () => G.jobs.guard >= 1 },
     { text: 'Before nightfall...<br>Draw a <b>Palisade</b> ring around camp (drag to paint) and plant <b>Torches</b>. Towers unlock on day 3.', done: () => Buildings.count('wallW') + Buildings.count('wallS') >= 6 || G.day > 1 },
-    { text: 'The night is theirs — until it isn\u2019t.<br><b>Powers</b> burn Essence: <b>Smite</b> erases shades. Essence flows back from every kill. Watch your people; the dark goes for stragglers.', done: () => !isNightLike() && G.day > 1 },
-    { text: 'Grow, fortify, advance.<br>Wheat plots feed a village; stone walls laugh at brutes; new craft unlocks each dawn. The Beacon awaits on day 10.', done: () => G.day >= 2 },
+    { text: 'The night is theirs — until it isn\u2019t.<br><b>Powers</b> burn Essence: <b>Smite</b> erases shades. The horde crawls from the <b>Dark Monoliths</b> — the purple dots on your map. Essence flows back from every kill.', done: () => !isNightLike() && G.day > 1 },
+    { text: 'Grow, fortify, hunt.<br>Wheat plots and Fishing Docks feed a village; tap a <b>Dark Monolith</b> and press <b>Raid</b> to send guards to destroy it — fewer lairs, smaller nights. The Beacon awaits on day 10.', done: () => G.day >= 2 },
   ],
 
   /* ================= init ================= */
@@ -85,6 +85,7 @@ const UI = {
       else if (e.key === '2') Sim.speedSet(2);
       else if (e.key === '3') Sim.speedSet(3);
       else if (e.key === 'Escape') { if (this.open) this.closePanel(); else this.cancelMode(); }
+      else if (e.key === 'l' || e.key === 'L') { if (window.DBG && DBG.lairs) DBG.lairs(); }
     });
     // continue button availability
     if (SaveSys.has('auto') || SaveSys.has(1) || SaveSys.has(2) || SaveSys.has(3)) $('btnContinue').classList.remove('hidden');
@@ -109,6 +110,7 @@ const UI = {
     const e = mk('essence', 'essence', 'Essence — fuels your Powers');
     const bar = document.createElement('div'); bar.id = 'essBar'; bar.innerHTML = '<div id="essFill"></div>';
     e.appendChild(bar); e.id = 'essChip';
+    mk('herbs', 'herb', 'Herbs — consumed by the Herbalist Hut to heal the wounded');
     mk('pop', 'pop', 'Villagers / housing capacity');
   },
 
@@ -119,6 +121,7 @@ const UI = {
     set('stone', Math.floor(G.res.stone));
     set('food', Math.floor(G.res.food));
     set('essence', Math.floor(G.res.essence));
+    set('herbs', Math.floor(G.res.herbs || 0));
     const cap = Buildings.housingCap();
     set('pop', G.villagers.length + '/' + cap);
     document.getElementById('chip_food').classList.toggle('low', G.res.food < 15 && G.villagers.length > 0);
@@ -257,6 +260,24 @@ const UI = {
     } else if (s.kind === 'b') {
       const b = s.ref;
       if (!G.buildings.includes(b)) return this.selHide();
+      if (b.key === 'lair') {
+        const raiding = G.raidTarget === b;
+        el.innerHTML = `
+          <h3 style="color:#b48ae0">${U.esc(b.def.name)}</h3>
+          <div class="sub">${U.esc(b.def.desc)}</div>
+          <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(b.hp / b.maxHp * 100, 0, 100)}%;background:#b48ae0"></div></div></div>
+          <div class="selActs">
+            <button id="selRaid" ${raiding ? 'style="border-color:var(--amber);color:var(--amber2)"' : ''}>${raiding ? 'Cancel Raid' : '\u2694 Raid!'}</button>
+            <button id="selClose">Close</button>
+          </div>`;
+        document.getElementById('selRaid').onclick = () => {
+          G.raidTarget = raiding ? null : b;
+          this.toast(raiding ? 'The guards stand down.' : 'Guards: RAID THE MONOLITH!', raiding ? '' : 'good');
+          this.selRender();
+        };
+        document.getElementById('selClose').onclick = () => this.selHide();
+        return;
+      }
       let extra = '';
       if (!b.built) extra = `<div class="row"><span class="mLbl">Build</span><div class="meter mProg"><div style="width:${(b.progress * 100).toFixed(0)}%"></div></div></div>`;
       else if (b.key === 'farm') extra = `<div class="row"><span class="mLbl">Wheat</span><div class="meter mGrow"><div style="width:${(b.growth * 100).toFixed(0)}%"></div></div></div>`;
@@ -397,7 +418,8 @@ const UI = {
     const x = cv.getContext('2d');
     x.imageSmoothingEnabled = false;
     if (locked) x.globalAlpha = 0.4;
-    let spr = Art.s[key === 'road' ? 'road0' : key === 'farm' ? 'farm3' : key];
+    const MAP = { farm: 'farm3', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
+    let spr = Art.s[MAP[key] || key];
     if (key === '__demolish' || !spr) spr = Art.s.wallW;
     const s = Math.min(38 / spr.width, 38 / spr.height);
     const w = spr.width * s, h = spr.height * s;
@@ -742,7 +764,7 @@ const UI = {
       this._lastTile = null;
       if (!p) return;
       const dt = performance.now() - p.t;
-      if (!p.moved && dt < 400 && G.state === 'playing') this.tap(e.clientX, e.clientY);
+      if (!p.moved && dt < 800 && G.state === 'playing') this.tap(e.clientX, e.clientY);
     };
     cv.addEventListener('pointerup', up);
     cv.addEventListener('pointercancel', up);
@@ -798,7 +820,13 @@ const UI = {
       }
     }
     if (!best) {
-      const b = World.bldAt(wx | 0, wy | 0);
+      let b = World.bldAt(wx | 0, wy | 0);
+      if (!b) {
+        // tall sprites (towers, lairs, windmills) overhang the tile above their
+        // footprint — a tap on the visible body should still select them
+        const up = World.bldAt(wx | 0, (wy | 0) - 1);
+        if (up && up.def.tall) b = up;
+      }
       if (b) best = { kind: 'b', ref: b };
     }
     if (best) { this.select(best.kind, best.ref); G.follow = null; }
@@ -890,34 +918,40 @@ const UI = {
       <h2>Your Goal</h2>
       <p>You are the guardian spirit of a tiny settlement. Keep your villagers alive, grow the village, and raise <b>The Beacon</b> (unlocks day 10). Light it and survive the <b>Long Night</b> that follows — dawn returns forever. Lose only when every villager dies.</p>
       <h2>The Rhythm</h2>
-      <p><b>Day (~3.5 min):</b> villagers with jobs gather food, wood and stone, build and repair.<br>
-      <b>Night (~1.5 min):</b> monsters attack. Villagers shelter indoors; guards and towers fight; you cast powers. Survivors of the dark burn away at dawn.</p>
+      <p><b>Day (~3.5 min):</b> villagers with jobs gather food, wood, stone and herbs; they build, farm, fish and repair.<br>
+      <b>Night (~1.5 min):</b> monsters attack from their <b>Dark Monoliths</b>. Guards and towers fight; you cast powers. Survivors burn at dawn.<br>
+      Every 5th night is a <b>BLOOD MOON</b> — a much bigger horde, but double essence from kills.</p>
+      <h2>Dark Monoliths & Raids</h2>
+      <p>Three lairs sit out in the wilds — the horde crawls out of them every night. Tap one and press <b>Raid</b>: your Guards will march out and tear it down (+25 essence, and that lair never spawns again). Destroy all three and the nights grow thin... but the dark still comes from the wilds.</p>
       <h2>Controls</h2>
       <ul>
-        <li><b>Tap</b> a villager, monster or building to inspect it.</li>
-        <li><b>Drag</b> to pan. <b>Pinch</b> or use <b>+/&minus;</b> buttons to zoom. Tap the <b>minimap</b> (top right) to jump.</li>
-        <li><b>Build:</b> pick a building, then tap the map. Walls, gates and roads <b>paint as you drag</b>.</li>
+        <li><b>Tap</b> a villager, monster, building or monolith to inspect it.</li>
+        <li><b>Drag</b> to pan. <b>Pinch</b> or use <b>+/&minus;</b> buttons to zoom. Tap the <b>minimap</b> (top right) to jump — purple dots are lairs.</li>
+        <li><b>Build:</b> pick a building, then tap the map. Walls, gates, roads and traps <b>paint as you drag</b>.</li>
         <li>Speed: pause / 1\u00d7 / 2\u00d7 / 3\u00d7 (space bar pauses on desktop).</li>
       </ul>
       <h2>Jobs</h2>
       <ul>
         <li><b>Forager</b> — berries. Fast early food; bushes regrow daily.</li>
         <li><b>Lumberjack</b> — wood for tents, palisades, towers.</li>
-        <li><b>Miner</b> — stone. Lodes are finite and richer far from camp.</li>
-        <li><b>Farmer</b> — tends wheat plots: the engine that feeds a big village.</li>
+        <li><b>Miner</b> — stone from boulders; salvages ancient ruins; cracks crystal lodes for essence; works Mine Shafts when lodes run dry.</li>
+        <li><b>Farmer</b> — tends wheat plots. A Windmill nearby grows them 35% faster.</li>
+        <li><b>Fisher</b> — works a Fishing Dock on the shore. Steady food, no farmland.</li>
+        <li><b>Herbalist</b> — gathers herbs; an Herbalist Hut turns them into healing for the wounded.</li>
         <li><b>Builder</b> — raises construction and repairs damage (costs materials).</li>
-        <li><b>Guard</b> — patrols and fights. Keep 1 early, more as nights grow.</li>
+        <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage.</li>
       </ul>
       <h2>Surviving the Night</h2>
       <ul>
         <li>Walls route the horde; they break gates and weak walls, so ring your camp and mind the gaps.</li>
-        <li><b>Watchtowers</b> (day 3) shoot automatically; <b>Ballistae</b> (day 7) pierce brutes.</li>
-        <li><b>Runners</b> are fast and fragile, <b>Brutes</b> (day 6) smash walls, <b>Stalkers</b> (day 9) hunt villagers.</li>
-        <li><b>Powers</b>: Mend heals, Smite erases shades, Meteor (day 6) wipes waves. Essence refills over time and from kills.</li>
-        <li>Food alarms mean idle villagers emergency-forage — but farms before day 4 is the reliable path.</li>
+        <li><b>Watchtowers</b> (day 3) shoot automatically; <b>Ballistae</b> (day 7) out-range everything.</li>
+        <li><b>Runners</b> are fast and fragile; <b>Brutes</b> (day 6) smash walls; <b>Bonecasters</b> (day 7) lob bones from range; <b>Stalkers</b> (day 9) hunt villagers; <b>Wraiths</b> drift <i>through</i> walls — keep guards inside; <b>Colossi</b> (day 15, endless) are walking sieges.</li>
+        <li><b>Spike Traps</b> wound and slow whatever steps on them; lay rows before your gates.</li>
+        <li><b>Powers</b>: Mend heals, Smite erases shades, Stasis (day 5) freezes a circle for 5s, Meteor (day 6) wipes waves. Essence flows from time, kills and Shrines.</li>
+        <li>The dead are buried where they fall — little graves remember them.</li>
       </ul>
       <h2>People</h2>
-      <p>Villagers are named individuals with traits (Hardy, Swift, Diligent, Strong Back). New folks arrive at dawn if there's <b>housing and food</b>. Starvation kills — keep the store above ~10.</p>
+      <p>Villagers are named individuals with traits (Hardy, Swift, Diligent, Strong Back). New folks arrive at dawn if there's <b>housing and food</b>. Starvation kills — keep the store above ~15.</p>
       <h2>Saving</h2>
       <p>Autosaves at every dawn, plus three manual slots (Menu \u2192 Save). Saves live in this browser.</p>`;
   },

@@ -82,24 +82,35 @@ const Render = {
     const draws = [];
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
-        const o = World.obj[World.idx(tx, ty)];
-        if (!o || o === OBJ.FLOWER) continue;
+        const oi = World.idx(tx, ty);
+        const o = World.obj[oi];
+        if (!o || o === OBJ.FLOWER || o === OBJ.MUSH || o === OBJ.TGRASS) continue;
         let spr = null;
         const h = U.hash2(tx, ty);
         switch (o) {
           case OBJ.TREE: spr = Art.s['tree' + ((h * 2) | 0)]; break;
           case OBJ.PINE: spr = Art.s['pine' + ((h * 2) | 0)]; break;
-          case OBJ.BUSH: spr = World.amt[World.idx(tx, ty)] > 0 ? Art.s.bushF : Art.s.bushE; break;
-          case OBJ.ROCK: spr = Art.s['rock' + ((h * 2) | 0)]; break;
+          case OBJ.BIRCH: spr = Art.s['birch' + ((h * 2) | 0)]; break;
+          case OBJ.DEADTREE: spr = Art.s.deadtree; break;
+          case OBJ.BUSH: spr = World.amt[oi] > 0 ? Art.s.bushF : Art.s.bushE; break;
+          case OBJ.HERB: spr = World.amt[oi] > 0 ? Art.s.herbF : Art.s.herbE; break;
+          case OBJ.ROCK: spr = h < .22 ? Art.s.rockS : Art.s['rock' + ((h * 2) | 0)]; break;
+          case OBJ.RUIN: spr = Art.s.ruin; break;
+          case OBJ.CRYSTAL: spr = Art.s.crystal; break;
           case OBJ.STUMP: spr = Art.s.stump; break;
           case OBJ.SAPLING: spr = Art.s.sapling; break;
+          case OBJ.GRAVE: spr = Art.s.grave; break;
         }
-        if (spr) draws.push({ y: ty * 16 + 16, fn: () => ctx.drawImage(spr, tx * 16, ty * 16) });
+        if (spr) {
+          const py = (ty + 1) * 16 - spr.height;
+          draws.push({ y: ty * 16 + 16, fn: () => ctx.drawImage(spr, tx * 16, py) });
+        }
       }
-      // flowers drawn flat (no sort needed)
+      // flat decor drawn directly (no y-sort needed)
       for (let tx = x0; tx <= x1; tx++) {
-        if (World.obj[World.idx(tx, ty)] === OBJ.FLOWER) {
-          const spr = Art.s['flw' + ((U.hash2(tx, ty) * 2) | 0)];
+        const o = World.obj[World.idx(tx, ty)];
+        if (o === OBJ.FLOWER || o === OBJ.MUSH || o === OBJ.TGRASS) {
+          const spr = o === OBJ.MUSH ? Art.s.mush : o === OBJ.TGRASS ? Art.s['tgrass' + ((U.hash2(tx, ty) * 2) | 0)] : Art.s['flw' + ((U.hash2(tx, ty) * 2) | 0)];
           ctx.drawImage(spr, tx * 16, ty * 16);
         }
       }
@@ -154,10 +165,14 @@ const Render = {
   drawBuilding(ctx, b) {
     const px = b.x * 16, py = (b.y + b.h) * 16; // anchor bottom of footprint
     let spr;
+    const animF = ((this._t * 5) | 0) % 2;
     if (b.key === 'farm') {
       const st = b.growth >= 1 ? 3 : b.growth > .55 ? 2 : b.growth > .18 ? 1 : 0;
       spr = Art.s['farm' + st];
-    } else if (b.key === 'torch') spr = Art.s['torch' + (((this._t * 6) | 0) % 2)];
+    } else if (b.key === 'torch') spr = Art.s['torch' + animF];
+    else if (b.key === 'lair') spr = Art.s['lair' + animF];
+    else if (b.key === 'windmill') spr = Art.s['windmill' + animF];
+    else if (b.key === 'herbalistHut') spr = Art.s.herbalist;
     else spr = Art.s[b.key];
 
     if (!b.built) {
@@ -208,7 +223,7 @@ const Render = {
     ctx.drawImage(spr, px | 0, py | 0);
     // carry icon
     if (v.carry.amt > 0) {
-      const ic = v.carry.type === 'wood' ? Art.s.carryWood : v.carry.type === 'stone' ? Art.s.carryStone : Art.s.carryFood;
+      const ic = v.carry.type === 'wood' ? Art.s.carryWood : v.carry.type === 'stone' ? Art.s.carryStone : v.carry.type === 'herbs' ? Art.s.carryHerb : Art.s.carryFood;
       ctx.drawImage(ic, (v.x * 16 - 3) | 0, (v.y * 16 - 24) | 0);
     }
     // hp
@@ -234,16 +249,24 @@ const Render = {
   },
 
   drawMonster(ctx, m) {
-    const big = m.type === 'lord';
+    const big = m.type === 'lord' || m.type === 'colossus';
     const spr = Art.monster(m.type, ((m.anim | 0) % 2));
     if (!spr) return;
-    const bob = (m.type === 'shade' || m.type === 'lord') ? Math.sin(this._t * 3 + m.id) * 1.6 : 0;
+    const bob = (m.type === 'shade' || m.type === 'lord' || m.type === 'wraith') ? Math.sin(this._t * 3 + m.id) * (m.type === 'wraith' ? 2.4 : 1.6) : 0;
     const px = m.x * 16 - spr.width / 2, py = m.y * 16 - spr.height + 2 + bob;
     ctx.fillStyle = 'rgba(0,0,0,.3)';
     ctx.beginPath();
     ctx.ellipse(m.x * 16, m.y * 16 + 1, big ? 9 : 5, big ? 4 : 2.2, 0, 0, Math.PI * 2);
     ctx.fill();
+    if (m.type === 'wraith') ctx.globalAlpha = 0.8;
     ctx.drawImage(spr, px | 0, py | 0);
+    ctx.globalAlpha = 1;
+    if (m.frozenT > 0) {
+      ctx.globalAlpha = .45;
+      ctx.fillStyle = '#9ad4f0';
+      ctx.fillRect(px | 0, py | 0, spr.width, spr.height);
+      ctx.globalAlpha = 1;
+    }
     if (m.flash > 0) {
       m.flash -= 0.016;
       ctx.globalAlpha = Math.min(.7, m.flash * 6);
@@ -295,6 +318,11 @@ const Render = {
         case 'arrow': {
           const ax = U.lerp(e.x, e.tx, p), ay = U.lerp(e.y, e.ty, p) - Math.sin(p * Math.PI) * .5;
           ctx.drawImage(Art.s.arrow, (ax * 16 - 4) | 0, (ay * 16) | 0);
+          break;
+        }
+        case 'bone': {
+          const ax = U.lerp(e.x, e.tx, p), ay = U.lerp(e.y, e.ty, p) - Math.sin(p * Math.PI) * .9;
+          ctx.drawImage(Art.s.bone, (ax * 16 - 3) | 0, (ay * 16 - 1) | 0);
           break;
         }
         case 'ring': {
@@ -354,7 +382,8 @@ const Render = {
         }
       if (ok && !def.terrain) {
         ctx.globalAlpha = .6;
-        const spr = Art.s[mode.key === 'farm' ? 'farm0' : mode.key];
+        const GHOST_SPR = { farm: 'farm0', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
+        const spr = Art.s[GHOST_SPR[mode.key] || mode.key];
         if (spr) {
           const hgt = Math.max(spr.height, def.h * 16);
           ctx.drawImage(spr, gx * 16, (gy + def.h) * 16 - hgt);
@@ -444,6 +473,10 @@ const Render = {
       ctx.globalCompositeOperation = 'source-over';
       this.firefliesDraw();
     }
+    if (dark > 0.02 && G.bloodMoon) {
+      ctx.fillStyle = `rgba(160,30,40,${0.16 * dark})`;
+      ctx.fillRect(0, 0, this.cw, this.ch);
+    }
     if (warm > 0.02) {
       ctx.fillStyle = `rgba(255,140,50,${warm * 0.14})`;
       ctx.fillRect(0, 0, this.cw, this.ch);
@@ -507,26 +540,35 @@ const Render = {
     const d = img.data;
     const MM = Art.MM;
     const col = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
-    const cGrass = col(MM.grass), cWater = col(MM.water), cTree = col(MM.tree), cRoad = col(MM.road), cRock = col(MM.rock), cDirt = col(MM.dirt);
+    const cGrass = col(MM.grass), cWater = col(MM.water), cTree = col(MM.tree), cRoad = col(MM.road), cRock = col(MM.rock), cDirt = col(MM.dirt), cSand = col(MM.sand);
     for (let i = 0; i < W * H; i++) {
       let c = cGrass;
       const t = World.t[i], o = World.obj[i];
       if (t === T.WATER) c = cWater;
       else if (t === T.ROAD) c = cRoad;
+      else if (t === T.SAND) c = cSand;
       else if (t === T.DIRT) c = cDirt;
-      else if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.SAPLING) c = cTree;
-      else if (o === OBJ.ROCK) c = cRock;
+      else if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.SAPLING) c = cTree;
+      else if (o === OBJ.ROCK || o === OBJ.RUIN) c = cRock;
+      else if (o === OBJ.CRYSTAL) c = [140, 92, 208];
       d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 255;
     }
-    // buildings
+    // buildings (lairs glow purple)
     for (const b of G.buildings) {
-      const cc = col(MM.bld);
+      const cc = b.key === 'lair' ? [180, 110, 240] : col(MM.bld);
       for (let dy = 0; dy < b.h; dy++) for (let dx = 0; dx < b.w; dx++) {
         const i = (b.y + dy) * W + (b.x + dx);
         if (i >= 0 && i < W * H) { d[i * 4] = cc[0]; d[i * 4 + 1] = cc[1]; d[i * 4 + 2] = cc[2]; }
       }
     }
     x.putImageData(img, 0, 0);
+    // lairs get a hot-pink 3px cross so they never blend into crystal purple
+    x.fillStyle = '#ff6ae0';
+    for (const b of G.buildings) {
+      if (b.key !== 'lair') continue;
+      x.fillRect(b.x - 1, b.y, 3, 1);
+      x.fillRect(b.x, b.y - 1, 1, 3);
+    }
     // entities as dots (crisper on top)
     x.fillStyle = '#fff';
     for (const v of G.villagers) x.fillRect(v.x | 0, v.y | 0, 1, 1);

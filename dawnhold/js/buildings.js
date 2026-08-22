@@ -66,6 +66,36 @@ const BUILD = {
     kind: 'store', light: 3.0, unlock: 5,
     desc: 'A second stockpile — shorten hauling trips and guard outer farms.',
   },
+  fisher: {
+    name: 'Fishing Dock', cat: 'basics', w: 1, h: 1, hp: 160, cost: { wood: 10 }, time: 22,
+    kind: 'fisher', needsWater: true, tall: 8, unlock: 3,
+    desc: 'Must touch water. A Fisher brings in steady food — no farmland used.',
+  },
+  windmill: {
+    name: 'Windmill', cat: 'basics', w: 2, h: 2, hp: 300, cost: { wood: 20, stone: 8 }, time: 55,
+    kind: 'windmill', tall: 28, unlock: 4,
+    desc: 'Wheat plots within 6 tiles grow 35% faster in its breeze.',
+  },
+  trap: {
+    name: 'Spike Trap', cat: 'defense', w: 1, h: 1, hp: 120, cost: { wood: 2, stone: 1 }, time: 5,
+    kind: 'trap', paint: true, unlock: 5,
+    desc: 'Wounds and slows monsters that walk over it. Wears out. Drag to lay rows.',
+  },
+  herbalistHut: {
+    name: 'Herbalist Hut', cat: 'basics', w: 1, h: 1, hp: 180, cost: { wood: 10, stone: 4 }, time: 26,
+    kind: 'healer', light: 2.0, tall: 6, unlock: 6,
+    desc: 'Herbalists stock it with herbs; the hut slowly mends wounded villagers nearby.',
+  },
+  mine: {
+    name: 'Mine Shaft', cat: 'basics', w: 1, h: 1, hp: 260, cost: { wood: 12 }, time: 30,
+    kind: 'mine', onRock: true, tall: 4, unlock: 7,
+    desc: 'Build atop a boulder. Miners work it forever — slow but endless stone.',
+  },
+  barracks: {
+    name: 'Barracks', cat: 'defense', w: 2, h: 2, hp: 500, cost: { wood: 25, stone: 20 }, time: 60,
+    kind: 'barracks', capOne: true, light: 2.0, tall: 4, unlock: 8,
+    desc: 'Drill yard and armory: all Guards deal +30% damage. Only one may stand.',
+  },
   shrine: {
     name: 'Shrine', cat: 'mystic', w: 1, h: 1, hp: 200, cost: { stone: 16 }, time: 28,
     kind: 'shrine', light: 3.1, tall: 8, essence: true, unlock: 8,
@@ -84,10 +114,16 @@ const CAMP_DEF = {
   kind: 'store', light: 3.2, housing: 2, tall: 0, desc: 'Where it all began. Stores goods and shelters two.',
 };
 
+// monster lair (not buildable — placed by the map, destroyed by raids)
+const LAIR_DEF = {
+  name: 'Dark Monolith', cat: null, w: 1, h: 1, hp: CONFIG.LAIR.hp, cost: {}, time: 0,
+  kind: 'lair', light: 1.8, tall: 12, desc: 'The horde crawls out of this each night. Select it and order a RAID — destroy all three and the nights grow thin.',
+};
+
 const Buildings = {
   byIdMap: new Map(),
 
-  def(key) { return key === 'camp' ? CAMP_DEF : BUILD[key]; },
+  def(key) { return key === 'camp' ? CAMP_DEF : key === 'lair' ? LAIR_DEF : BUILD[key]; },
 
   byId(id) { return this.byIdMap.get(id) || null; },
 
@@ -110,6 +146,19 @@ const Buildings = {
   canPlace(key, tx, ty) {
     const def = BUILD[key];
     if (!def) return { ok: false, reason: 'Unknown' };
+    if (def.capOne && this.count(key) >= 1) return { ok: false, reason: 'Only one allowed' };
+    // fishing docks must touch water
+    if (def.needsWater) {
+      let wet = false;
+      for (let dy = -1; dy <= 1 && !wet; dy++)
+        for (let dx = -1; dx <= 1 && !wet; dx++)
+          if ((dx || dy) && World.tileT(tx + dx, ty + dy) === T.WATER) wet = true;
+      if (!wet) return { ok: false, reason: 'Must touch water' };
+    }
+    // mine shafts consume the boulder they stand on
+    if (def.onRock) {
+      if (World.objAt(tx, ty) !== OBJ.ROCK) return { ok: false, reason: 'Place on a boulder' };
+    }
     for (let dy = 0; dy < def.h; dy++) {
       for (let dx = 0; dx < def.w; dx++) {
         const x = tx + dx, y = ty + dy;
@@ -117,18 +166,18 @@ const Buildings = {
         const i = World.idx(x, y);
         const t = World.t[i];
         if (t === T.WATER) return { ok: false, reason: 'On water' };
-        if (def.terrain) { // roads can overwrite grass/dirt but not objects/farms
+        if (def.terrain) { // roads can overwrite grass/dirt/sand but not objects/farms
           if (t === T.ROAD) return { ok: false, reason: '' };
           const o = World.obj[i];
-          if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.BUSH) return { ok: false, reason: 'Blocked' };
+          if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.BUSH || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE) return { ok: false, reason: 'Blocked' };
           if (World.occ[i]) return { ok: false, reason: 'Occupied' };
           continue;
         }
-        if (t !== T.GRASS && t !== T.DIRT) return { ok: false, reason: 'Bad ground' };
+        if (t !== T.GRASS && t !== T.DIRT && t !== T.SAND) return { ok: false, reason: 'Bad ground' };
         if (def.grassOnly && t !== T.GRASS) return { ok: false, reason: 'Needs grass' };
         const o = World.obj[i];
-        if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.BUSH || o === OBJ.SAPLING)
-          return { ok: false, reason: 'Blocked — clear first' };
+        const blocking = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.BUSH || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.GRAVE;
+        if (blocking && !(def.onRock && o === OBJ.ROCK)) return { ok: false, reason: 'Blocked — clear first' };
         if (World.occ[i]) return { ok: false, reason: 'Occupied' };
       }
     }
@@ -169,6 +218,7 @@ const Buildings = {
         if (World.obj[i] === OBJ.FLOWER || World.obj[i] === OBJ.STUMP) World.obj[i] = OBJ.NONE;
       }
     const b = this.create(key, tx, ty, false);
+    if (def.onRock) World.setObj(tx, ty, OBJ.NONE, 0); // shaft swallows the boulder
     G.stats.built++;
     // nudge villagers out of footprint
     for (const v of G.villagers) {
@@ -181,6 +231,7 @@ const Buildings = {
   },
 
   demolish(b, silent) {
+    if (b.key === 'lair') return; // lairs are destroyed by raiding, never demolished
     const i = G.buildings.indexOf(b);
     if (i < 0) return;
     G.buildings.splice(i, 1);
@@ -207,6 +258,9 @@ const Buildings = {
   },
 
   stores() { return G.buildings.filter(b => b.built && b.def.kind === 'store'); },
+  lairs() { return G.buildings.filter(b => b.key === 'lair'); },
+  fisherHuts() { return G.buildings.filter(b => b.built && b.def.kind === 'fisher'); },
+  mines() { return G.buildings.filter(b => b.built && b.def.kind === 'mine'); },
 
   nearestStore(tx, ty) {
     let best = null, bd = 1e9;
@@ -229,13 +283,36 @@ const Buildings = {
   // per-frame building logic
   update(dt) {
     const night = isNightLike();
+    const hasBarracks = G.buildings.some(b => b.built && b.key === 'barracks');
+    const windmills = [];
+    for (const b of G.buildings) if (b.built && b.key === 'windmill') windmills.push(b);
     for (const b of G.buildings) {
       if (b.cd > 0) b.cd -= dt;
       if (b.tendedT < 90) b.tendedT += dt;
-      // farms grow in daylight (faster while tended)
+      // farms grow in daylight (faster while tended, faster near a windmill)
       if (b.def.kind === 'farm' && b.built && !night) {
         const boost = b.tendedT < 2 ? CONFIG.FARM.tendBoost : 1;
-        b.growth = Math.min(1, b.growth + dt * boost / CONFIG.FARM.grow);
+        let breeze = 1;
+        for (const wm of windmills) {
+          if (U.dst(b.x + 1, b.y + 1, wm.x + 1, wm.y + 1) <= 6) { breeze = 1.35; break; }
+        }
+        b.growth = Math.min(1, b.growth + dt * boost * breeze / CONFIG.FARM.grow);
+      }
+      // herbalist hut mends wounded villagers nearby, consuming stored herbs
+      if (b.def.kind === 'healer' && b.built && G.res.herbs >= 1) {
+        let patient = null;
+        for (const v of G.villagers) {
+          if (v.hp < v.maxHp - 1 && U.dst2(v.x, v.y, b.x + .5, b.y + .5) < 16) { patient = v; break; }
+        }
+        if (patient) {
+          patient.hp = Math.min(patient.maxHp, patient.hp + CONFIG.HERB.healRate * dt);
+          b.healDebt = (b.healDebt || 0) + CONFIG.HERB.healRate * dt;
+          while (b.healDebt >= CONFIG.HERB.herbPerHeal && G.res.herbs >= 1) {
+            b.healDebt -= CONFIG.HERB.herbPerHeal;
+            G.res.herbs -= 1;
+          }
+          if (Math.random() < dt * 2) Sim.fx('spark', patient.x, patient.y - .5, .3);
+        }
       }
       // towers shoot
       if (b.def.kind === 'tower' && b.built && b.cd <= 0) {
@@ -252,6 +329,7 @@ const Buildings = {
         }
       }
     }
+    return hasBarracks;
   },
 
   windowGlows() {

@@ -42,7 +42,7 @@ const PAL = {
 const Art = {
   s: {},            // static sprite canvases by name
   _vcache: new Map(), // villager look sprites
-  MM: { water: '#33619a', grass: '#4e7a40', tree: '#2e5d3a', road: '#b09a6a', rock: '#8d8d95', dirt: '#8a6d4e', bld: '#e8a94b', vil: '#ffffff', mon: '#e05555' },
+  MM: { water: '#33619a', grass: '#4e7a40', tree: '#2e5d3a', road: '#b09a6a', rock: '#8d8d95', dirt: '#8a6d4e', sand: '#d8c48a', bld: '#e8a94b', vil: '#ffffff', mon: '#e05555' },
 
   init() {
     this.terrain();
@@ -91,60 +91,220 @@ const Art = {
       for (let i = 0; i < 10; i++) R(x, (U.hash2(i, 4) * 16) | 0, (U.hash2(i, 9) * 16) | 0, 2, 1, PAL.water[1]);
       S.water = c;
     }
+    // sand — shore tile
+    {
+      const { c, x } = mkc(16, 16);
+      const rng = U.mulberry32(51);
+      R(x, 0, 0, 16, 16, '#d8c48a');
+      for (let i = 0; i < 16; i++) {
+        const px = (rng() * 16) | 0, py = (rng() * 16) | 0;
+        R(x, px, py, 1, 1, rng() < .5 ? '#c4ae74' : '#e8d8a4');
+      }
+      R(x, 3, 11, 1, 1, '#b4a066'); R(x, 11, 5, 1, 1, '#b4a066');
+      S.sand = c;
+    }
   },
 
   /* ================= OBJECTS ================= */
+  // Trees are 16x24 (they overhang the tile above); everything anchors to
+  // its tile bottom in the renderer. Strong outlines keep them readable.
   objects() {
     const S = this.s;
-    // oak trees (2 variants)
+    const shadowBand = (x) => { x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 22, 8, 2); };
+
+    // --- oaks: round, outlined canopy, flared trunk ---
     for (let v = 0; v < 2; v++) {
-      const { c, x } = mkc(16, 16);
-      const ox = v ? 1 : -1;
-      R(x, 7, 10, 2, 5, PAL.trunk); R(x, 7, 14, 1, 1, PAL.trunkD);
-      // canopy blob
-      const rows = [[5, 6], [4, 8], [3, 10], [3, 10], [4, 8]];
-      rows.forEach((r, i) => R(x, r[0] + (ox > 0 ? 0 : 0), 1 + i, r[1] - r[0], 1, i < 2 ? PAL.oakL : PAL.oak));
-      R(x, 4 + (v ? 1 : 0), 3, 2, 1, PAL.oakL); R(x, 9, 5, 1, 1, PAL.oakD); R(x, 6, 6, 2, 1, PAL.oakD);
-      if (v) R(x, 3, 4, 1, 1, PAL.oakD);
+      const { c, x } = mkc(16, 24);
+      shadowBand(x);
+      // trunk with flare + shading
+      R(x, 6, 16, 4, 7, PAL.trunk); R(x, 6, 16, 1, 7, PAL.trunkD);
+      R(x, 5, 21, 6, 2, PAL.trunk); R(x, 5, 22, 6, 1, PAL.trunkD);
+      // canopy: outline, dark base, mid, light clumps
+      const canopy = [
+        [4, 3, 8], [3, 4, 10], [2, 5, 12], [2, 6, 12], [1, 7, 14], [1, 8, 14], [2, 9, 12], [2, 10, 12], [3, 11, 10], [4, 12, 8],
+      ];
+      // outline pass (1px bigger)
+      x.fillStyle = '#1c3b1c';
+      for (const [cx, cy, w] of canopy) x.fillRect(cx - 1, cy - 1 + 3, w + 2, 3);
+      // body
+      x.fillStyle = PAL.oakD;
+      for (const [cx, cy, w] of canopy) x.fillRect(cx, cy + 3, w, 1);
+      // mid tone upper 2/3
+      x.fillStyle = PAL.oak;
+      for (const [cx, cy, w] of canopy) if (cy <= 8) x.fillRect(cx, cy + 3, w, 1);
+      // highlights
+      x.fillStyle = PAL.oakL;
+      R(x, 5 + v, 5, 4, 2); R(x, 9 - v, 7, 3, 2); R(x, 4, 9 - v, 3, 1);
+      R(x, 10, 5 + v, 2, 1);
+      if (v) { R(x, 3, 8, 2, 2, PAL.oakD); R(x, 11, 9, 2, 2, PAL.oakD); }
       S['tree' + v] = c;
     }
-    // pines (2)
+    // --- pines: jagged tiers, dark outline ---
     for (let v = 0; v < 2; v++) {
-      const { c, x } = mkc(16, 16);
-      R(x, 7, 12, 2, 3, PAL.trunk);
-      const tiers = [[7, 2], [6, 4], [5, 6], [4, 8], [3, 10]];
-      tiers.forEach((t, i) => R(x, t[0], 1 + i * 2 + (v ? 1 : 0), t[1] - t[0] + 2, 2, i % 2 ? PAL.pineD : PAL.pine));
-      R(x, 7, 0, 2, 2, PAL.pineL); if (v) R(x, 5, 6, 1, 1, PAL.pineL);
+      const { c, x } = mkc(16, 24);
+      shadowBand(x);
+      R(x, 7, 18, 2, 5, PAL.trunk); R(x, 7, 18, 1, 5, PAL.trunkD);
+      const tiers = [[7, 1, 2], [6, 4, 4], [5, 7, 6], [4, 10, 8], [3, 13, 10]];
+      // outline
+      x.fillStyle = '#152e1d';
+      for (const [tx0, ty0, w] of tiers) {
+        x.fillRect(tx0 - 1, ty0 + 2, w + 2, 3);
+        x.fillRect(tx0 - 1, ty0 + 4, 2, 2); x.fillRect(tx0 + w - 1, ty0 + 4, 2, 2); // droop tips
+      }
+      tiers.forEach(([tx0, ty0, w], i) => {
+        x.fillStyle = i % 2 ? PAL.pineD : PAL.pine;
+        x.fillRect(tx0, ty0 + 2, w, 2);
+        x.fillRect(tx0 + 1, ty0 + 4, w - 2, 1);
+      });
+      x.fillStyle = PAL.pineL;
+      R(x, 7, 3, 2, 2); R(x, 6, 8, 2, 2); R(x, 5 + v, 12, 3, 1); R(x, 9 - v, 5, 2, 1);
+      R(x, 7, 0, 2, 3, PAL.pineL);
+      if (v) { R(x, 5, 9, 2, 2, PAL.pineD); R(x, 10, 12, 2, 2, PAL.pineD); }
       S['pine' + v] = c;
     }
-    // stump
-    { const { c, x } = mkc(16, 16); R(x, 5, 9, 6, 3, PAL.stump); R(x, 5, 9, 6, 1, '#9a7448'); R(x, 6, 10, 4, 1, '#684a2c'); S.stump = c; }
-    // sapling
-    { const { c, x } = mkc(16, 16); R(x, 7, 11, 2, 3, PAL.trunk); R(x, 6, 8, 4, 3, PAL.sprout); R(x, 7, 7, 2, 1, PAL.sprout); S.sapling = c; }
-    // bush full / empty
+    // --- birch: white trunk, airy light canopy ---
+    for (let v = 0; v < 2; v++) {
+      const { c, x } = mkc(16, 24);
+      shadowBand(x);
+      R(x, 7, 14, 2, 9, '#e8e4d4'); R(x, 7, 14, 1, 9, '#c9c4b0');
+      R(x, 7, 16, 1, 1, '#5a5648'); R(x, 8, 19, 1, 1, '#5a5648'); R(x, 7, 22, 1, 1, '#5a5648');
+      const lumps = [[5, 4], [9, 4], [3, 6], [11, 6], [6, 8], [10, 8]];
+      x.fillStyle = '#1c3b1c';
+      for (const [lx, ly] of lumps) x.fillRect(lx - 1, ly + 2, 5, 5);
+      x.fillStyle = '#7ab648';
+      for (const [lx, ly] of lumps) x.fillRect(lx, ly + 2, 3, 3);
+      x.fillStyle = '#a8d86a';
+      for (const [lx, ly] of lumps) x.fillRect(lx, ly + 2, 2, 2);
+      if (v) { R(x, 4, 5, 2, 2, '#5a9434'); }
+      S['birch' + v] = c;
+    }
+    // --- dead tree: bare twisted branches ---
+    {
+      const { c, x } = mkc(16, 24);
+      shadowBand(x);
+      x.fillStyle = '#4a4038';
+      R(x, 7, 12, 2, 10, '#4a4038');
+      R(x, 5, 9, 2, 1, '#4a4038'); R(x, 4, 7, 1, 2, '#4a4038'); R(x, 3, 5, 1, 2, '#4a4038');
+      R(x, 9, 8, 2, 1, '#4a4038'); R(x, 10, 5, 1, 3, '#4a4038'); R(x, 11, 3, 1, 2, '#4a4038');
+      R(x, 6, 6, 1, 3, '#4a4038'); R(x, 7, 2, 1, 4, '#4a4038');
+      x.fillStyle = '#6e6258';
+      R(x, 7, 13, 1, 8, '#6e6258'); R(x, 4, 7, 1, 1, '#6e6258'); R(x, 10, 5, 1, 2, '#6e6258');
+      S.deadtree = c;
+    }
+    // --- stump & sapling (refreshed) ---
+    { const { c, x } = mkc(16, 24); R(x, 4, 19, 8, 3, PAL.stump); R(x, 4, 19, 8, 1, '#9a7448'); R(x, 5, 20, 6, 1, '#684a2c'); R(x, 4, 22, 8, 1, 'rgba(0,0,0,.2)'); S.stump = c; }
+    { const { c, x } = mkc(16, 24); R(x, 7, 20, 2, 3, PAL.trunk); R(x, 5, 17, 6, 3, PAL.sprout); R(x, 6, 15, 4, 2, '#8fd45e'); R(x, 7, 14, 2, 1, '#8fd45e'); S.sapling = c; }
+    // --- berry bush full / empty (outlined) ---
     {
       const mk = full => {
-        const { c, x } = mkc(16, 16);
-        const rows = [[5, 6], [4, 8], [4, 8], [5, 6]];
-        rows.forEach((r, i) => R(x, r[0], 6 + i, r[1] - r[0], 1, i === 0 ? PAL.bushD : PAL.bush));
-        R(x, 6, 7, 1, 1, '#4f9a52');
-        if (full) { [[5, 8], [8, 7], [10, 9], [6, 10], [9, 11]].forEach(p => R(x, p[0], p[1], 1, 1, Math.random() < .5 ? PAL.berry : PAL.berryL)); }
+        const { c, x } = mkc(16, 24);
+        x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(4, 22, 8, 2);
+        const rows = [[4, 6], [3, 10], [3, 10], [4, 6]];
+        x.fillStyle = '#1c3b1c';
+        rows.forEach((r, i) => x.fillRect(r[0] - 1, 15 + i, r[1] - r[0] + 2, 1));
+        rows.forEach((r, i) => { x.fillStyle = i === 0 ? PAL.bushD : PAL.bush; x.fillRect(r[0], 15 + i, r[1] - r[0], 1); });
+        x.fillStyle = '#4f9a52'; R(x, 6, 16, 1, 1); R(x, 10, 17, 1, 1);
+        if (full) { [[4, 16], [8, 15], [11, 17], [5, 18], [9, 18], [7, 16]].forEach(p => R(x, p[0], p[1], 1, 1, ((p[0] + p[1]) % 3) ? PAL.berry : PAL.berryL)); }
         return c;
       };
       S.bushF = mk(true); S.bushE = mk(false);
     }
-    // rocks (2)
+    // --- herb bush: teal leaves, white blossoms (clearly not a berry) ---
+    {
+      const mk = full => {
+        const { c, x } = mkc(16, 24);
+        x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(5, 22, 6, 2);
+        // dark under-leaves
+        x.fillStyle = '#1d4a40';
+        R(x, 4, 15, 8, 7); R(x, 5, 13, 6, 2);
+        // spiky leaves fanning up
+        x.fillStyle = '#3fa88c';
+        R(x, 7, 12, 2, 10);          // center blade
+        R(x, 5, 15, 2, 7); R(x, 9, 15, 2, 7);   // mid blades
+        R(x, 3, 18, 2, 4); R(x, 11, 18, 2, 4);  // outer blades
+        x.fillStyle = '#6fd4b4';
+        R(x, 7, 12, 1, 8); R(x, 5, 15, 1, 4); R(x, 9, 15, 1, 4);
+        if (full) { x.fillStyle = '#f0f0e0'; R(x, 7, 10, 2, 2); R(x, 5, 12, 1, 2); R(x, 10, 12, 1, 2); x.fillStyle = '#e8a94b'; R(x, 7, 10, 1, 1); }
+        return c;
+      };
+      S.herbF = mk(true); S.herbE = mk(false);
+    }
+    // --- rocks: small, boulders (2), all outlined w/ moss & cracks ---
+    {
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(5, 22, 7, 2);
+      R(x, 5, 18, 6, 4, PAL.rock); R(x, 5, 18, 6, 1, PAL.rockL); R(x, 5, 21, 6, 1, PAL.rockD); R(x, 7, 19, 2, 1, PAL.rockD);
+      x.fillStyle = '#4a4a54'; x.fillRect(4, 17, 8, 1); x.fillRect(4, 17, 1, 5); x.fillRect(11, 17, 1, 5);
+      S.rockS = c;
+    }
     for (let v = 0; v < 2; v++) {
-      const { c, x } = mkc(16, 16);
-      const w = v ? 10 : 8, h = v ? 7 : 6, ox = v ? 3 : 4, oy = 16 - h - 1;
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 22, 11, 2);
+      const w = v ? 12 : 10, h = v ? 9 : 7, ox = v ? 2 : 3, oy = 23 - h;
+      // outline
+      x.fillStyle = '#4a4a54';
+      x.fillRect(ox - 1, oy, w + 2, h + 1);
+      // body
+      R(x, ox, oy, w, h, PAL.rock);
       R(x, ox + 1, oy, w - 2, 1, PAL.rockL);
-      R(x, ox, oy + 1, w, h - 2, PAL.rock);
-      R(x, ox + 1, oy + h - 1, w - 2, 1, PAL.rockD);
-      R(x, ox + 2, oy + 2, 2, 1, PAL.rockD); R(x, ox + w - 3, oy + 3, 2, 1, PAL.rockD);
-      if (v) R(x, ox + 5, oy - 2, 3, 2, PAL.rock), R(x, ox + 5, oy - 2, 3, 1, PAL.rockL);
+      R(x, ox + 2, oy + 1, 3, 1, PAL.rockL);
+      R(x, ox, oy + h - 1, w, 1, PAL.rockD);
+      R(x, ox + w - 3, oy + 2, 1, h - 3, PAL.rockD);
+      R(x, ox + 2, oy + 3, 3, 1, PAL.rockD); R(x, ox + 5, oy + h - 3, 2, 1, PAL.rockD);
+      // moss patch
+      R(x, ox + 1, oy + 1, 2, 1, '#5a7a4a'); R(x, ox + 1, oy + 2, 1, 1, '#5a7a4a');
+      if (v) { // secondary lump
+        R(x, ox + 7, oy - 4, 4, 5, PAL.rock); R(x, ox + 7, oy - 4, 4, 1, PAL.rockL);
+        x.fillStyle = '#4a4a54'; x.fillRect(ox + 6, oy - 5, 6, 1); x.fillRect(ox + 6, oy - 5, 1, 6);
+        R(x, ox + 9, oy - 2, 1, 2, PAL.rockD);
+      }
       S['rock' + v] = c;
     }
-    // flowers (2)
+    // --- essence crystal lode ---
+    {
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 22, 10, 2);
+      R(x, 3, 15, 10, 7, PAL.rock); R(x, 3, 15, 10, 1, PAL.rockL); R(x, 3, 21, 10, 1, PAL.rockD);
+      x.fillStyle = '#4a4a54'; x.fillRect(2, 14, 12, 1); x.fillRect(2, 14, 1, 8); x.fillRect(13, 14, 1, 8);
+      // crystal spikes
+      const spikes = [[5, 10, 2, 5], [8, 12, 2, 3], [10, 13, 1, 2]];
+      for (const [sx, sy, sw, sh] of spikes) {
+        R(x, sx, sy, sw, sh, '#8a5cd0'); R(x, sx, sy, sw, 2, '#b48ae0'); R(x, sx, sy, 1, sh, '#d0b0ff');
+        x.fillStyle = '#4a2e78'; x.fillRect(sx - 1, sy + sh, sw + 2, 0); x.fillRect(sx - 1 + sw + 1, sy, 1, sh);
+      }
+      R(x, 6, 9, 1, 1, '#f0e0ff');
+      S.crystal = c;
+    }
+    // --- ancient ruin: crumbled masonry ---
+    {
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(2, 22, 12, 2);
+      R(x, 2, 14, 12, 8, PAL.stoneD);
+      R(x, 2, 14, 12, 1, PAL.stoneB); R(x, 2, 21, 12, 1, '#4c4c56');
+      R(x, 3, 16, 4, 2, PAL.stoneB); R(x, 8, 15, 5, 2, PAL.stoneB); R(x, 4, 19, 3, 2, PAL.stoneB); R(x, 9, 18, 4, 2, PAL.stoneB);
+      R(x, 2, 14, 1, 8, '#4c4c56'); R(x, 13, 14, 1, 8, '#4c4c56');
+      R(x, 6, 9, 3, 5, PAL.stoneB); R(x, 6, 9, 3, 1, PAL.stoneL); R(x, 6, 9, 1, 5, PAL.stoneL); // broken pillar stub
+      R(x, 3, 15, 2, 1, '#5a7a4a'); R(x, 10, 20, 2, 1, '#5a7a4a'); // moss
+      S.ruin = c;
+    }
+    // --- decor: mushrooms & tall grass ---
+    {
+      const { c, x } = mkc(16, 16);
+      R(x, 4, 10, 2, 3, '#d8cbb0'); R(x, 3, 8, 4, 2, '#c04444'); R(x, 4, 8, 2, 1, '#e86a6a');
+      R(x, 10, 12, 2, 2, '#d8cbb0'); R(x, 9, 10, 4, 2, '#c04444');
+      R(x, 3, 8, 4, 1, '#8a2e2e'); R(x, 4, 9, 1, 1, '#f0e0d0');
+      S.mush = c;
+    }
+    for (let v = 0; v < 2; v++) {
+      const { c, x } = mkc(16, 16);
+      for (let i = 0; i < 4; i++) {
+        const gx = 3 + i * 3 + v;
+        R(x, gx, 8 + ((i * 5 + v * 3) % 4), 1, 7 - ((i + v) % 3), i % 2 ? '#6ea83c' : '#5a8a34');
+      }
+      R(x, 6 + v, 6, 1, 9, '#7ab648'); R(x, 9 - v, 7, 1, 8, '#5a8a34');
+      S['tgrass' + v] = c;
+    }
+    // --- flowers (2) ---
     for (let v = 0; v < 2; v++) {
       const { c, x } = mkc(16, 16);
       const cols = ['#f0f0f0', '#ffd94a', '#e88bd0'];
@@ -155,6 +315,15 @@ const Art = {
         R(x, px, py - 1, 1, 1, cols[(i + v + 1) % 3]); R(x, px, py, 1, 1, cols[(i + v + 2) % 3]);
       }
       S['flw' + v] = c;
+    }
+    // --- grave ---
+    {
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(4, 22, 8, 2);
+      R(x, 5, 13, 6, 9, PAL.stoneB); R(x, 5, 13, 6, 1, PAL.stoneL); R(x, 5, 21, 6, 1, PAL.stoneD);
+      R(x, 6, 14, 1, 7, PAL.stoneL); R(x, 7, 16, 2, 1, PAL.stoneD); R(x, 7, 18, 2, 1, PAL.stoneD);
+      R(x, 4, 21, 8, 1, '#5a7a4a');
+      S.grave = c;
     }
   },
 
@@ -360,6 +529,133 @@ const Art = {
       R(x, 4, 7, 8, 2, PAL.wood);
       S.site = c;
     }
+    // --- monster lair: dark monolith w/ runes (2 glow frames), 16x28 ---
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 28);
+      x.fillStyle = 'rgba(0,0,0,.28)'; x.fillRect(3, 26, 10, 2);
+      // bones at base
+      R(x, 3, 24, 3, 1, '#d8d4c4'); R(x, 11, 24, 2, 1, '#d8d4c4'); R(x, 5, 25, 1, 2, '#b8b4a4');
+      // monolith
+      R(x, 4, 6, 8, 20, '#3a3548'); R(x, 4, 6, 2, 20, '#4c4660'); R(x, 10, 6, 2, 20, '#2c2838');
+      R(x, 5, 4, 6, 2, '#3a3548'); R(x, 6, 3, 4, 1, '#4c4660');
+      x.fillStyle = '#241f30'; x.fillRect(3, 5, 10, 1); x.fillRect(3, 5, 1, 21); x.fillRect(12, 5, 1, 21);
+      // cracks
+      R(x, 7, 14, 1, 4, '#241f30'); R(x, 8, 18, 1, 3, '#241f30');
+      // runes
+      const glow = f ? '#d070ff' : '#9a4ed0';
+      x.fillStyle = glow;
+      R(x, 6, 9, 1, 2); R(x, 9, 8, 1, 3); R(x, 7, 12, 3, 1); R(x, 6, 16, 2, 1); R(x, 9, 20, 1, 2);
+      if (f) { x.fillStyle = 'rgba(208,112,255,.5)'; R(x, 6, 8, 4, 5); }
+      S['lair' + f] = c;
+    }
+    // --- spike trap ---
+    {
+      const { c, x } = mkc(16, 16);
+      R(x, 1, 12, 14, 3, '#6e5136'); R(x, 1, 12, 14, 1, '#7c5a34');
+      for (let i = 0; i < 4; i++) {
+        const sx = 2 + i * 4;
+        R(x, sx, 4 + (i % 2) * 2, 2, 9, PAL.metalD);
+        R(x, sx, 4 + (i % 2) * 2, 1, 9, PAL.metal);
+        R(x, sx, 4 + (i % 2) * 2, 2, 1, '#e8e8f0');
+      }
+      R(x, 3, 13, 2, 1, '#5c4229'); R(x, 10, 14, 3, 1, '#5c4229');
+      S.trap = c;
+    }
+    // --- windmill 2x2 (2 blade frames) ---
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(32, 44);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(6, 42, 20, 2);
+      // stone base 2 tiles tall
+      R(x, 8, 22, 16, 20, PAL.stoneB);
+      R(x, 8, 22, 16, 1, PAL.stoneL); R(x, 8, 27, 16, 1, PAL.stoneD); R(x, 8, 33, 16, 1, PAL.stoneD); R(x, 8, 39, 16, 1, PAL.stoneD);
+      R(x, 14, 22, 1, 20, PAL.stoneD); R(x, 8, 41, 16, 1, '#5c5c66');
+      R(x, 14, 34, 4, 8, PAL.door); R(x, 14, 34, 4, 1, '#7a5a34');
+      R(x, 9, 25, 3, 3, '#2c2c34');
+      // wooden cap + hub
+      R(x, 10, 18, 12, 5, PAL.plank); R(x, 10, 18, 12, 1, PAL.woodL); R(x, 15, 20, 2, 3, PAL.plankD);
+      // blades
+      const bx = 16, by = 19;
+      x.fillStyle = PAL.plank;
+      const rot = f ? 45 : 0;
+      for (let b = 0; b < 4; b++) {
+        const ang = (rot + b * 90) * Math.PI / 180;
+        const dx = Math.round(Math.cos(ang)), dy = Math.round(Math.sin(ang));
+        if (Math.abs(dx) > Math.abs(dy)) { x.fillRect(bx + (dx > 0 ? 2 : -10), by - 1, 8, 3); }
+        else { x.fillRect(bx - 1, by + (dy > 0 ? 2 : -10), 3, 8); }
+      }
+      x.fillStyle = '#e8e4d4'; x.fillRect(bx - 1, by - 1, 3, 3);
+      S['windmill' + f] = c;
+    }
+    // --- fishing dock 1x1 (hut + planks over water) ---
+    {
+      const { c, x } = mkc(16, 24);
+      R(x, 2, 19, 12, 2, PAL.plank); R(x, 2, 19, 12, 1, PAL.woodL); // dock
+      R(x, 3, 21, 1, 3, PAL.plankD); R(x, 12, 21, 1, 3, PAL.plankD); // posts
+      // hut
+      R(x, 3, 9, 10, 10, PAL.plank);
+      R(x, 3, 9, 10, 1, PAL.woodL); R(x, 3, 18, 10, 1, PAL.plankD);
+      R(x, 3, 12, 10, 1, PAL.plankD); R(x, 3, 15, 10, 1, PAL.plankD);
+      for (let i = 0; i < 4; i++) R(x, 1 + i * 4, 4 + i, 2, 1, i % 2 ? '#6a8ab4' : '#5278a4'); // slate roof
+      R(x, 1, 8, 14, 1, '#3f5d80'); R(x, 1, 3, 2, 1, '#3f5d80'); R(x, 12, 6, 2, 1, '#3f5d80');
+      R(x, 6, 13, 4, 6, PAL.door); R(x, 6, 13, 4, 1, '#7a5a34');
+      R(x, 5, 10, 2, 2, '#2c2c34');
+      // fishing rod
+      R(x, 12, 15, 1, 4, '#7a5a34'); R(x, 13, 18, 1, 3, '#d8d4c4');
+      S.fisher = c;
+    }
+    // --- mine shaft ---
+    {
+      const { c, x } = mkc(16, 20);
+      R(x, 2, 6, 12, 13, PAL.rock);
+      R(x, 2, 6, 12, 1, PAL.rockL); R(x, 2, 18, 12, 1, PAL.rockD);
+      R(x, 2, 6, 1, 13, PAL.rockD); R(x, 13, 6, 1, 13, PAL.rockD);
+      // dark entrance
+      R(x, 4, 8, 8, 11, '#181420');
+      R(x, 4, 8, 8, 1, '#241f30');
+      // timber frame
+      R(x, 3, 7, 1, 12, PAL.plank); R(x, 12, 7, 1, 12, PAL.plank); R(x, 3, 6, 10, 2, PAL.plank);
+      R(x, 3, 6, 10, 1, PAL.woodL);
+      // cart + lamp
+      R(x, 1, 15, 4, 3, PAL.wood); R(x, 1, 15, 4, 1, PAL.woodL);
+      R(x, 13, 12, 1, 1, '#ffd94a');
+      S.mine = c;
+    }
+    // --- herbalist hut ---
+    {
+      const { c, x } = mkc(16, 22);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(3, 20, 10, 2);
+      R(x, 3, 11, 10, 9, PAL.plank);
+      R(x, 3, 11, 10, 1, PAL.woodL); R(x, 3, 19, 10, 1, PAL.plankD);
+      for (let i = 0; i < 4; i++) R(x, 1 + i * 4, 4 + i, 3, 2, i % 2 ? '#3f8a6a' : '#357a5c'); // green roof
+      R(x, 1, 8, 14, 3, '#357a5c'); R(x, 1, 10, 14, 1, '#2a6448');
+      R(x, 6, 14, 4, 6, PAL.door); R(x, 6, 14, 4, 1, '#7a5a34');
+      R(x, 4, 12, 2, 2, '#2c2c34');
+      // drying rack with herbs
+      R(x, 13, 12, 1, 8, '#7a5a34'); R(x, 13, 12, 3, 1, '#7a5a34');
+      R(x, 14, 13, 1, 2, '#3fa88c'); R(x, 15, 13, 1, 3, '#3fa88c');
+      S.herbalist = c;
+    }
+    // --- barracks 2x2 ---
+    {
+      const { c, x } = mkc(32, 36);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 34, 24, 2);
+      R(x, 4, 16, 24, 18, PAL.plank);
+      R(x, 4, 16, 24, 1, PAL.woodL);
+      for (let r = 0; r < 4; r++) R(x, 4, 19 + r * 4, 24, 1, PAL.plankD);
+      R(x, 13, 16, 1, 18, PAL.plankD);
+      // roof
+      for (let i = 0; i < 8; i++) R(x, 2 + i, 8 + i, 26, 1, i % 2 ? '#8a4038' : '#7c3830');
+      R(x, 2, 15, 28, 1, '#5c2822');
+      // banner + weapon rack
+      R(x, 27, 4, 1, 12, PAL.plankD);
+      R(x, 24, 5, 4, 7, '#c03030'); R(x, 24, 5, 4, 1, '#e05555'); R(x, 25, 8, 2, 2, '#e8a94b');
+      R(x, 5, 25, 8, 3, PAL.wood); R(x, 5, 25, 8, 1, PAL.woodL);
+      R(x, 7, 21, 1, 4, PAL.metal); R(x, 9, 22, 1, 3, '#9aa0aa');
+      // door + windows
+      R(x, 13, 26, 6, 8, PAL.door); R(x, 13, 26, 6, 1, '#7a5a34');
+      R(x, 6, 19, 4, 4, '#2c2c34'); R(x, 21, 19, 4, 4, '#2c2c34');
+      S.barracks = c;
+    }
   },
 
   /* ================= MONSTERS ================= */
@@ -414,6 +710,62 @@ const Art = {
       R(x, 6, 11, 2, 4, '#191628'); R(x, 8, 11, 2, 3, '#191628');
       S['mon_stalker' + f] = c;
     }
+    // bonecaster — hunched skeleton hurling bones
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 16);
+      R(x, 6, 1, 4, 4, '#d8d4c4'); // skull
+      R(x, 6, 2, 1, 1, '#8a1c1c'); R(x, 9, 2, 1, 1, '#8a1c1c');
+      R(x, 7, 4, 2, 1, '#241f30');
+      R(x, 6, 5, 4, 5, '#c4c0b0'); // ribcage
+      R(x, 7, 6, 2, 3, '#8a8678'); R(x, 6, 7, 4, 1, '#a8a494');
+      R(x, 6, 10, 1, 4, '#c4c0b0'); R(x, 9, 10, 1, 4, '#c4c0b0'); // legs
+      if (f) { R(x, 11, 5, 1, 3, '#c4c0b0'); R(x, 12, 3, 2, 2, '#e8e4d4'); } // throwing arm + bone
+      else { R(x, 11, 4, 1, 4, '#c4c0b0'); R(x, 4, 6, 1, 3, '#c4c0b0'); }
+      R(x, 5, 6, 1, 3, '#c4c0b0');
+      S['mon_boner' + f] = c;
+    }
+    // wraith — pale phasing spirit (baked translucency)
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 20);
+      x.globalAlpha = 0.85;
+      const body = 'rgba(150,180,220,0.9)';
+      x.fillStyle = body;
+      const rows = [[5, 6], [4, 8], [4, 8], [3, 10], [4, 8], [4, 8], [5, 6]];
+      rows.forEach((r, i) => x.fillRect(r[0], 3 + i, r[1] - r[0], 1));
+      x.fillRect(6, 1, 4, 2);
+      // hollow eyes + mouth
+      R(x, 6, 4, 1, 2, '#101828'); R(x, 9, 4, 1, 2, '#101828'); R(x, 7, 7, 2, 1, '#101828');
+      // tattered tail wisps
+      x.fillStyle = 'rgba(150,180,220,0.55)';
+      if (f) { x.fillRect(5, 10, 2, 4); x.fillRect(9, 10, 2, 5); x.fillRect(7, 10, 1, 3); }
+      else { x.fillRect(6, 10, 2, 5); x.fillRect(9, 10, 1, 3); x.fillRect(4, 10, 1, 2); }
+      x.globalAlpha = 1;
+      S['mon_wraith' + f] = c;
+    }
+    // colossus — 24x24 walking stone horror
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(24, 24);
+      x.fillStyle = 'rgba(0,0,0,.3)'; x.fillRect(5, 22, 14, 2);
+      // legs
+      R(x, 6, 17, 4, 6, '#5c5c68'); R(x, 14, 17, 4, 6, '#5c5c68');
+      R(x, 6, 17, 4, 1, '#7c7c88'); R(x, 14, 17, 4, 1, '#7c7c88');
+      // torso slab
+      R(x, 4, 6, 16, 12, '#6c6c78');
+      R(x, 4, 6, 16, 1, '#8c8c98'); R(x, 4, 17, 16, 1, '#4c4c58');
+      R(x, 5, 8, 3, 1, '#4c4c58'); R(x, 15, 11, 3, 1, '#4c4c58'); R(x, 8, 14, 4, 1, '#4c4c58');
+      R(x, 10, 8, 2, 6, '#4c4c58'); // crack
+      // arms (swing frames)
+      if (f) { R(x, 1, 4, 3, 10, '#5c5c68'); R(x, 20, 8, 3, 8, '#5c5c68'); }
+      else { R(x, 1, 8, 3, 8, '#5c5c68'); R(x, 20, 4, 3, 10, '#5c5c68'); }
+      R(x, 1, 13, 3, 2, '#8c8c98'); R(x, 20, 13, 3, 2, '#8c8c98');
+      // head
+      R(x, 8, 1, 8, 6, '#7c7c88'); R(x, 8, 1, 8, 1, '#9c9ca8');
+      R(x, 9, 3, 2, 2, '#ff5a5a'); R(x, 13, 3, 2, 2, '#ff5a5a');
+      R(x, 9, 3, 1, 1, '#ffd0d0'); R(x, 13, 3, 1, 1, '#ffd0d0');
+      R(x, 10, 5, 4, 1, '#4c4c58');
+      R(x, 7, 0, 2, 2, '#5c5c68'); R(x, 15, 0, 2, 2, '#5c5c68'); // horns
+      S['mon_colossus' + f] = c;
+    }
     // night lord — 32x32 boss
     for (let f = 0; f < 2; f++) {
       const { c, x } = mkc(32, 32);
@@ -455,6 +807,9 @@ const Art = {
     { const { c, x } = mkc(7, 6); R(x, 0, 1, 7, 2, PAL.wood); R(x, 0, 3, 7, 2, PAL.woodD); R(x, 1, 0, 1, 1, PAL.woodL); R(x, 4, 2, 1, 1, '#c9a86a'); S.carryWood = c; }
     { const { c, x } = mkc(7, 6); R(x, 1, 2, 2, 2, PAL.berry); R(x, 4, 2, 2, 2, PAL.berry); R(x, 2, 4, 2, 2, PAL.berryL); R(x, 3, 0, 1, 2, '#4e7a40'); S.carryFood = c; }
     { const { c, x } = mkc(7, 6); R(x, 0, 1, 7, 4, PAL.rock); R(x, 1, 1, 4, 1, PAL.rockL); R(x, 1, 4, 5, 1, PAL.rockD); S.carryStone = c; }
+    { const { c, x } = mkc(7, 6); R(x, 2, 0, 1, 2, '#3fa88c'); R(x, 1, 2, 2, 3, '#3fa88c'); R(x, 4, 2, 2, 3, '#6fd4b4'); R(x, 2, 5, 1, 1, '#f0f0e0'); S.carryHerb = c; }
+    // bone projectile
+    { const { c, x } = mkc(6, 3); R(x, 1, 0, 4, 1, '#e8e4d4'); R(x, 0, 0, 1, 2, '#d8d4c4'); R(x, 5, 1, 1, 2, '#d8d4c4'); R(x, 2, 1, 2, 1, '#c4c0b0'); S.bone = c; }
     // ghost placement tile
     { const { c, x } = mkc(16, 16); x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 1; x.strokeRect(.5, .5, 15, 15); S.ghostTile = c; }
   },
@@ -467,6 +822,8 @@ const Art = {
     ic('food', x => { R(x, 3, 5, 4, 4, PAL.berry); R(x, 9, 6, 4, 4, PAL.berryL); R(x, 5, 10, 4, 4, PAL.berry); R(x, 7, 2, 1, 3, '#4e7a40'); R(x, 4, 3, 3, 1, '#4e7a40'); });
     ic('essence', x => { R(x, 5, 3, 6, 10, '#8a5cd0'); R(x, 4, 5, 8, 6, '#8a5cd0'); R(x, 6, 4, 2, 3, '#d0b0ff'); R(x, 6, 11, 4, 1, '#5c3a94'); });
     ic('pop', x => { R(x, 5, 2, 6, 6, '#f0c8a0'); R(x, 5, 2, 6, 2, '#6b4a26'); R(x, 3, 9, 10, 5, '#4a8f3c'); R(x, 6, 5, 1, 1, '#222'); R(x, 9, 5, 1, 1, '#222'); });
+    ic('herb', x => { R(x, 7, 2, 2, 12, '#3fa88c'); R(x, 4, 5, 3, 2, '#3fa88c'); R(x, 9, 7, 3, 2, '#6fd4b4'); R(x, 5, 9, 2, 2, '#6fd4b4'); R(x, 7, 1, 2, 2, '#f0f0e0'); R(x, 7, 1, 1, 1, '#e8a94b'); });
+    ic('stasis', x => { R(x, 7, 1, 2, 14, '#9ad4f0'); R(x, 1, 7, 14, 2, '#9ad4f0'); R(x, 4, 4, 2, 2, '#c8ecff'); R(x, 10, 10, 2, 2, '#c8ecff'); R(x, 10, 4, 2, 2, '#c8ecff'); R(x, 4, 10, 2, 2, '#c8ecff'); R(x, 7, 7, 2, 2, '#f0faff'); });
     ic('build', x => { R(x, 3, 7, 8, 2, '#7a5a34'); R(x, 9, 3, 4, 5, PAL.metal); R(x, 10, 3, 2, 1, PAL.metalD); R(x, 2, 12, 12, 2, PAL.plank); });
     ic('jobs', x => { R(x, 2, 4, 4, 4, '#f0c8a0'); R(x, 1, 9, 6, 5, '#c03030'); R(x, 10, 5, 4, 4, '#f0c8a0'); R(x, 9, 10, 6, 5, '#4a8f3c'); });
     ic('powers', x => { R(x, 7, 1, 2, 14, '#c9a94b'); R(x, 1, 7, 14, 2, '#c9a94b'); R(x, 4, 4, 8, 8, '#8a5cd0'); R(x, 6, 6, 4, 4, '#d0b0ff'); });

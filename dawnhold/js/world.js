@@ -49,8 +49,10 @@ const World = {
     this.amt = new Uint8Array(W * H);
     this.occ = new Int32Array(W * H);
     G.regrow = new Map();
+    this.lairSpots = [];
     const elev = this.noiseGen(seed);
     const moist = this.noiseGen(seed * 7 + 13);
+    const forestN = this.noiseGen(seed * 5 + 71);
     const rocky = this.noiseGen(seed * 3 + 101);
     const cx = W / 2, cy = H / 2;
     this.center = { x: cx, y: cy };
@@ -64,29 +66,45 @@ const World = {
         const edge = Math.max(Math.abs(dx), Math.abs(dy));
         const e = elev.fbm(nx, ny, 4) * (1 - Math.pow(U.clamp((edge - .82) / .18, 0, 1), 1.6));
         const m = moist.fbm(nx, ny, 3);
+        const f = forestN.fbm(nx + .17, ny + .41, 3);
         const r = rocky.fbm(nx + .31, ny + .77, 3);
         const dc = U.dst(x, y, cx, cy);
-        if (e < 0.34) this.t[i] = T.WATER;
-        else {
-          this.t[i] = T.GRASS;
-          if (e > 0.36 && e < 0.42 && U.hash2(x, y) < .3) this.t[i] = T.DIRT; // patches
-          if (this.t[i] === T.GRASS) {
-            if (m > 0.60 && e > 0.42) {
-              this.obj[i] = (e > 0.58 || m > 0.74) ? OBJ.PINE : OBJ.TREE;
-              if (U.hash2(x + 9, y) < .18) this.obj[i] = OBJ.NONE; // gaps in woods
-            } else if (m > 0.52 && m <= 0.60 && U.hash2(x, y + 5) < 0.10) {
-              this.obj[i] = OBJ.BUSH;
-            } else if (m <= 0.52 && U.hash2(x + 3, y + 3) < 0.045) {
-              this.obj[i] = OBJ.FLOWER;
-            }
-            // stone: richer away from center (risk/reward)
-            if (r > 0.68 && dc > 14 && U.hash2(x + 1, y + 7) < .5) {
-              this.obj[i] = OBJ.ROCK;
-            } else if (r > 0.63 && dc > 10 && U.hash2(x + 4, y + 2) < .16) {
-              this.obj[i] = OBJ.ROCK;
-            }
-          }
+
+        if (e < 0.34) { this.t[i] = T.WATER; continue; }
+        if (e < 0.375) { this.t[i] = T.SAND; continue; }   // shore ring
+        this.t[i] = T.GRASS;
+        if (e > 0.36 && e < 0.42 && U.hash2(x, y) < .3) this.t[i] = T.DIRT; // clearings
+
+        if (this.t[i] !== T.GRASS) continue;
+        const h = U.hash2(x, y), h2 = U.hash2(x + 5, y + 9);
+
+        // ---- dark forest biome: dense pines, mushrooms, dead trees ----
+        if (f > 0.63 && e > 0.40) {
+          if (h < 0.62) this.obj[i] = h2 < .82 ? OBJ.PINE : OBJ.TREE;
+          else if (h < 0.70) this.obj[i] = OBJ.MUSH;
+          else if (h < 0.735) this.obj[i] = OBJ.DEADTREE;
+          else if (h < 0.76) this.obj[i] = OBJ.HERB;
+          continue;
         }
+        // ---- highland biome: boulders, crystals, birch ----
+        if (r > 0.66 && dc > 13) {
+          if (h < 0.42) this.obj[i] = h2 < 0.10 ? OBJ.CRYSTAL : OBJ.ROCK;
+          else if (h < 0.47) this.obj[i] = OBJ.PINE;
+          else if (h < 0.50) this.obj[i] = OBJ.BIRCH;
+          continue;
+        }
+        // ---- meadow biome: oaks, berries, herbs, flowers, tall grass ----
+        if (m > 0.48) {
+          if (h < 0.13) this.obj[i] = OBJ.TREE;
+          else if (h < 0.155) this.obj[i] = OBJ.BIRCH;
+          else if (h < 0.23) this.obj[i] = OBJ.BUSH;
+          else if (h < 0.265) this.obj[i] = OBJ.HERB;
+          else if (h < 0.34) this.obj[i] = h2 < .5 ? OBJ.FLOWER : OBJ.TGRASS;
+        } else if (h < 0.05) {
+          this.obj[i] = OBJ.TGRASS;
+        }
+        // stray stone even in meadows, farther out
+        if (!this.obj[i] && r > 0.63 && dc > 10 && U.hash2(x + 4, y + 2) < .12) this.obj[i] = OBJ.ROCK;
       }
     }
 
@@ -101,7 +119,7 @@ const World = {
     // guarantee starting resources (idempotent placement on grass)
     const sprinkle = (type, count, rMin, rMax, amt) => {
       let placed = 0, tries = 0;
-      while (placed < count && tries++ < 800) {
+      while (placed < count && tries++ < 900) {
         const a = Math.random() * Math.PI * 2;
         const r = rMin + Math.random() * (rMax - rMin);
         const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r);
@@ -109,20 +127,62 @@ const World = {
         const i = this.idx(x, y);
         if (this.t[i] !== T.GRASS) continue;
         if (this.obj[i] === type) { placed++; continue; }
-        if (this.obj[i] !== OBJ.NONE && this.obj[i] !== OBJ.FLOWER) continue;
+        if (this.obj[i] !== OBJ.NONE && this.obj[i] !== OBJ.FLOWER && this.obj[i] !== OBJ.TGRASS && this.obj[i] !== OBJ.MUSH) continue;
         this.obj[i] = type; if (amt) this.amt[i] = amt;
         placed++;
       }
     };
     sprinkle(OBJ.BUSH, 16, 5, 13, OBJ_AMT[OBJ.BUSH]);
-    sprinkle(OBJ.TREE, 26, 7, 17, OBJ_AMT[OBJ.TREE]);
-    sprinkle(OBJ.PINE, 10, 12, 22, OBJ_AMT[OBJ.PINE]);
+    sprinkle(OBJ.TREE, 24, 7, 17, OBJ_AMT[OBJ.TREE]);
+    sprinkle(OBJ.PINE, 8, 12, 22, OBJ_AMT[OBJ.PINE]);
     sprinkle(OBJ.ROCK, 8, 13, 20, OBJ_AMT[OBJ.ROCK]);
+    sprinkle(OBJ.HERB, 6, 6, 14, OBJ_AMT[OBJ.HERB]);
+
+    // ancient ruins scattered at mid distance
+    sprinkle(OBJ.RUIN, 8, 14, 30, CONFIG.RUIN.stone);
+    // essence crystal lodes, far out (risk/reward)
+    sprinkle(OBJ.CRYSTAL, 5, 16, 28, OBJ_AMT[OBJ.CRYSTAL]);
+
+    // ---- monster lairs: 3 monoliths, spread angles, far from camp ----
+    const baseA = Math.random() * Math.PI * 2;
+    for (let k = 0; k < CONFIG.LAIR.count; k++) {
+      let placed = false;
+      for (let tries = 0; tries < 60 && !placed; tries++) {
+        const a = baseA + k * (Math.PI * 2 / CONFIG.LAIR.count) + (Math.random() - .5) * 0.7;
+        const r = 19 + Math.random() * 7;
+        const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r);
+        if (!this.inB(x, y)) continue;
+        const i = this.idx(x, y);
+        if (this.t[i] === T.WATER || this.t[i] === T.SAND) continue;
+        this.t[i] = T.GRASS;
+        this.obj[i] = OBJ.NONE;
+        // keep the lair's tile & neighbors clear so monsters can leave
+        let ok = true;
+        for (const [ddx, ddy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+          const j = this.inB(x + ddx, y + ddy) ? this.idx(x + ddx, y + ddy) : -1;
+          if (j >= 0 && this.t[j] === T.WATER) ok = false;
+          if (j >= 0) { this.obj[j] = OBJ.NONE; }
+        }
+        if (!ok) continue;
+        this.lairSpots.push({ x, y });
+        // dead trees & mushrooms ring the lair (visual tell)
+        for (let d = 0; d < 8; d++) {
+          const da = Math.random() * Math.PI * 2, dr = 1.5 + Math.random() * 2.5;
+          const dx2 = Math.round(x + Math.cos(da) * dr), dy2 = Math.round(y + Math.sin(da) * dr);
+          if (this.inB(dx2, dy2)) {
+            const j = this.idx(dx2, dy2);
+            if (this.t[j] === T.GRASS && this.obj[j] === OBJ.NONE && U.dst(dx2, dy2, cx, cy) > 6)
+              this.obj[j] = U.hash2(dx2, dy2) < .6 ? OBJ.DEADTREE : OBJ.MUSH;
+          }
+        }
+        placed = true;
+      }
+    }
 
     // fill amounts for all generated objects
     for (let i = 0; i < this.obj.length; i++) {
       const o = this.obj[i];
-      if ((o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BUSH || o === OBJ.ROCK) && this.amt[i] === 0)
+      if (OBJ_AMT[o] && this.amt[i] === 0)
         this.amt[i] = OBJ_AMT[o] + (U.hash2(i, 17) < .3 ? 1 : 0);
     }
 
@@ -173,6 +233,7 @@ const World = {
     if (t === T.GRASS) x.drawImage(Art.s['g' + v], px, py);
     else if (t === T.DIRT) x.drawImage(Art.s.dirt, px, py);
     else if (t === T.ROAD) x.drawImage(Art.s['road' + (v % 2)], px, py);
+    else if (t === T.SAND) x.drawImage(Art.s.sand, px, py);
   },
 
   bakeTile(tx, ty) {
@@ -203,32 +264,43 @@ const World = {
     this.obj[i] = o; this.amt[i] = amt || 0;
   },
 
-  // depleted → regrowth scheduling
+  // depleted → regrowth scheduling; returns a bonus tag for the caller
   deplete(tx, ty) {
     const i = this.idx(tx, ty), o = this.obj[i];
     this.amt[i] = 0;
+    let bonus = null;
     if (o === OBJ.TREE || o === OBJ.PINE) {
       this.obj[i] = OBJ.STUMP;
       G.regrow.set(i, { t: 150 + Math.random() * 60, kind: o });   // stump → sapling → tree
     } else if (o === OBJ.BUSH) {
-      this.obj[i] = OBJ.BUSH; // keep bush sprite-empty state via amt
       G.regrow.set(i, { t: 170 + Math.random() * 50, kind: OBJ.BUSH });
-    } else if (o === OBJ.ROCK) {
-      this.obj[i] = OBJ.NONE; // lode exhausted forever
+    } else if (o === OBJ.HERB) {
+      G.regrow.set(i, { t: CONFIG.HERB.regrow, kind: OBJ.HERB });
+    } else if (o === OBJ.CRYSTAL) {
+      this.obj[i] = OBJ.NONE;
+      bonus = 'crystal';
+    } else if (o === OBJ.RUIN) {
+      this.obj[i] = OBJ.NONE;
+      bonus = 'ruin';
+    } else if (o === OBJ.ROCK || o === OBJ.DEADTREE) {
+      this.obj[i] = OBJ.NONE; // exhausted
     }
+    return bonus;
   },
 
-  // walkability for pathing/movement. opts: {monster}
+  // walkability for pathing/movement. opts: {monster, phase}
   walkable(tx, ty, opts) {
     if (!this.inB(tx, ty)) return false;
     const i = this.idx(tx, ty);
     if (this.t[i] === T.WATER) return false;
     const o = this.obj[i];
-    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK) return false;
+    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.GRAVE) return false;
+    if (opts && opts.phase) return true; // wraiths drift through walls
     const id = this.occ[i];
-    if (id) {
+    if (id && !(opts && opts.phase)) {
       const b = Buildings.byId(id);
       if (b && b.built) {
+        if (b.def.kind === 'trap') return !!(opts && opts.monster); // monsters stride onto spikes
         if (b.def.kind === 'gate' && !(opts && opts.monster)) return true;
         return false;
       }
@@ -239,17 +311,18 @@ const World = {
   },
 
   // movement cost for A*. monsters treat solid buildings as pricey breakables.
-  cost(tx, ty, monster) {
+  cost(tx, ty, monster, phase) {
     if (!this.inB(tx, ty)) return Infinity;
     const i = this.idx(tx, ty);
     if (this.t[i] === T.WATER) return Infinity;
     const o = this.obj[i];
-    let c = this.t[i] === T.ROAD ? 0.72 : 1;
-    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK) return Infinity;
+    let c = this.t[i] === T.ROAD ? 0.72 : this.t[i] === T.SAND ? 1.15 : 1;
+    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.GRAVE) return Infinity;
     const id = this.occ[i];
-    if (id) {
+    if (id && !phase) {
       const b = Buildings.byId(id);
       if (b && b.built) {
+        if (b.def.kind === 'trap') return monster ? 1 : Infinity; // spikes are walked over
         if (b.def.kind === 'gate') return monster ? 22 : 0.8;
         if (monster) return 24 + b.hp / 60;  // will have to break it
         return Infinity;
@@ -272,7 +345,8 @@ const World = {
           const i = this.idx(x, y);
           const o = this.obj[i];
           if (types.includes(o)) {
-            if (o === OBJ.BUSH && this.amt[i] <= 0) continue;
+            const needsAmt = o === OBJ.BUSH || o === OBJ.HERB;
+            if (needsAmt && this.amt[i] <= 0) continue;
             cands.push({ x, y, i, d: r });
           }
         }

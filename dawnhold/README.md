@@ -7,6 +7,51 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
+> **v1.1 — The Wilds Update:** biome map overhaul (dark forests, meadows,
+> highlands, sand shores) with fully redrawn, readable tree & rock art;
+> **3 raidable Dark Monolith lairs** the horde crawls out of each night;
+> **blood moons** every 5th night; two new jobs (**Fisher**, **Herbalist**) with
+> herbs & healing huts; **Fishing Docks, Mine Shafts, Windmills, Spike Traps,
+> Barracks**; three new monsters (**Bonecasters** that snipe from range,
+> **Wraiths** that drift through walls, endless-mode **Colossi**); the
+> **Stasis** power; ancient ruins & essence crystals to salvage; and graves
+> that remember the fallen.
+
+---
+
+## Changelog
+
+### v1.1 — The Wilds Update
+- **World:** biome map generation (dark forests, meadows, highlands), sand
+  shores around water, ancient ruins (14 stone) and essence-crystal lodes
+  (6 stone + 8 essence) to salvage out in the wilds.
+- **Art:** fully redrawn, outlined, more recognizable trees (oak, pine, birch,
+  dead tree) and rocks (boulder, small rock, crystal); mushrooms, tall grass,
+  and graves as new set dressing.
+- **Lairs & raids:** three raidable Dark Monoliths spawn the night horde;
+  select one and press **Raid** to send guards to destroy it (+25 essence,
+  permanently smaller nights). Pink crosses mark them on the minimap.
+- **Blood moons:** every 5th night the horde grows 50% — but kills pay double
+  essence.
+- **New jobs:** Fisher (works shore docks) and Herbalist (gathers herbs; the
+  Herbalist Hut consumes them to auto-heal the wounded).
+- **New buildings:** Fishing Dock (needs water), Windmill (+35% farm growth
+  within 6 tiles), Spike Traps (drag-paintable, wound + slow, wear out), Mine
+  Shaft (endless slow stone, built on a boulder), Barracks (+30% guard damage,
+  one allowed).
+- **New monsters:** Bonecaster (day 7, ranged), Wraith (day 11, phases
+  through walls), Colossus (day 15, endless-mode siege titan).
+- **New power:** Stasis (day 5) freezes monsters in a circle for 5s.
+- **Feel:** dusk telegraphs name the attacking lair's direction; tap
+  forgiveness for tall buildings (towers, lairs, windmills); the dead are
+  buried where they fall; herbs chip in the HUD; old saves keep working
+  (lair-less worlds fall back to wilderness spawns).
+
+### v1.0 — First Light
+- Initial release: day/night survival loop, 8 jobs, 15 buildings, 5 monsters,
+  god powers, Beacon victory + Night Lord finale, endless mode, chronicle,
+  traits, tutorial, 4 difficulties, autosave + 3 slots, mobile-first UI.
+
 ---
 
 ## Run it
@@ -25,16 +70,23 @@ Great Beacon to bring back the dawn.
 
 You are the guardian spirit of six settlers. **You never directly control
 villagers** — you assign their **Jobs** (Forager, Lumberjack, Miner, Farmer,
-Builder, Guard) and they work autonomously.
+Fisher, Herbalist, Builder, Guard) and they work autonomously.
 
-- **Day (~3.5 min):** gather berries/wood/stone, build, farm, repair.
-- **Dusk:** you're told how many monsters are coming **and from which
-  direction**. Non-guards head for shelter.
-- **Night (~1.5 min):** the horde attacks. Guards and towers fight; you spend
-  **Essence** on god powers (Mend / Smite / Meteor). Survivors burn at dawn.
+- **Day (~3.5 min):** gather berries/wood/stone/herbs, build, farm, fish,
+  repair.
+- **Dusk:** you're told how many monsters are coming **and from which lair**.
+  Non-guards head for shelter. Every 5th night is a **blood moon** (+50% horde,
+  double essence from kills).
+- **Night (~1.5 min):** the horde crawls out of its **Dark Monoliths** (pink
+  crosses on the minimap). Guards and towers fight; you spend **Essence** on
+  god powers (Mend / Smite / Stasis / Meteor). Survivors burn at dawn.
+- **Raids:** tap a monolith and press **Raid** — your guards march out and
+  tear it down (+25 essence, that lair never spawns again; wipe all three and
+  nights shrink to stragglers from the wilds).
 - **Grow:** wanderers join at dawn if you have **food + beds**.
 - **Win:** raise **The Beacon** (day 10), survive the **Long Night** assault
-  (with the Night Lord boss) → dawn returns forever. Then keep playing endless.
+  (with the Night Lord boss) → dawn returns forever. Then keep playing endless
+  (Colossi arrive from day 15).
 - **Lose:** only when every villager is dead.
 
 **Controls:** tap = select/place · drag = pan (or paint walls/roads/gates) ·
@@ -76,18 +128,24 @@ This game was designed from a review-driven audit of its inspirations.
 ## Balance model (see `js/core.js` → `CONFIG`)
 
 - **Food:** villager eats ~2 meals/day (~4.3 food). Bush yields 7 (regrows
-  ~3 min); wheat plot yields 15 per ~95s of sun (farmer tends to boost 20%).
-  1 farm ≈ 3+ villagers fed. Starting food covers ~2 days.
+  ~3 min); wheat plot yields 15 per ~95s of sun (farmer +20%, windmill within
+  6 tiles +35%); fishing dock ~1 food / 3.4s per fisher. Starting food covers
+  ~2 days.
 - **Waves (Normal):** `round(1.4 + 1.75 × day)` capped at 30, ×0.68 Easy,
-  ×1.38 Hard, 0 Peaceful. Composition: shades always; runners 22% from d3;
-  brutes 15% from d6 (2.4× building damage); stalkers 16% from d9 (hunt
-  villagers). HP +5.5%/day past day 9.
-- **Defense math:** shade 28hp/4dmg vs guard 7.5dmg/0.72s, tower 8dmg/1.1s
-  (range 5.5), ballista 27dmg/2.3s (range 7.5). Palisade 220hp/2w, stone wall
-  520hp/4s, brutes need ~40s to solo a stone wall.
+  ×1.38 Hard, 0 Peaceful; blood moons ×1.5 every 5th night; no lairs left →
+  ×0.75 from the wilds. Composition: shades always; runners 22% d3; brutes 15%
+  d6; bonecasters 14% d7 (range 4.5); stalkers 16% d9; wraiths 18% d11 (phase
+  through walls); colossi 10% d15 (endless). HP +5.5%/day past day 9.
+- **Defense math:** shade 28hp/4dmg vs guard 7.5dmg/0.72s (+30% with
+  Barracks), tower 8dmg/1.1s (range 5.5), ballista 27dmg/2.3s (range 7.5 —
+  out-ranges bonecasters). Palisade 220hp/2w, stone wall 520hp/4s. Spike traps
+  15 dmg + slow per step, wear out after ~3 monsters. Lair 450hp — two guards
+  break it in ~20s.
 - **Essence:** starts 40, cap 120, ~0.1/s day · 0.05/s night (×difficulty),
-  +2 per kill (brutes 5, boss 40), shrines +0.06/s. Mend 12, Smite 22
-  (kills a shade outright), Meteor 65 (day 6).
+  +2 per kill (double on blood moons; lairs +25, crystals +8, boss +40),
+  shrines +0.06/s. Mend 12, Smite 22, Stasis 30 (day 5), Meteor 65 (day 6).
+- **Herbs:** bush yields 5 (regrows ~3.5 min); the hut heals 6 hp/s nearby,
+  1 herb per 5 hp mended.
 - **Growth:** wanderer at dawn if food ≥ 14 and beds free (65% chance);
   refugees ×2 every 3rd day; pop cap 44.
 
@@ -117,8 +175,8 @@ The labeled source-boundary comments inside `onefile.html` mirror this load
 order, so the portable build remains navigable.
 
 **Console hooks** for tinkering: `DBG.res('wood',100)`, `DBG.dusk()`,
-`DBG.wave(8)`, `DBG.vill(3)`, `DBG.day(9)`, plus `G`, `Sim`, `BUILD`,
-`CONFIG` are global.
+`DBG.wave(8)`, `DBG.vill(3)`, `DBG.day(9)`, `DBG.lairs()` (press **L** in game
+to toast lair positions), plus `G`, `Sim`, `BUILD`, `CONFIG` are global.
 
 ### Performance notes
 Terrain is baked once to an offscreen canvas; entities are capped
@@ -127,6 +185,6 @@ a half-resolution destination-out pass with capped light count; the minimap
 redraws at ~3Hz.
 
 ## Ideas if you want to extend it
-Weather (rain slows foraging), wandering traders, monster camps you can raid
-by day, villager relationships/morale, stone-tier monsters that throw bones
-over walls, scenario maps, cloud saves.
+Weather (rain slows foraging), wandering traders, villager
+relationships/morale, scenario maps, cloud saves, a second map theme
+(snowbound valley), seasonal crop rotations.

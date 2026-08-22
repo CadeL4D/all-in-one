@@ -10,14 +10,14 @@
 const Path = {
   find(sx, sy, tx, ty, opts) {
     opts = opts || {};
-    const monster = !!opts.monster, adjacent = !!opts.adjacent;
+    const monster = !!opts.monster, adjacent = !!opts.adjacent, phase = !!opts.phase;
     sx |= 0; sy |= 0; tx |= 0; ty |= 0;
     const W = World.W, H = World.H;
     if (!World.inB(tx, ty)) return null;
 
     // If goal blocked and adjacent allowed, snap to a nearby walkable tile
-    if (adjacent && !this.pass(tx, ty, monster)) {
-      const spot = this.nearbyFree(tx, ty, monster, 2);
+    if (adjacent && !this.pass(tx, ty, monster, phase)) {
+      const spot = this.nearbyFree(tx, ty, monster, 2, phase);
       if (!spot) return null;
       tx = spot.x; ty = spot.y;
     }
@@ -49,11 +49,11 @@ const Path = {
         const dx = DIR8[d][0], dy = DIR8[d][1];
         const nx = cx + dx, ny = cy + dy;
         if (!World.inB(nx, ny)) continue;
-        const step = World.cost(nx, ny, monster);
+        const step = World.cost(nx, ny, monster, phase);
         if (step === Infinity) continue;
         if (dx && dy) { // no corner cutting
-          if (World.cost(cx + dx, cy, monster) === Infinity) continue;
-          if (World.cost(cx, cy + dy, monster) === Infinity) continue;
+          if (World.cost(cx + dx, cy, monster, phase) === Infinity) continue;
+          if (World.cost(cx, cy + dy, monster, phase) === Infinity) continue;
         }
         const ni = World.idx(nx, ny);
         if (closed[ni]) continue;
@@ -78,17 +78,17 @@ const Path = {
     return pts.length ? pts : null;
   },
 
-  pass(tx, ty, monster) {
+  pass(tx, ty, monster, phase) {
     if (!World.inB(tx, ty)) return false;
-    return World.cost(tx, ty, monster) !== Infinity;
+    return World.cost(tx, ty, monster, phase) !== Infinity;
   },
 
-  nearbyFree(tx, ty, monster, r) {
+  nearbyFree(tx, ty, monster, r, phase) {
     let best = null, bd = 1e9;
     for (let dy = -r; dy <= r; dy++)
       for (let dx = -r; dx <= r; dx++) {
         const x = tx + dx, y = ty + dy;
-        if (!this.pass(x, y, monster)) continue;
+        if (!this.pass(x, y, monster, phase)) continue;
         const d = dx * dx + dy * dy;
         if (d < bd) { bd = d; best = { x, y }; }
       }

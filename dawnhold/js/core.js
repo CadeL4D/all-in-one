@@ -11,7 +11,7 @@ const CONFIG = {
   // --- day cycle (seconds at 1x speed) ---
   DAY_LEN: 210, NIGHT_LEN: 95, TRANS: 22,   // TRANS = dusk/dawn fade
 
-  START: { wood: 26, stone: 0, food: 48, essence: 40 },
+  START: { wood: 26, stone: 0, food: 48, essence: 40, herbs: 0 },
   VIL_START: 6,
 
   // --- hunger / food ---
@@ -19,7 +19,7 @@ const CONFIG = {
 
   // --- work ---
   CARRY: 8,                       // units hauled per trip
-  WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0 },
+  WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0, herbalist: 0.8 },
   FARM: { grow: 95, yield: 15, tendBoost: 1.2 },
   REPAIR: { rate: 22, cost: 24 }, // hp/s while repairing, hp per 1 resource
 
@@ -36,19 +36,35 @@ const CONFIG = {
   POWERS: {
     mend:    { cost: 12, heal: 45, cd: 1.0 },
     smite:   { cost: 22, dmg: 32, r: 1.7, cd: 1.2 },
+    stasis:  { cost: 30, dur: 5, r: 2.2, cd: 2.0, unlockDay: 5 },
     meteor:  { cost: 65, dmg: 130, r: 2.8, cd: 3.0, unlockDay: 6 },
   },
 
   // --- waves ---
-  WAVE: { base: 1.4, per: 1.75, cap: 30, spawnWindow: 30, hpScaleDay: 9, hpScale: 0.055, final: 2.1 },
+  WAVE: { base: 1.4, per: 1.75, cap: 30, spawnWindow: 30, hpScaleDay: 9, hpScale: 0.055, final: 2.1, bloodEvery: 5, bloodMult: 1.5, noLairMult: 0.75 },
 
   MONS: {
     shade:   { name: 'Shade',   hp: 28,  dmg: 4,  spd: 1.75, atkT: 0.9,  ess: 2, r: 0.5 },
     runner:  { name: 'Runner',  hp: 17,  dmg: 3,  spd: 2.9,  atkT: 0.65, ess: 2, from: 3, w: 0.22 },
     brute:   { name: 'Brute',   hp: 95,  dmg: 12, spd: 1.15, atkT: 1.4,  ess: 5, from: 6, w: 0.15, bld: 2.4 },
     stalker: { name: 'Stalker', hp: 34,  dmg: 7,  spd: 2.45, atkT: 0.8,  ess: 3, from: 9, w: 0.16 },
+    boner:   { name: 'Bonecaster', hp: 42, dmg: 6, spd: 1.3, atkT: 2.2, ess: 4, from: 7, w: 0.14, bld: 1.6, range: 4.5 },
+    wraith:  { name: 'Wraith',  hp: 46,  dmg: 9,  spd: 1.6,  atkT: 0.9,  ess: 5, from: 11, w: 0.18, phase: true },
+    colossus:{ name: 'Colossus', hp: 700, dmg: 30, spd: 0.8, atkT: 1.8,  ess: 30, from: 15, w: 0.10, bld: 3.5, r: 0.8 },
     lord:    { name: 'Night Lord', hp: 900, dmg: 24, spd: 1.0, atkT: 1.6, ess: 40, bld: 2.6, r: 0.7 },
   },
+
+  // --- lairs & raids ---
+  LAIR: { hp: 450, ess: 25, count: 3 },
+
+  // --- herb / healing economy ---
+  HERB: { amt: 5, regrow: 210, healRate: 6, herbPerHeal: 5 },
+  MINE: { rate: 2.8 },
+  FISHER: { rate: 3.4, carry: 6 },
+  TRAP: { dmg: 15, hpCost: 40, slow: 1.0 },
+  BARRACKS: { dmgMult: 1.3 },
+  RUIN: { stone: 14 },
+  CRYSTAL: { stone: 6, essence: 8 },
 
   // --- population growth ---
   ARRIVE: { chance: 0.65, foodNeed: 14, everyN: 3, n: 2, maxPop: 44 },
@@ -66,24 +82,26 @@ const CONFIG = {
 };
 
 // ---- terrain tile ids ----
-const T = { GRASS: 0, DIRT: 1, WATER: 2, ROAD: 3 };
+const T = { GRASS: 0, DIRT: 1, WATER: 2, ROAD: 3, SAND: 4 };
 
 // ---- map object ids (things standing on terrain) ----
-const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7 };
+const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7, MUSH: 8, TGRASS: 9, HERB: 10, RUIN: 11, CRYSTAL: 12, DEADTREE: 13, BIRCH: 14, GRAVE: 15 };
 
 // object yields (units per full source)
-const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10 };
+const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4 };
 
 // ---- jobs ----
-const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'builder', 'guard'];
+const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'herbalist', 'builder', 'guard'];
 const JOB_INFO = {
-  idle:    { name: 'Resting',  cloth: '#e8e0d0', desc: 'No duty. They haul nothing and stay near camp. Idle folk will emergency-forage if food runs dry.' },
-  forager: { name: 'Forager',  cloth: '#4a8f3c', desc: 'Pick berries from bushes. Fast food early on; bushes regrow each day.' },
-  lumber:  { name: 'Lumberjack', cloth: '#8a5a2b', desc: 'Fell trees for wood. Stumps slowly regrow into new trees.' },
-  miner:   { name: 'Miner',    cloth: '#7d7d85', desc: 'Mine stone from rocky outcrops. Stone is finite — the best lodes lie far from camp.' },
-  farmer:  { name: 'Farmer',   cloth: '#d9a036', desc: 'Tend and harvest wheat plots. The reliable food engine for a growing village.' },
-  builder: { name: 'Builder',  cloth: '#e07030', desc: 'Raises new buildings and repairs damaged walls and towers.' },
-  guard:   { name: 'Guard',    cloth: '#c03030', desc: 'Patrols the village and fights the shades. Keep at least one after night one.' },
+  idle:     { name: 'Resting',  cloth: '#e8e0d0', desc: 'No duty. They haul nothing and stay near camp. Idle folk will emergency-forage if food runs dry.' },
+  forager:  { name: 'Forager',  cloth: '#4a8f3c', desc: 'Pick berries from bushes. Fast food early on; bushes regrow each day.' },
+  lumber:   { name: 'Lumberjack', cloth: '#8a5a2b', desc: 'Fell trees for wood. Stumps slowly regrow into new trees.' },
+  miner:    { name: 'Miner',    cloth: '#7d7d85', desc: 'Mine stone from boulders and lodes, salvage ancient ruins, crack essence crystals.' },
+  farmer:   { name: 'Farmer',   cloth: '#d9a036', desc: 'Tend and harvest wheat plots. The reliable food engine for a growing village.' },
+  fisher:   { name: 'Fisher',   cloth: '#5a8fc9', desc: 'Works a Fishing Dock on the shore — steady food, no land used.' },
+  herbalist:{ name: 'Herbalist', cloth: '#3f9d84', desc: 'Gathers healing herbs; an Herbalist Hut turns them into mending for the wounded.' },
+  builder:  { name: 'Builder',  cloth: '#e07030', desc: 'Raises new buildings and repairs damaged walls and towers.' },
+  guard:    { name: 'Guard',    cloth: '#c03030', desc: 'Patrols the village and fights the shades. Keep at least one after night one.' },
 };
 
 // ---- utilities ----
@@ -123,16 +141,17 @@ const G = {
   phase: 'day',            // day | dusk | night | dawn
   speed: 1, paused: false,
   diff: 'normal', diffM: CONFIG.DIFF.normal,
-  res: { wood: 0, stone: 0, food: 0, essence: 0 },
+  res: { wood: 0, stone: 0, food: 0, essence: 0, herbs: 0 },
   villagers: [], monsters: [], buildings: [],
   effects: [], floaters: [],
-  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, builder: 1, guard: 0 },
+  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, herbalist: 0, builder: 1, guard: 0 },
   regrow: new Map(),       // tileIdx -> {t, kind}
   unlocks: {},             // buildKey -> true (granted)
   stats: { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: 6 },
   chronicle: [],           // {d, txt, k}
   wave: null,              // pending spawn state for the night
-  finalNight: false, beaconLit: false, boss: null,
+  finalNight: false, beaconLit: false, boss: null, bloodMoon: false,
+  raidTarget: null,        // lair building the guards are ordered to raid
   tut: 0, tutOn: true,
   shake: 0,
   cam: { x: 0, y: 0, z: CONFIG.ZOOM.start },

@@ -33,6 +33,10 @@ const Sim = {
     const cx = World.W / 2 | 0, cy = World.H / 2 | 0;
     // starting camp slightly left of center, tents around it
     Buildings.create('camp', cx - 1, cy - 1, true);
+    // monster lairs from the generator
+    for (const spot of World.lairSpots) Buildings.create('lair', spot.x, spot.y, true);
+    G.bloodMoon = false;
+    G.raidTarget = null;
     const starters = ['forager', 'forager', 'lumber', 'lumber', 'miner', 'builder'];
     for (let i = 0; i < C.VIL_START; i++) {
       const a = (i / C.VIL_START) * Math.PI * 2;
@@ -45,7 +49,7 @@ const Sim = {
     G.unlocks = {};
     for (const k in BUILD) if (BUILD[k].unlock <= 0) G.unlocks[k] = true;
 
-    this.log(`Day 1 — ${C.VIL_START} settlers raise the camp of Dawnhold beneath a dimming sun.`, 'good');
+    this.log(`Day 1 — ${C.VIL_START} settlers raise the camp of Dawnhold beneath a dimming sun. Three dark monoliths brood on the horizon.`, 'good');
     UI.toast('Shelter is short — raise Tents before dark.', 'good');
     UI.tutStart();
     UI.refreshAll();
@@ -103,6 +107,8 @@ const Sim = {
           const x = i % World.W, y = (i / World.W) | 0;
           if (rg.kind === OBJ.BUSH) {
             World.amt[i] = OBJ_AMT[OBJ.BUSH];
+          } else if (rg.kind === OBJ.HERB) {
+            World.amt[i] = OBJ_AMT[OBJ.HERB];
           } else if (rg.kind === OBJ.TREE || rg.kind === OBJ.PINE) {
             if (World.obj[i] === OBJ.STUMP) {
               World.obj[i] = OBJ.SAPLING;
@@ -132,14 +138,28 @@ const Sim = {
   /* ---------------- phases ---------------- */
   dusk() {
     G.phase = 'dusk';
-    const n = this.waveSize(G.day);
+    G.bloodMoon = G.day >= CONFIG.WAVE.bloodEvery && G.day % CONFIG.WAVE.bloodEvery === 0 && this.waveSize(G.day) > 0;
+    const n = this.waveSize(G.day) * (G.bloodMoon ? CONFIG.WAVE.bloodMult : 1);
     if (n > 0) {
-      // pre-pick the attack direction(s) so the player can prepare (readable tactics)
-      G.nextSides = G.day >= 5 ? [U.irnd(0, 3), U.irnd(0, 3)] : [U.irnd(0, 3)];
-      const names = ['north', 'south', 'west', 'east'];
-      const dir = [...new Set(G.nextSides)].map(s => names[s]).join(' and ');
-      UI.toast(`The sun slips away. ${n} shapes stir to the ${dir}...`, 'bad');
-      this.log(`Dusk of day ${G.day} — ${n} shades gather to the ${dir}.`, 'bad');
+      // direction telegraph from the nearest living lair (readable tactics)
+      const lairs = Buildings.lairs();
+      if (lairs.length) {
+        let nearest = null, bd = 1e9;
+        for (const l of lairs) {
+          const d = U.dst2(World.center.x, World.center.y, l.x, l.y);
+          if (d < bd) { bd = d; nearest = l; }
+        }
+        const ang = Math.atan2(nearest.y - World.center.y, nearest.x - World.center.x);
+        const dirs = ['east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'north', 'northeast'];
+        const dir = dirs[((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8];
+        UI.toast(G.bloodMoon
+          ? `A BLOOD MOON rises — a greater horde boils from the monolith to the ${dir}!`
+          : `The sun slips away. ${n} shapes crawl from the monolith to the ${dir}...`, 'bad');
+        this.log(G.bloodMoon ? `Blood moon — the lairs empty themselves upon the valley.` : `Dusk of day ${G.day} — the horde stirs to the ${dir}.`, 'bad');
+      } else {
+        UI.toast(G.bloodMoon ? 'A BLOOD MOON rises — the dark has no home left, so all of it comes!' : `The sun slips away. ${n} shapes drift in from the wilds...`, 'bad');
+        this.log(`Dusk of day ${G.day} — no lairs remain, yet ${n} shapes gather from the wilds.`, 'bad');
+      }
     } else if (G.diff === 'peaceful') {
       UI.toast('Night falls. Peaceful valley — nothing stirs.', 'good');
     }
@@ -153,11 +173,13 @@ const Sim = {
 
   night() {
     G.phase = 'night';
-    const n = this.waveSize(G.day);
-    if (n > 0) {
+    const base = this.waveSize(G.day);
+    if (base > 0) {
       const isFinal = G.finalNight;
+      const lairs = Buildings.lairs();
+      const noLairMult = lairs.length ? 1 : CONFIG.WAVE.noLairMult;
+      const total = Math.max(1, Math.round((base * (G.bloodMoon ? CONFIG.WAVE.bloodMult : 1) * noLairMult) * (isFinal ? CONFIG.WAVE.final : 1)));
       let comps = [];
-      const total = isFinal ? Math.round(n * CONFIG.WAVE.final) : n;
       for (let i = 0; i < total; i++) comps.push(this.rollType(G.day));
       G.wave = { left: total, comps, t: 0, window: CONFIG.WAVE.spawnWindow };
       G.stats.wavePeak = Math.max(G.stats.wavePeak, total);
@@ -166,8 +188,6 @@ const Sim = {
         G.finalNightDay = G.day;
         UI.toast('THE LONG NIGHT — the horde answers the Beacon!', 'bad');
         this.log('The Long Night begins. Everything the dark has, it sends.', 'bad');
-      } else {
-        this.log(`Night ${G.day} — the horde attacks.`, 'bad');
       }
     } else G.wave = null;
   },
@@ -209,8 +229,12 @@ const Sim = {
       const d = BUILD[k];
       if (!G.unlocks[k] && d.unlock > 0 && d.unlock <= G.day) { G.unlocks[k] = true; newU.push(d.name); }
     }
-    if (!G.unlocks.__meteor && CONFIG.POWERS.meteor.unlockDay <= G.day) {
-      G.unlocks.__meteor = true; newU.push('Meteor (Powers)');
+    for (const pk in POWERS) {
+      const p = POWERS[pk];
+      if (p.unlockDay && !G.unlocks['__pw_' + pk] && p.unlockDay <= G.day) {
+        G.unlocks['__pw_' + pk] = true;
+        newU.push(`${p.name} (Power)`);
+      }
     }
     if (newU.length) {
       UI.toast('Unlocked: ' + newU.join(', '), 'good');
@@ -277,6 +301,9 @@ const Sim = {
     if (day >= M.runner.from) pool.push({ t: 'runner', w: M.runner.w });
     if (day >= M.brute.from) pool.push({ t: 'brute', w: M.brute.w });
     if (day >= M.stalker.from) pool.push({ t: 'stalker', w: M.stalker.w });
+    if (day >= M.boner.from) pool.push({ t: 'boner', w: M.boner.w });
+    if (day >= M.wraith.from) pool.push({ t: 'wraith', w: M.wraith.w });
+    if (day >= M.colossus.from) pool.push({ t: 'colossus', w: M.colossus.w });
     let tot = pool.reduce((s, p) => s + p.w, 0);
     let r = Math.random() * tot;
     for (const p of pool) { r -= p.w; if (r <= 0) return p.t; }
@@ -287,13 +314,25 @@ const Sim = {
     const w = G.wave;
     w.t += dt;
     const should = Math.min(w.comps.length, Math.floor(w.t / w.window * (w.comps.length + 2)));
+    const lairs = Buildings.lairs();
     while (w.left > 0 && G.monsters.length < 70 && w.comps.length - w.left < should) {
       const type = w.comps[w.comps.length - w.left];
       w.left--;
-      const p = World.edgePoint(type === 'lord' && G.nextSides ? [G.nextSides[0]] : G.nextSides);
-      const m = Entities.makeMonster(type, p.x, p.y);
+      let px, py;
+      if (lairs.length) {
+        // crawl out of a living lair (with a little jitter)
+        const l = U.choice(lairs);
+        px = l.x + .5 + (Math.random() - .5) * 1.6;
+        py = l.y + .5 + (Math.random() - .5) * 1.6;
+      } else {
+        const p = World.edgePoint(G.nextSides);
+        px = p.x; py = p.y;
+      }
+      const m = Entities.makeMonster(type, px, py);
       G.monsters.push(m);
+      if (lairs.length && Math.random() < .4) this.fx('spark', px, py - .4, .3);
       if (type === 'lord') { G.boss = m; UI.bossBar(m); UI.toast('A NIGHT LORD rises with the horde!', 'bad'); G.shake = Math.max(G.shake, 6); }
+      if (type === 'colossus') { UI.toast('The ground shakes — a COLOSSUS has come!', 'bad'); G.shake = Math.max(G.shake, 5); }
     }
     if (w.left <= 0 && G.monsters.length === 0) G.wave = null;
   },
@@ -441,7 +480,7 @@ const Sim = {
           v.path = null;
           if (v.atkCd <= 0) {
             v.atkCd = CONFIG.GUARD.atkT;
-            this.hitMonster(m, CONFIG.GUARD.dmg, v);
+            this.hitMonster(m, this.guardDmg(), v);
             this.fx('spark', m.x, m.y, .25);
           }
         } else if (!v.path || v.pi >= v.path.length || (v.aiT > .3 && !v.path)) {
@@ -468,6 +507,23 @@ const Sim = {
         if (dc < 30 * 30 && (dm < bd || dm < 64)) { bd = Math.min(bd, dm); best = m; }
       }
       if (best) { v.tgt = best; v.state = 'fight'; return; }
+      // raid order: march on a dark monolith and tear it down
+      if (G.raidTarget && G.buildings.includes(G.raidTarget)) {
+        const rt = G.raidTarget;
+        const d = U.dst(v.x, v.y, rt.x + .5, rt.y + .5);
+        if (d < 1.15) {
+          v.path = null;
+          if (v.atkCd <= 0) {
+            v.atkCd = CONFIG.GUARD.atkT;
+            this.hitBuilding(rt, this.guardDmg());
+            this.fx('spark', rt.x + .5, rt.y + .3, .3);
+          }
+        } else if (!v.path || v.pi >= v.path.length) {
+          v.path = Path.find(v.x | 0, v.y | 0, rt.x, rt.y, { adjacent: true });
+          v.pi = 0;
+        }
+        return;
+      }
       // idle patrol
       if (Math.random() < .3) {
         const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 3;
@@ -513,10 +569,29 @@ const Sim = {
       return;
     }
 
-    // gatherers: forager / lumber / miner
-    if (job === 'forager' || job === 'lumber' || job === 'miner') {
-      const types = job === 'forager' ? [OBJ.BUSH] : job === 'lumber' ? [OBJ.TREE, OBJ.PINE] : [OBJ.ROCK];
-      const resType = job === 'forager' ? 'food' : job === 'lumber' ? 'wood' : 'stone';
+    // fishers work the docks
+    if (job === 'fisher') {
+      if (v.carry.amt >= Entities.carryMax(v)) { this.sendToStore(v); return; }
+      const huts = Buildings.fisherHuts();
+      if (huts.length) {
+        let best = huts[0], bc = 1e9;
+        for (const h of huts) {
+          const crew = G.villagers.filter(o => o !== v && o.workB === h && (o.state === 'work' || o.state === 'toWork')).length;
+          const d = U.dst2(v.x, v.y, h.x, h.y) * (1 + crew);
+          if (d < bc) { bc = d; best = h; }
+        }
+        if (this.sendToBuilding(v, best, 'fish')) return;
+      }
+      return;
+    }
+
+    // gatherers: forager / lumber / miner / herbalist
+    if (job === 'forager' || job === 'lumber' || job === 'miner' || job === 'herbalist') {
+      const types = job === 'forager' ? [OBJ.BUSH]
+        : job === 'lumber' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
+          : job === 'miner' ? [OBJ.ROCK, OBJ.RUIN, OBJ.CRYSTAL]
+            : [OBJ.HERB];
+      const resType = job === 'forager' ? 'food' : job === 'lumber' ? 'wood' : job === 'miner' ? 'stone' : 'herbs';
       if (v.carry.amt >= Entities.carryMax(v)) { this.sendToStore(v); return; }
       const near = World.findNearestObj(v.x | 0, v.y | 0, types, 36);
       if (near) {
@@ -529,6 +604,20 @@ const Sim = {
           return;
         }
       }
+      // miners with no lodes left work the mine shafts instead
+      if (job === 'miner') {
+        const mines = Buildings.mines();
+        if (mines.length) {
+          let best = null, bd = 1e9;
+          for (const mn of mines) {
+            const crew = G.villagers.filter(o => o !== v && o.workB === mn && (o.state === 'work' || o.state === 'toWork')).length;
+            if (crew >= 2) continue;
+            const d = U.dst2(v.x, v.y, mn.x, mn.y);
+            if (d < bd) { bd = d; best = mn; }
+          }
+          if (best && this.sendToBuilding(v, best, 'mine')) return;
+        }
+      }
       // nothing in range — if carrying something, store it; else truly idle
       if (v.carry.amt > 0) this.sendToStore(v);
       return;
@@ -538,9 +627,11 @@ const Sim = {
   vArriveWork(v) {
     if (v.workKind && v.tgtTile) {
       const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
-      const want = v.workKind === 'food' ? OBJ.BUSH : v.workKind === 'wood' ? [OBJ.TREE, OBJ.PINE] : [OBJ.ROCK];
-      const ok = Array.isArray(want) ? want.includes(o) : o === want;
-      if (ok && World.amtAt(v.tgtTile.x, v.tgtTile.y) > 0) { v.state = 'work'; v.workT = 0; return; }
+      const want = v.workKind === 'food' ? [OBJ.BUSH]
+        : v.workKind === 'wood' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
+          : v.workKind === 'stone' ? [OBJ.ROCK, OBJ.RUIN, OBJ.CRYSTAL]
+            : v.workKind === 'herbs' ? [OBJ.HERB] : [];
+      if (want.includes(o) && World.amtAt(v.tgtTile.x, v.tgtTile.y) > 0) { v.state = 'work'; v.workT = 0; return; }
       v.state = 'idle'; v.tgtTile = null;
       return;
     }
@@ -552,6 +643,7 @@ const Sim = {
       if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
       if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
       if (v.workMode === 'tend' && b.built && b.growth < 1) { v.state = 'work'; v.workT = 0; return; }
+      if ((v.workMode === 'fish' || v.workMode === 'mine') && b.built) { v.state = 'work'; v.workT = 0; return; }
       v.workB = null; v.state = 'idle';
       return;
     }
@@ -563,7 +655,7 @@ const Sim = {
     if (v.workKind && v.tgtTile) {
       const { x, y } = v.tgtTile;
       v.workT += dt * ws;
-      const jobKey = v.workKind === 'food' ? 'forager' : v.workKind === 'wood' ? 'lumber' : v.workKind === 'stone' ? 'miner' : v.job;
+      const jobKey = v.workKind === 'food' ? 'forager' : v.workKind === 'wood' ? 'lumber' : v.workKind === 'stone' ? 'miner' : v.workKind === 'herbs' ? 'herbalist' : v.job;
       const interval = CONFIG.WORK_T[jobKey] || 0.9;
       while (v.workT >= interval) {
         v.workT -= interval;
@@ -574,7 +666,12 @@ const Sim = {
         v.carry.amt++;
         this.fx('spark', x + .5, y + .3, .2);
         if (amt - 1 <= 0) {
-          World.deplete(x, y);
+          const bonus = World.deplete(x, y);
+          if (bonus === 'crystal') {
+            G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.CRYSTAL.essence);
+            this.float(x + .5, y + .3, '+' + CONFIG.CRYSTAL.essence + ' essence', '#b48ae0');
+            this.log('Miners cracked an essence crystal — its light flows to you.', 'magic');
+          }
           v.state = 'idle'; v.tgtTile = null;
           break;
         }
@@ -585,6 +682,34 @@ const Sim = {
     }
     const b = v.workB;
     if (!b || !G.buildings.includes(b)) { v.workB = null; v.state = 'idle'; return; }
+    if (v.workMode === 'fish' && b.built) {
+      v.workT += dt * ws;
+      if (v.workT >= CONFIG.FISHER.rate) {
+        v.workT = 0;
+        v.carry.type = 'food';
+        v.carry.amt++;
+        this.fx('spark', v.x, v.y - .4, .2);
+        if (v.carry.amt >= Math.min(Entities.carryMax(v), CONFIG.FISHER.carry + 4)) {
+          v.workB = null; v.state = 'idle';
+          this.sendToStore(v);
+        }
+      }
+      return;
+    }
+    if (v.workMode === 'mine' && b.built) {
+      v.workT += dt * ws;
+      if (v.workT >= CONFIG.MINE.rate) {
+        v.workT = 0;
+        v.carry.type = 'stone';
+        v.carry.amt++;
+        this.fx('spark', v.x, v.y - .4, .2);
+        if (v.carry.amt >= Entities.carryMax(v)) {
+          v.workB = null; v.state = 'idle';
+          this.sendToStore(v);
+        }
+      }
+      return;
+    }
     if (v.workMode === 'build' && !b.built) {
       b.progress = Math.min(1, b.progress + dt * ws / b.def.time);
       b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
@@ -660,6 +785,7 @@ const Sim = {
 
   /* ---------------- monsters ---------------- */
   updateMonster(m, dt) {
+    if (m.frozenT > 0) { m.frozenT -= dt; return; }   // held by Stasis
     if (m.burning > 0) {
       m.burning -= dt;
       m.hp -= 26 * dt;
@@ -667,15 +793,58 @@ const Sim = {
       if (m.hp <= 0) { this.monsterDeath(m, 'dawn'); return; }
       return;
     }
+    if (m.slowT > 0) m.slowT -= dt;
+    if (m.trapCd > 0) m.trapCd -= dt;
     if (m.atkCd > 0) m.atkCd -= dt;
     m.aiT -= dt;
     if (m.aiT <= 0) { m.aiT = 0.45 + Math.random() * 0.2; this.mThink(m); }
+
+    // spike traps wound & slow whatever walks over them (wraiths drift above)
+    if (m.trapCd <= 0 && !m.st.phase) {
+      const tb = World.bldAt(m.x | 0, m.y | 0);
+      if (tb && tb.built && tb.def.kind === 'trap') {
+        m.trapCd = 0.8;
+        this.hitMonster(m, CONFIG.TRAP.dmg);
+        m.slowT = Math.max(m.slowT, CONFIG.TRAP.slow);
+        tb.hp -= CONFIG.TRAP.hpCost;
+        this.fx('spark', m.x, m.y - .3, .25);
+        if (tb.hp <= 0) {
+          this.fx('smoke', tb.x + .5, tb.y + .5, .6);
+          Buildings.demolish(tb, true);
+        }
+      }
+    }
+
+    // bonecasters snipe from stand-off range
+    if (m.type === 'boner') {
+      const rng = m.st.range;
+      if (m.tgtE && m.tgtE.hp > 0 && U.dst(m.x, m.y, m.tgtE.x, m.tgtE.y) < rng) {
+        m.path = null;
+        if (m.atkCd <= 0) {
+          m.atkCd = m.atkT;
+          this.fx('bone', m.x, m.y - .5, .35, { tx: m.tgtE.x, ty: m.tgtE.y });
+          this.hitVillager(m.tgtE, m.dmg);
+        }
+        return;
+      }
+      if (m.tgtB && G.buildings.includes(m.tgtB)) {
+        if (U.dst(m.x, m.y, m.tgtB.x + m.tgtB.w / 2, m.tgtB.y + m.tgtB.h / 2) < rng) {
+          m.path = null;
+          if (m.atkCd <= 0) {
+            m.atkCd = m.atkT;
+            this.fx('bone', m.x, m.y - .5, .35, { tx: m.tgtB.x + m.tgtB.w / 2, ty: m.tgtB.y + m.tgtB.h / 2 });
+            this.hitBuilding(m.tgtB, m.dmg * m.bld);
+          }
+          return;
+        }
+      }
+    }
 
     if (m.path && m.pi < m.path.length) {
       // check if next waypoint is inside a solid building → attack it
       const wp = m.path[m.pi];
       const bt = World.bldAt(wp.x | 0, wp.y | 0);
-      if (bt && bt.built && bt.def.kind !== 'gate') {
+      if (bt && bt.built && bt.def.kind !== 'gate' && bt.def.kind !== 'trap' && !m.st.phase) {
         const d = U.dst(m.x, m.y, wp.x, wp.y);
         if (d < 1.25) {
           if (m.atkCd <= 0) {
@@ -685,7 +854,7 @@ const Sim = {
           return;
         }
       }
-      this.moveAlong(m, dt, m.spd);
+      this.moveAlong(m, dt, m.spd * (m.slowT > 0 ? 0.5 : 1) * (G.bloodMoon ? 1.1 : 1));
       m.anim += dt * 8;
     } else {
       // direct attack checks when pathless/adjacent
@@ -704,18 +873,19 @@ const Sim = {
     if (m.tgtE && (m.tgtE.hp <= 0 || !G.villagers.includes(m.tgtE))) m.tgtE = null;
     if (m.tgtB && !G.buildings.includes(m.tgtB)) m.tgtB = null;
 
-    // pick target: stalker prefers villagers; others nearest villager then building
+    // pick target: stalkers & wraiths prefer villagers; others nearest villager then building
     if (!m.tgtE && !m.tgtB) {
       let bestV = null, bd = 1e9;
       for (const v of G.villagers) {
         const d = U.dst2(m.x, m.y, v.x, v.y);
         if (d < bd) { bd = d; bestV = v; }
       }
-      const preferV = m.type === 'stalker' || bd < 20 * 20;
+      const preferV = m.type === 'stalker' || m.type === 'wraith' || bd < 20 * 20;
       if (bestV && preferV) m.tgtE = bestV;
       else {
         let bestB = null, bdd = 1e9;
         for (const b of G.buildings) {
+          if (b.key === 'lair') continue; // never sack their own home
           const d = U.dst2(m.x, m.y, b.x + b.w / 2, b.y + b.h / 2);
           const w = b.key === 'camp' ? d * .6 : d; // drawn to the heart of the village
           if (w < bdd) { bdd = w; bestB = b; }
@@ -734,7 +904,7 @@ const Sim = {
       }
     }
 
-    // (re)path
+    // (re)path — wraiths drift straight through walls
     const goalE = m.tgtE;
     const goalB = m.tgtB;
     const gx = goalE ? goalE.x : goalB ? goalB.x + goalB.w / 2 : World.center.x;
@@ -742,20 +912,18 @@ const Sim = {
     const needPath = !m.path || m.pi >= m.path.length || (m.pathT = (m.pathT || 0) + .5) > 2.5;
     if (needPath) {
       m.pathT = 0;
-      const p = Path.find(m.x | 0, m.y | 0, gx | 0, gy | 0, { adjacent: true, monster: true });
+      const p = Path.find(m.x | 0, m.y | 0, gx | 0, gy | 0, { adjacent: true, monster: true, phase: !!m.st.phase });
       if (p) { m.path = p; m.pi = 0; }
       else {
-        // fully sealed & unpathable — batter nearest wall
+        // fully sealed & unpathable — batter nearest structure
         let best = null, bd = 1e9;
         for (const b of G.buildings) {
-          if (!b.built || b.def.kind === 'torch' || b.def.kind === 'shrine') {
-            // torches/shrines get smashed too, but walls first
-          }
+          if (b.key === 'lair') continue;
           const d = U.dst2(m.x, m.y, b.x + b.w / 2, b.y + b.h / 2);
           if (d < bd) { bd = d; best = b; }
         }
         m.tgtB = best; m.tgtE = null;
-        const p2 = best ? Path.find(m.x | 0, m.y | 0, (best.x + best.w / 2) | 0, (best.y + best.h / 2) | 0, { adjacent: true, monster: true }) : null;
+        const p2 = best ? Path.find(m.x | 0, m.y | 0, (best.x + best.w / 2) | 0, (best.y + best.h / 2) | 0, { adjacent: true, monster: true, phase: !!m.st.phase }) : null;
         if (p2) { m.path = p2; m.pi = 0; }
       }
     }
@@ -779,7 +947,8 @@ const Sim = {
   monsterDeath(m, how) {
     if (m.dead) return;
     m.dead = true;
-    const ess = how === 'dawn' ? Math.ceil(m.ess / 2) : m.ess;
+    const base = how === 'dawn' ? m.ess / 2 : m.ess;
+    const ess = Math.ceil(base * (G.bloodMoon ? 2 : 1));
     G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + ess);
     G.stats.kills++;
     this.float(m.x, m.y - .5, '+' + ess + ' essence', '#b48ae0');
@@ -801,6 +970,13 @@ const Sim = {
     this.fx('corpse', v.x, v.y, 2.2, { look: v.look });
     this.log(`${v.name}${v.trait ? ' the ' + v.trait.name : ''} (${v.job}) was lost to ${cause}.`, 'bad');
     UI.toast(`${v.name} has died — ${cause}.`, 'bad');
+    // leave a small grave so the dead are remembered
+    const gx = v.x | 0, gy = v.y | 0;
+    const o = World.objAt(gx, gy);
+    if ((o === OBJ.NONE || o === OBJ.FLOWER || o === OBJ.TGRASS || o === OBJ.MUSH) && !World.bldAt(gx, gy)
+      && World.tileT(gx, gy) !== T.WATER && World.inB(gx, gy)) {
+      World.setObj(gx, gy, OBJ.GRAVE, 0);
+    }
     if (G.follow === v) G.follow = null;
     if (G.sel && G.sel.ref === v) { G.sel = null; UI.selHide(); }
     this.reassign();
@@ -811,6 +987,7 @@ const Sim = {
     b.hp -= dmg;
     this.fx('spark', b.x + b.w / 2 + (Math.random() - .5), b.y + b.h / 2 - Math.random(), .2);
     if (b.hp <= 0) {
+      if (b.key === 'lair') { this.lairDestroyed(b); return; }
       const wasStore = b.def.kind === 'store';
       const wasBeacon = b.key === 'beacon';
       this.fx('smoke', b.x + b.w / 2, b.y + b.h / 2, 1.0);
@@ -824,6 +1001,31 @@ const Sim = {
         this.log(`${b.def.name} was destroyed.`, 'bad');
       }
     }
+  },
+
+  lairDestroyed(b) {
+    const idx = G.buildings.indexOf(b);
+    if (idx >= 0) G.buildings.splice(idx, 1);
+    Buildings.byIdMap.delete(b.id);
+    World.occ[World.idx(b.x, b.y)] = 0;
+    if (G.raidTarget === b) G.raidTarget = null;
+    if (G.sel && G.sel.ref === b) { G.sel = null; UI.selHide(); }
+    G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.LAIR.ess);
+    this.fx('smoke', b.x + .5, b.y + .5, 1.2);
+    for (let k = 0; k < 6; k++) this.fx('spark', b.x + (Math.random() - .5), b.y - Math.random() * .8, .5);
+    G.shake = Math.max(G.shake, 5);
+    UI.toast(`A Dark Monolith shatters! +${CONFIG.LAIR.ess} essence`, 'good');
+    this.log('The guards tore down a Dark Monolith. Its night-spawn is ended.', 'good');
+    if (!Buildings.lairs().length) {
+      UI.toast('The last monolith has fallen — the nights grow thin!', 'good');
+      this.log('No lairs remain. The dark must now crawl in from the wilds.', 'good');
+    }
+  },
+
+  guardDmg() {
+    let d = CONFIG.GUARD.dmg;
+    if (G.buildings.some(b => b.built && b.key === 'barracks')) d *= CONFIG.BARRACKS.dmgMult;
+    return d;
   },
 
   shootTower(b, m) {
@@ -969,7 +1171,11 @@ const Sim = {
 
 // ---- debug/test hooks (also handy for tinkering) ----
 window.DBG = {
-  res(k, n) { G.res[k] += n; UI.updateHUD(); },
+  lairs() {
+    const s = Buildings.lairs().map(l => `${l.x},${l.y}`).join(' | ') || 'none';
+    UI.toast('LAIRS: ' + s, 'magic');
+    return s;
+  },  res(k, n) { G.res[k] += n; UI.updateHUD(); },
   dusk() { if (G.phase === 'day') { G.time = CONFIG.DAY_LEN - 0.01; } },
   night() { DBG.dusk(); },
   day(n) { G.day = n; },

@@ -81,8 +81,9 @@ const SaveSys = {
     G.seed = d.seed; G.day = d.day; G.time = d.time; G.phase = d.phase;
     G.diff = d.diff in CONFIG.DIFF ? d.diff : 'normal';
     G.diffM = CONFIG.DIFF[G.diff];
-    G.res = { ...d.res };
-    G.jobs = { ...d.jobs };
+    G.res = { wood: d.res.wood || 0, stone: d.res.stone || 0, food: d.res.food || 0, essence: d.res.essence || 0, herbs: d.res.herbs || 0 };
+    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, herbalist: 0, builder: 0, guard: 0 };
+    for (const k of JOBS) if (k !== 'idle') G.jobs[k] = d.jobs[k] || 0;
     G.unlocks = d.unlocks || {};
     G.stats = { ...d.stats };
     G.chronicle = d.chronicle || [];

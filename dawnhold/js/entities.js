@@ -42,13 +42,14 @@ const Entities = {
     const st = CONFIG.MONS[type];
     const hpMul = G.diffM.hp * (1 + Math.max(0, G.day - CONFIG.WAVE.hpScaleDay) * CONFIG.WAVE.hpScale);
     const m = {
-      kind: 'm', id: NID(), type, name: st.name,
+      kind: 'm', id: NID(), type, name: st.name, st,
       x, y, hp: Math.round(st.hp * hpMul), maxHp: Math.round(st.hp * hpMul),
       dmg: st.dmg, spd: st.spd, atkT: st.atkT, ess: st.ess,
       state: 'advance', path: null, pi: 0,
       tgtE: null, tgtB: null, atkCd: 0,
       anim: Math.random() * 2, aiT: Math.random() * 0.5,
       stuckT: 0, lastD: 1e9, burning: 0, dead: false,
+      frozenT: 0, slowT: 0, trapCd: 0,
       bld: st.bld || 1, r: st.r || 0.5,
     };
     return m;

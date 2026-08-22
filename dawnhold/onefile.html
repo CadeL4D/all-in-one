@@ -212,6 +212,7 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
   #titleArt{display:none} h1{font-size:30px;letter-spacing:6px;margin-top:calc(var(--sat) + 8px)}
   .titleInner{gap:6px}
 }
+
 </style>
 </head>
 <body>
@@ -291,7 +292,7 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
         <button class="bigbtn diff" data-diff="normal"><b>Normal</b><span>The intended challenge.</span></button>
         <button class="bigbtn diff" data-diff="hard"><b>Hard</b><span>The dark hungers.</span></button>
       </div>
-      <div class="verText">v1.0 &middot; saves in this browser</div>
+      <div class="verText">v1.1 &middot; The Wilds Update &middot; saves in this browser</div>
     </div>
   </div>
 
@@ -305,8 +306,8 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
   </div>
 </div>
 <noscript><div style="color:#fff;font-family:monospace;padding:2em">Dawnhold needs JavaScript enabled.</div></noscript>
+<!-- ==== js/core.js ==== -->
 <script>
-/* ===== Bundled from js/core.js ===== */
 'use strict';
 /* ============================================================
    Dawnhold — core.js
@@ -320,7 +321,7 @@ const CONFIG = {
   // --- day cycle (seconds at 1x speed) ---
   DAY_LEN: 210, NIGHT_LEN: 95, TRANS: 22,   // TRANS = dusk/dawn fade
 
-  START: { wood: 26, stone: 0, food: 48, essence: 40 },
+  START: { wood: 26, stone: 0, food: 48, essence: 40, herbs: 0 },
   VIL_START: 6,
 
   // --- hunger / food ---
@@ -328,7 +329,7 @@ const CONFIG = {
 
   // --- work ---
   CARRY: 8,                       // units hauled per trip
-  WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0 },
+  WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0, herbalist: 0.8 },
   FARM: { grow: 95, yield: 15, tendBoost: 1.2 },
   REPAIR: { rate: 22, cost: 24 }, // hp/s while repairing, hp per 1 resource
 
@@ -345,19 +346,35 @@ const CONFIG = {
   POWERS: {
     mend:    { cost: 12, heal: 45, cd: 1.0 },
     smite:   { cost: 22, dmg: 32, r: 1.7, cd: 1.2 },
+    stasis:  { cost: 30, dur: 5, r: 2.2, cd: 2.0, unlockDay: 5 },
     meteor:  { cost: 65, dmg: 130, r: 2.8, cd: 3.0, unlockDay: 6 },
   },
 
   // --- waves ---
-  WAVE: { base: 1.4, per: 1.75, cap: 30, spawnWindow: 30, hpScaleDay: 9, hpScale: 0.055, final: 2.1 },
+  WAVE: { base: 1.4, per: 1.75, cap: 30, spawnWindow: 30, hpScaleDay: 9, hpScale: 0.055, final: 2.1, bloodEvery: 5, bloodMult: 1.5, noLairMult: 0.75 },
 
   MONS: {
     shade:   { name: 'Shade',   hp: 28,  dmg: 4,  spd: 1.75, atkT: 0.9,  ess: 2, r: 0.5 },
     runner:  { name: 'Runner',  hp: 17,  dmg: 3,  spd: 2.9,  atkT: 0.65, ess: 2, from: 3, w: 0.22 },
     brute:   { name: 'Brute',   hp: 95,  dmg: 12, spd: 1.15, atkT: 1.4,  ess: 5, from: 6, w: 0.15, bld: 2.4 },
     stalker: { name: 'Stalker', hp: 34,  dmg: 7,  spd: 2.45, atkT: 0.8,  ess: 3, from: 9, w: 0.16 },
+    boner:   { name: 'Bonecaster', hp: 42, dmg: 6, spd: 1.3, atkT: 2.2, ess: 4, from: 7, w: 0.14, bld: 1.6, range: 4.5 },
+    wraith:  { name: 'Wraith',  hp: 46,  dmg: 9,  spd: 1.6,  atkT: 0.9,  ess: 5, from: 11, w: 0.18, phase: true },
+    colossus:{ name: 'Colossus', hp: 700, dmg: 30, spd: 0.8, atkT: 1.8,  ess: 30, from: 15, w: 0.10, bld: 3.5, r: 0.8 },
     lord:    { name: 'Night Lord', hp: 900, dmg: 24, spd: 1.0, atkT: 1.6, ess: 40, bld: 2.6, r: 0.7 },
   },
+
+  // --- lairs & raids ---
+  LAIR: { hp: 450, ess: 25, count: 3 },
+
+  // --- herb / healing economy ---
+  HERB: { amt: 5, regrow: 210, healRate: 6, herbPerHeal: 5 },
+  MINE: { rate: 2.8 },
+  FISHER: { rate: 3.4, carry: 6 },
+  TRAP: { dmg: 15, hpCost: 40, slow: 1.0 },
+  BARRACKS: { dmgMult: 1.3 },
+  RUIN: { stone: 14 },
+  CRYSTAL: { stone: 6, essence: 8 },
 
   // --- population growth ---
   ARRIVE: { chance: 0.65, foodNeed: 14, everyN: 3, n: 2, maxPop: 44 },
@@ -375,24 +392,26 @@ const CONFIG = {
 };
 
 // ---- terrain tile ids ----
-const T = { GRASS: 0, DIRT: 1, WATER: 2, ROAD: 3 };
+const T = { GRASS: 0, DIRT: 1, WATER: 2, ROAD: 3, SAND: 4 };
 
 // ---- map object ids (things standing on terrain) ----
-const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7 };
+const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7, MUSH: 8, TGRASS: 9, HERB: 10, RUIN: 11, CRYSTAL: 12, DEADTREE: 13, BIRCH: 14, GRAVE: 15 };
 
 // object yields (units per full source)
-const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10 };
+const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4 };
 
 // ---- jobs ----
-const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'builder', 'guard'];
+const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'herbalist', 'builder', 'guard'];
 const JOB_INFO = {
-  idle:    { name: 'Resting',  cloth: '#e8e0d0', desc: 'No duty. They haul nothing and stay near camp. Idle folk will emergency-forage if food runs dry.' },
-  forager: { name: 'Forager',  cloth: '#4a8f3c', desc: 'Pick berries from bushes. Fast food early on; bushes regrow each day.' },
-  lumber:  { name: 'Lumberjack', cloth: '#8a5a2b', desc: 'Fell trees for wood. Stumps slowly regrow into new trees.' },
-  miner:   { name: 'Miner',    cloth: '#7d7d85', desc: 'Mine stone from rocky outcrops. Stone is finite — the best lodes lie far from camp.' },
-  farmer:  { name: 'Farmer',   cloth: '#d9a036', desc: 'Tend and harvest wheat plots. The reliable food engine for a growing village.' },
-  builder: { name: 'Builder',  cloth: '#e07030', desc: 'Raises new buildings and repairs damaged walls and towers.' },
-  guard:   { name: 'Guard',    cloth: '#c03030', desc: 'Patrols the village and fights the shades. Keep at least one after night one.' },
+  idle:     { name: 'Resting',  cloth: '#e8e0d0', desc: 'No duty. They haul nothing and stay near camp. Idle folk will emergency-forage if food runs dry.' },
+  forager:  { name: 'Forager',  cloth: '#4a8f3c', desc: 'Pick berries from bushes. Fast food early on; bushes regrow each day.' },
+  lumber:   { name: 'Lumberjack', cloth: '#8a5a2b', desc: 'Fell trees for wood. Stumps slowly regrow into new trees.' },
+  miner:    { name: 'Miner',    cloth: '#7d7d85', desc: 'Mine stone from boulders and lodes, salvage ancient ruins, crack essence crystals.' },
+  farmer:   { name: 'Farmer',   cloth: '#d9a036', desc: 'Tend and harvest wheat plots. The reliable food engine for a growing village.' },
+  fisher:   { name: 'Fisher',   cloth: '#5a8fc9', desc: 'Works a Fishing Dock on the shore — steady food, no land used.' },
+  herbalist:{ name: 'Herbalist', cloth: '#3f9d84', desc: 'Gathers healing herbs; an Herbalist Hut turns them into mending for the wounded.' },
+  builder:  { name: 'Builder',  cloth: '#e07030', desc: 'Raises new buildings and repairs damaged walls and towers.' },
+  guard:    { name: 'Guard',    cloth: '#c03030', desc: 'Patrols the village and fights the shades. Keep at least one after night one.' },
 };
 
 // ---- utilities ----
@@ -432,16 +451,17 @@ const G = {
   phase: 'day',            // day | dusk | night | dawn
   speed: 1, paused: false,
   diff: 'normal', diffM: CONFIG.DIFF.normal,
-  res: { wood: 0, stone: 0, food: 0, essence: 0 },
+  res: { wood: 0, stone: 0, food: 0, essence: 0, herbs: 0 },
   villagers: [], monsters: [], buildings: [],
   effects: [], floaters: [],
-  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, builder: 1, guard: 0 },
+  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, herbalist: 0, builder: 1, guard: 0 },
   regrow: new Map(),       // tileIdx -> {t, kind}
   unlocks: {},             // buildKey -> true (granted)
   stats: { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: 6 },
   chronicle: [],           // {d, txt, k}
   wave: null,              // pending spawn state for the night
-  finalNight: false, beaconLit: false, boss: null,
+  finalNight: false, beaconLit: false, boss: null, bloodMoon: false,
+  raidTarget: null,        // lair building the guards are ordered to raid
   tut: 0, tutOn: true,
   shake: 0,
   cam: { x: 0, y: 0, z: CONFIG.ZOOM.start },
@@ -469,9 +489,10 @@ function darknessLevel() {
   }
   return 0;
 }
-;
 
-/* ===== Bundled from js/art.js ===== */
+</script>
+<!-- ==== js/art.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — art.js
@@ -516,7 +537,7 @@ const PAL = {
 const Art = {
   s: {},            // static sprite canvases by name
   _vcache: new Map(), // villager look sprites
-  MM: { water: '#33619a', grass: '#4e7a40', tree: '#2e5d3a', road: '#b09a6a', rock: '#8d8d95', dirt: '#8a6d4e', bld: '#e8a94b', vil: '#ffffff', mon: '#e05555' },
+  MM: { water: '#33619a', grass: '#4e7a40', tree: '#2e5d3a', road: '#b09a6a', rock: '#8d8d95', dirt: '#8a6d4e', sand: '#d8c48a', bld: '#e8a94b', vil: '#ffffff', mon: '#e05555' },
 
   init() {
     this.terrain();
@@ -565,60 +586,220 @@ const Art = {
       for (let i = 0; i < 10; i++) R(x, (U.hash2(i, 4) * 16) | 0, (U.hash2(i, 9) * 16) | 0, 2, 1, PAL.water[1]);
       S.water = c;
     }
+    // sand — shore tile
+    {
+      const { c, x } = mkc(16, 16);
+      const rng = U.mulberry32(51);
+      R(x, 0, 0, 16, 16, '#d8c48a');
+      for (let i = 0; i < 16; i++) {
+        const px = (rng() * 16) | 0, py = (rng() * 16) | 0;
+        R(x, px, py, 1, 1, rng() < .5 ? '#c4ae74' : '#e8d8a4');
+      }
+      R(x, 3, 11, 1, 1, '#b4a066'); R(x, 11, 5, 1, 1, '#b4a066');
+      S.sand = c;
+    }
   },
 
   /* ================= OBJECTS ================= */
+  // Trees are 16x24 (they overhang the tile above); everything anchors to
+  // its tile bottom in the renderer. Strong outlines keep them readable.
   objects() {
     const S = this.s;
-    // oak trees (2 variants)
+    const shadowBand = (x) => { x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 22, 8, 2); };
+
+    // --- oaks: round, outlined canopy, flared trunk ---
     for (let v = 0; v < 2; v++) {
-      const { c, x } = mkc(16, 16);
-      const ox = v ? 1 : -1;
-      R(x, 7, 10, 2, 5, PAL.trunk); R(x, 7, 14, 1, 1, PAL.trunkD);
-      // canopy blob
-      const rows = [[5, 6], [4, 8], [3, 10], [3, 10], [4, 8]];
-      rows.forEach((r, i) => R(x, r[0] + (ox > 0 ? 0 : 0), 1 + i, r[1] - r[0], 1, i < 2 ? PAL.oakL : PAL.oak));
-      R(x, 4 + (v ? 1 : 0), 3, 2, 1, PAL.oakL); R(x, 9, 5, 1, 1, PAL.oakD); R(x, 6, 6, 2, 1, PAL.oakD);
-      if (v) R(x, 3, 4, 1, 1, PAL.oakD);
+      const { c, x } = mkc(16, 24);
+      shadowBand(x);
+      // trunk with flare + shading
+      R(x, 6, 16, 4, 7, PAL.trunk); R(x, 6, 16, 1, 7, PAL.trunkD);
+      R(x, 5, 21, 6, 2, PAL.trunk); R(x, 5, 22, 6, 1, PAL.trunkD);
+      // canopy: outline, dark base, mid, light clumps
+      const canopy = [
+        [4, 3, 8], [3, 4, 10], [2, 5, 12], [2, 6, 12], [1, 7, 14], [1, 8, 14], [2, 9, 12], [2, 10, 12], [3, 11, 10], [4, 12, 8],
+      ];
+      // outline pass (1px bigger)
+      x.fillStyle = '#1c3b1c';
+      for (const [cx, cy, w] of canopy) x.fillRect(cx - 1, cy - 1 + 3, w + 2, 3);
+      // body
+      x.fillStyle = PAL.oakD;
+      for (const [cx, cy, w] of canopy) x.fillRect(cx, cy + 3, w, 1);
+      // mid tone upper 2/3
+      x.fillStyle = PAL.oak;
+      for (const [cx, cy, w] of canopy) if (cy <= 8) x.fillRect(cx, cy + 3, w, 1);
+      // highlights
+      x.fillStyle = PAL.oakL;
+      R(x, 5 + v, 5, 4, 2); R(x, 9 - v, 7, 3, 2); R(x, 4, 9 - v, 3, 1);
+      R(x, 10, 5 + v, 2, 1);
+      if (v) { R(x, 3, 8, 2, 2, PAL.oakD); R(x, 11, 9, 2, 2, PAL.oakD); }
       S['tree' + v] = c;
     }
-    // pines (2)
+    // --- pines: jagged tiers, dark outline ---
     for (let v = 0; v < 2; v++) {
-      const { c, x } = mkc(16, 16);
-      R(x, 7, 12, 2, 3, PAL.trunk);
-      const tiers = [[7, 2], [6, 4], [5, 6], [4, 8], [3, 10]];
-      tiers.forEach((t, i) => R(x, t[0], 1 + i * 2 + (v ? 1 : 0), t[1] - t[0] + 2, 2, i % 2 ? PAL.pineD : PAL.pine));
-      R(x, 7, 0, 2, 2, PAL.pineL); if (v) R(x, 5, 6, 1, 1, PAL.pineL);
+      const { c, x } = mkc(16, 24);
+      shadowBand(x);
+      R(x, 7, 18, 2, 5, PAL.trunk); R(x, 7, 18, 1, 5, PAL.trunkD);
+      const tiers = [[7, 1, 2], [6, 4, 4], [5, 7, 6], [4, 10, 8], [3, 13, 10]];
+      // outline
+      x.fillStyle = '#152e1d';
+      for (const [tx0, ty0, w] of tiers) {
+        x.fillRect(tx0 - 1, ty0 + 2, w + 2, 3);
+        x.fillRect(tx0 - 1, ty0 + 4, 2, 2); x.fillRect(tx0 + w - 1, ty0 + 4, 2, 2); // droop tips
+      }
+      tiers.forEach(([tx0, ty0, w], i) => {
+        x.fillStyle = i % 2 ? PAL.pineD : PAL.pine;
+        x.fillRect(tx0, ty0 + 2, w, 2);
+        x.fillRect(tx0 + 1, ty0 + 4, w - 2, 1);
+      });
+      x.fillStyle = PAL.pineL;
+      R(x, 7, 3, 2, 2); R(x, 6, 8, 2, 2); R(x, 5 + v, 12, 3, 1); R(x, 9 - v, 5, 2, 1);
+      R(x, 7, 0, 2, 3, PAL.pineL);
+      if (v) { R(x, 5, 9, 2, 2, PAL.pineD); R(x, 10, 12, 2, 2, PAL.pineD); }
       S['pine' + v] = c;
     }
-    // stump
-    { const { c, x } = mkc(16, 16); R(x, 5, 9, 6, 3, PAL.stump); R(x, 5, 9, 6, 1, '#9a7448'); R(x, 6, 10, 4, 1, '#684a2c'); S.stump = c; }
-    // sapling
-    { const { c, x } = mkc(16, 16); R(x, 7, 11, 2, 3, PAL.trunk); R(x, 6, 8, 4, 3, PAL.sprout); R(x, 7, 7, 2, 1, PAL.sprout); S.sapling = c; }
-    // bush full / empty
+    // --- birch: white trunk, airy light canopy ---
+    for (let v = 0; v < 2; v++) {
+      const { c, x } = mkc(16, 24);
+      shadowBand(x);
+      R(x, 7, 14, 2, 9, '#e8e4d4'); R(x, 7, 14, 1, 9, '#c9c4b0');
+      R(x, 7, 16, 1, 1, '#5a5648'); R(x, 8, 19, 1, 1, '#5a5648'); R(x, 7, 22, 1, 1, '#5a5648');
+      const lumps = [[5, 4], [9, 4], [3, 6], [11, 6], [6, 8], [10, 8]];
+      x.fillStyle = '#1c3b1c';
+      for (const [lx, ly] of lumps) x.fillRect(lx - 1, ly + 2, 5, 5);
+      x.fillStyle = '#7ab648';
+      for (const [lx, ly] of lumps) x.fillRect(lx, ly + 2, 3, 3);
+      x.fillStyle = '#a8d86a';
+      for (const [lx, ly] of lumps) x.fillRect(lx, ly + 2, 2, 2);
+      if (v) { R(x, 4, 5, 2, 2, '#5a9434'); }
+      S['birch' + v] = c;
+    }
+    // --- dead tree: bare twisted branches ---
+    {
+      const { c, x } = mkc(16, 24);
+      shadowBand(x);
+      x.fillStyle = '#4a4038';
+      R(x, 7, 12, 2, 10, '#4a4038');
+      R(x, 5, 9, 2, 1, '#4a4038'); R(x, 4, 7, 1, 2, '#4a4038'); R(x, 3, 5, 1, 2, '#4a4038');
+      R(x, 9, 8, 2, 1, '#4a4038'); R(x, 10, 5, 1, 3, '#4a4038'); R(x, 11, 3, 1, 2, '#4a4038');
+      R(x, 6, 6, 1, 3, '#4a4038'); R(x, 7, 2, 1, 4, '#4a4038');
+      x.fillStyle = '#6e6258';
+      R(x, 7, 13, 1, 8, '#6e6258'); R(x, 4, 7, 1, 1, '#6e6258'); R(x, 10, 5, 1, 2, '#6e6258');
+      S.deadtree = c;
+    }
+    // --- stump & sapling (refreshed) ---
+    { const { c, x } = mkc(16, 24); R(x, 4, 19, 8, 3, PAL.stump); R(x, 4, 19, 8, 1, '#9a7448'); R(x, 5, 20, 6, 1, '#684a2c'); R(x, 4, 22, 8, 1, 'rgba(0,0,0,.2)'); S.stump = c; }
+    { const { c, x } = mkc(16, 24); R(x, 7, 20, 2, 3, PAL.trunk); R(x, 5, 17, 6, 3, PAL.sprout); R(x, 6, 15, 4, 2, '#8fd45e'); R(x, 7, 14, 2, 1, '#8fd45e'); S.sapling = c; }
+    // --- berry bush full / empty (outlined) ---
     {
       const mk = full => {
-        const { c, x } = mkc(16, 16);
-        const rows = [[5, 6], [4, 8], [4, 8], [5, 6]];
-        rows.forEach((r, i) => R(x, r[0], 6 + i, r[1] - r[0], 1, i === 0 ? PAL.bushD : PAL.bush));
-        R(x, 6, 7, 1, 1, '#4f9a52');
-        if (full) { [[5, 8], [8, 7], [10, 9], [6, 10], [9, 11]].forEach(p => R(x, p[0], p[1], 1, 1, Math.random() < .5 ? PAL.berry : PAL.berryL)); }
+        const { c, x } = mkc(16, 24);
+        x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(4, 22, 8, 2);
+        const rows = [[4, 6], [3, 10], [3, 10], [4, 6]];
+        x.fillStyle = '#1c3b1c';
+        rows.forEach((r, i) => x.fillRect(r[0] - 1, 15 + i, r[1] - r[0] + 2, 1));
+        rows.forEach((r, i) => { x.fillStyle = i === 0 ? PAL.bushD : PAL.bush; x.fillRect(r[0], 15 + i, r[1] - r[0], 1); });
+        x.fillStyle = '#4f9a52'; R(x, 6, 16, 1, 1); R(x, 10, 17, 1, 1);
+        if (full) { [[4, 16], [8, 15], [11, 17], [5, 18], [9, 18], [7, 16]].forEach(p => R(x, p[0], p[1], 1, 1, ((p[0] + p[1]) % 3) ? PAL.berry : PAL.berryL)); }
         return c;
       };
       S.bushF = mk(true); S.bushE = mk(false);
     }
-    // rocks (2)
+    // --- herb bush: teal leaves, white blossoms (clearly not a berry) ---
+    {
+      const mk = full => {
+        const { c, x } = mkc(16, 24);
+        x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(5, 22, 6, 2);
+        // dark under-leaves
+        x.fillStyle = '#1d4a40';
+        R(x, 4, 15, 8, 7); R(x, 5, 13, 6, 2);
+        // spiky leaves fanning up
+        x.fillStyle = '#3fa88c';
+        R(x, 7, 12, 2, 10);          // center blade
+        R(x, 5, 15, 2, 7); R(x, 9, 15, 2, 7);   // mid blades
+        R(x, 3, 18, 2, 4); R(x, 11, 18, 2, 4);  // outer blades
+        x.fillStyle = '#6fd4b4';
+        R(x, 7, 12, 1, 8); R(x, 5, 15, 1, 4); R(x, 9, 15, 1, 4);
+        if (full) { x.fillStyle = '#f0f0e0'; R(x, 7, 10, 2, 2); R(x, 5, 12, 1, 2); R(x, 10, 12, 1, 2); x.fillStyle = '#e8a94b'; R(x, 7, 10, 1, 1); }
+        return c;
+      };
+      S.herbF = mk(true); S.herbE = mk(false);
+    }
+    // --- rocks: small, boulders (2), all outlined w/ moss & cracks ---
+    {
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(5, 22, 7, 2);
+      R(x, 5, 18, 6, 4, PAL.rock); R(x, 5, 18, 6, 1, PAL.rockL); R(x, 5, 21, 6, 1, PAL.rockD); R(x, 7, 19, 2, 1, PAL.rockD);
+      x.fillStyle = '#4a4a54'; x.fillRect(4, 17, 8, 1); x.fillRect(4, 17, 1, 5); x.fillRect(11, 17, 1, 5);
+      S.rockS = c;
+    }
     for (let v = 0; v < 2; v++) {
-      const { c, x } = mkc(16, 16);
-      const w = v ? 10 : 8, h = v ? 7 : 6, ox = v ? 3 : 4, oy = 16 - h - 1;
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 22, 11, 2);
+      const w = v ? 12 : 10, h = v ? 9 : 7, ox = v ? 2 : 3, oy = 23 - h;
+      // outline
+      x.fillStyle = '#4a4a54';
+      x.fillRect(ox - 1, oy, w + 2, h + 1);
+      // body
+      R(x, ox, oy, w, h, PAL.rock);
       R(x, ox + 1, oy, w - 2, 1, PAL.rockL);
-      R(x, ox, oy + 1, w, h - 2, PAL.rock);
-      R(x, ox + 1, oy + h - 1, w - 2, 1, PAL.rockD);
-      R(x, ox + 2, oy + 2, 2, 1, PAL.rockD); R(x, ox + w - 3, oy + 3, 2, 1, PAL.rockD);
-      if (v) R(x, ox + 5, oy - 2, 3, 2, PAL.rock), R(x, ox + 5, oy - 2, 3, 1, PAL.rockL);
+      R(x, ox + 2, oy + 1, 3, 1, PAL.rockL);
+      R(x, ox, oy + h - 1, w, 1, PAL.rockD);
+      R(x, ox + w - 3, oy + 2, 1, h - 3, PAL.rockD);
+      R(x, ox + 2, oy + 3, 3, 1, PAL.rockD); R(x, ox + 5, oy + h - 3, 2, 1, PAL.rockD);
+      // moss patch
+      R(x, ox + 1, oy + 1, 2, 1, '#5a7a4a'); R(x, ox + 1, oy + 2, 1, 1, '#5a7a4a');
+      if (v) { // secondary lump
+        R(x, ox + 7, oy - 4, 4, 5, PAL.rock); R(x, ox + 7, oy - 4, 4, 1, PAL.rockL);
+        x.fillStyle = '#4a4a54'; x.fillRect(ox + 6, oy - 5, 6, 1); x.fillRect(ox + 6, oy - 5, 1, 6);
+        R(x, ox + 9, oy - 2, 1, 2, PAL.rockD);
+      }
       S['rock' + v] = c;
     }
-    // flowers (2)
+    // --- essence crystal lode ---
+    {
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 22, 10, 2);
+      R(x, 3, 15, 10, 7, PAL.rock); R(x, 3, 15, 10, 1, PAL.rockL); R(x, 3, 21, 10, 1, PAL.rockD);
+      x.fillStyle = '#4a4a54'; x.fillRect(2, 14, 12, 1); x.fillRect(2, 14, 1, 8); x.fillRect(13, 14, 1, 8);
+      // crystal spikes
+      const spikes = [[5, 10, 2, 5], [8, 12, 2, 3], [10, 13, 1, 2]];
+      for (const [sx, sy, sw, sh] of spikes) {
+        R(x, sx, sy, sw, sh, '#8a5cd0'); R(x, sx, sy, sw, 2, '#b48ae0'); R(x, sx, sy, 1, sh, '#d0b0ff');
+        x.fillStyle = '#4a2e78'; x.fillRect(sx - 1, sy + sh, sw + 2, 0); x.fillRect(sx - 1 + sw + 1, sy, 1, sh);
+      }
+      R(x, 6, 9, 1, 1, '#f0e0ff');
+      S.crystal = c;
+    }
+    // --- ancient ruin: crumbled masonry ---
+    {
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(2, 22, 12, 2);
+      R(x, 2, 14, 12, 8, PAL.stoneD);
+      R(x, 2, 14, 12, 1, PAL.stoneB); R(x, 2, 21, 12, 1, '#4c4c56');
+      R(x, 3, 16, 4, 2, PAL.stoneB); R(x, 8, 15, 5, 2, PAL.stoneB); R(x, 4, 19, 3, 2, PAL.stoneB); R(x, 9, 18, 4, 2, PAL.stoneB);
+      R(x, 2, 14, 1, 8, '#4c4c56'); R(x, 13, 14, 1, 8, '#4c4c56');
+      R(x, 6, 9, 3, 5, PAL.stoneB); R(x, 6, 9, 3, 1, PAL.stoneL); R(x, 6, 9, 1, 5, PAL.stoneL); // broken pillar stub
+      R(x, 3, 15, 2, 1, '#5a7a4a'); R(x, 10, 20, 2, 1, '#5a7a4a'); // moss
+      S.ruin = c;
+    }
+    // --- decor: mushrooms & tall grass ---
+    {
+      const { c, x } = mkc(16, 16);
+      R(x, 4, 10, 2, 3, '#d8cbb0'); R(x, 3, 8, 4, 2, '#c04444'); R(x, 4, 8, 2, 1, '#e86a6a');
+      R(x, 10, 12, 2, 2, '#d8cbb0'); R(x, 9, 10, 4, 2, '#c04444');
+      R(x, 3, 8, 4, 1, '#8a2e2e'); R(x, 4, 9, 1, 1, '#f0e0d0');
+      S.mush = c;
+    }
+    for (let v = 0; v < 2; v++) {
+      const { c, x } = mkc(16, 16);
+      for (let i = 0; i < 4; i++) {
+        const gx = 3 + i * 3 + v;
+        R(x, gx, 8 + ((i * 5 + v * 3) % 4), 1, 7 - ((i + v) % 3), i % 2 ? '#6ea83c' : '#5a8a34');
+      }
+      R(x, 6 + v, 6, 1, 9, '#7ab648'); R(x, 9 - v, 7, 1, 8, '#5a8a34');
+      S['tgrass' + v] = c;
+    }
+    // --- flowers (2) ---
     for (let v = 0; v < 2; v++) {
       const { c, x } = mkc(16, 16);
       const cols = ['#f0f0f0', '#ffd94a', '#e88bd0'];
@@ -629,6 +810,15 @@ const Art = {
         R(x, px, py - 1, 1, 1, cols[(i + v + 1) % 3]); R(x, px, py, 1, 1, cols[(i + v + 2) % 3]);
       }
       S['flw' + v] = c;
+    }
+    // --- grave ---
+    {
+      const { c, x } = mkc(16, 24);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(4, 22, 8, 2);
+      R(x, 5, 13, 6, 9, PAL.stoneB); R(x, 5, 13, 6, 1, PAL.stoneL); R(x, 5, 21, 6, 1, PAL.stoneD);
+      R(x, 6, 14, 1, 7, PAL.stoneL); R(x, 7, 16, 2, 1, PAL.stoneD); R(x, 7, 18, 2, 1, PAL.stoneD);
+      R(x, 4, 21, 8, 1, '#5a7a4a');
+      S.grave = c;
     }
   },
 
@@ -834,6 +1024,133 @@ const Art = {
       R(x, 4, 7, 8, 2, PAL.wood);
       S.site = c;
     }
+    // --- monster lair: dark monolith w/ runes (2 glow frames), 16x28 ---
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 28);
+      x.fillStyle = 'rgba(0,0,0,.28)'; x.fillRect(3, 26, 10, 2);
+      // bones at base
+      R(x, 3, 24, 3, 1, '#d8d4c4'); R(x, 11, 24, 2, 1, '#d8d4c4'); R(x, 5, 25, 1, 2, '#b8b4a4');
+      // monolith
+      R(x, 4, 6, 8, 20, '#3a3548'); R(x, 4, 6, 2, 20, '#4c4660'); R(x, 10, 6, 2, 20, '#2c2838');
+      R(x, 5, 4, 6, 2, '#3a3548'); R(x, 6, 3, 4, 1, '#4c4660');
+      x.fillStyle = '#241f30'; x.fillRect(3, 5, 10, 1); x.fillRect(3, 5, 1, 21); x.fillRect(12, 5, 1, 21);
+      // cracks
+      R(x, 7, 14, 1, 4, '#241f30'); R(x, 8, 18, 1, 3, '#241f30');
+      // runes
+      const glow = f ? '#d070ff' : '#9a4ed0';
+      x.fillStyle = glow;
+      R(x, 6, 9, 1, 2); R(x, 9, 8, 1, 3); R(x, 7, 12, 3, 1); R(x, 6, 16, 2, 1); R(x, 9, 20, 1, 2);
+      if (f) { x.fillStyle = 'rgba(208,112,255,.5)'; R(x, 6, 8, 4, 5); }
+      S['lair' + f] = c;
+    }
+    // --- spike trap ---
+    {
+      const { c, x } = mkc(16, 16);
+      R(x, 1, 12, 14, 3, '#6e5136'); R(x, 1, 12, 14, 1, '#7c5a34');
+      for (let i = 0; i < 4; i++) {
+        const sx = 2 + i * 4;
+        R(x, sx, 4 + (i % 2) * 2, 2, 9, PAL.metalD);
+        R(x, sx, 4 + (i % 2) * 2, 1, 9, PAL.metal);
+        R(x, sx, 4 + (i % 2) * 2, 2, 1, '#e8e8f0');
+      }
+      R(x, 3, 13, 2, 1, '#5c4229'); R(x, 10, 14, 3, 1, '#5c4229');
+      S.trap = c;
+    }
+    // --- windmill 2x2 (2 blade frames) ---
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(32, 44);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(6, 42, 20, 2);
+      // stone base 2 tiles tall
+      R(x, 8, 22, 16, 20, PAL.stoneB);
+      R(x, 8, 22, 16, 1, PAL.stoneL); R(x, 8, 27, 16, 1, PAL.stoneD); R(x, 8, 33, 16, 1, PAL.stoneD); R(x, 8, 39, 16, 1, PAL.stoneD);
+      R(x, 14, 22, 1, 20, PAL.stoneD); R(x, 8, 41, 16, 1, '#5c5c66');
+      R(x, 14, 34, 4, 8, PAL.door); R(x, 14, 34, 4, 1, '#7a5a34');
+      R(x, 9, 25, 3, 3, '#2c2c34');
+      // wooden cap + hub
+      R(x, 10, 18, 12, 5, PAL.plank); R(x, 10, 18, 12, 1, PAL.woodL); R(x, 15, 20, 2, 3, PAL.plankD);
+      // blades
+      const bx = 16, by = 19;
+      x.fillStyle = PAL.plank;
+      const rot = f ? 45 : 0;
+      for (let b = 0; b < 4; b++) {
+        const ang = (rot + b * 90) * Math.PI / 180;
+        const dx = Math.round(Math.cos(ang)), dy = Math.round(Math.sin(ang));
+        if (Math.abs(dx) > Math.abs(dy)) { x.fillRect(bx + (dx > 0 ? 2 : -10), by - 1, 8, 3); }
+        else { x.fillRect(bx - 1, by + (dy > 0 ? 2 : -10), 3, 8); }
+      }
+      x.fillStyle = '#e8e4d4'; x.fillRect(bx - 1, by - 1, 3, 3);
+      S['windmill' + f] = c;
+    }
+    // --- fishing dock 1x1 (hut + planks over water) ---
+    {
+      const { c, x } = mkc(16, 24);
+      R(x, 2, 19, 12, 2, PAL.plank); R(x, 2, 19, 12, 1, PAL.woodL); // dock
+      R(x, 3, 21, 1, 3, PAL.plankD); R(x, 12, 21, 1, 3, PAL.plankD); // posts
+      // hut
+      R(x, 3, 9, 10, 10, PAL.plank);
+      R(x, 3, 9, 10, 1, PAL.woodL); R(x, 3, 18, 10, 1, PAL.plankD);
+      R(x, 3, 12, 10, 1, PAL.plankD); R(x, 3, 15, 10, 1, PAL.plankD);
+      for (let i = 0; i < 4; i++) R(x, 1 + i * 4, 4 + i, 2, 1, i % 2 ? '#6a8ab4' : '#5278a4'); // slate roof
+      R(x, 1, 8, 14, 1, '#3f5d80'); R(x, 1, 3, 2, 1, '#3f5d80'); R(x, 12, 6, 2, 1, '#3f5d80');
+      R(x, 6, 13, 4, 6, PAL.door); R(x, 6, 13, 4, 1, '#7a5a34');
+      R(x, 5, 10, 2, 2, '#2c2c34');
+      // fishing rod
+      R(x, 12, 15, 1, 4, '#7a5a34'); R(x, 13, 18, 1, 3, '#d8d4c4');
+      S.fisher = c;
+    }
+    // --- mine shaft ---
+    {
+      const { c, x } = mkc(16, 20);
+      R(x, 2, 6, 12, 13, PAL.rock);
+      R(x, 2, 6, 12, 1, PAL.rockL); R(x, 2, 18, 12, 1, PAL.rockD);
+      R(x, 2, 6, 1, 13, PAL.rockD); R(x, 13, 6, 1, 13, PAL.rockD);
+      // dark entrance
+      R(x, 4, 8, 8, 11, '#181420');
+      R(x, 4, 8, 8, 1, '#241f30');
+      // timber frame
+      R(x, 3, 7, 1, 12, PAL.plank); R(x, 12, 7, 1, 12, PAL.plank); R(x, 3, 6, 10, 2, PAL.plank);
+      R(x, 3, 6, 10, 1, PAL.woodL);
+      // cart + lamp
+      R(x, 1, 15, 4, 3, PAL.wood); R(x, 1, 15, 4, 1, PAL.woodL);
+      R(x, 13, 12, 1, 1, '#ffd94a');
+      S.mine = c;
+    }
+    // --- herbalist hut ---
+    {
+      const { c, x } = mkc(16, 22);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(3, 20, 10, 2);
+      R(x, 3, 11, 10, 9, PAL.plank);
+      R(x, 3, 11, 10, 1, PAL.woodL); R(x, 3, 19, 10, 1, PAL.plankD);
+      for (let i = 0; i < 4; i++) R(x, 1 + i * 4, 4 + i, 3, 2, i % 2 ? '#3f8a6a' : '#357a5c'); // green roof
+      R(x, 1, 8, 14, 3, '#357a5c'); R(x, 1, 10, 14, 1, '#2a6448');
+      R(x, 6, 14, 4, 6, PAL.door); R(x, 6, 14, 4, 1, '#7a5a34');
+      R(x, 4, 12, 2, 2, '#2c2c34');
+      // drying rack with herbs
+      R(x, 13, 12, 1, 8, '#7a5a34'); R(x, 13, 12, 3, 1, '#7a5a34');
+      R(x, 14, 13, 1, 2, '#3fa88c'); R(x, 15, 13, 1, 3, '#3fa88c');
+      S.herbalist = c;
+    }
+    // --- barracks 2x2 ---
+    {
+      const { c, x } = mkc(32, 36);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 34, 24, 2);
+      R(x, 4, 16, 24, 18, PAL.plank);
+      R(x, 4, 16, 24, 1, PAL.woodL);
+      for (let r = 0; r < 4; r++) R(x, 4, 19 + r * 4, 24, 1, PAL.plankD);
+      R(x, 13, 16, 1, 18, PAL.plankD);
+      // roof
+      for (let i = 0; i < 8; i++) R(x, 2 + i, 8 + i, 26, 1, i % 2 ? '#8a4038' : '#7c3830');
+      R(x, 2, 15, 28, 1, '#5c2822');
+      // banner + weapon rack
+      R(x, 27, 4, 1, 12, PAL.plankD);
+      R(x, 24, 5, 4, 7, '#c03030'); R(x, 24, 5, 4, 1, '#e05555'); R(x, 25, 8, 2, 2, '#e8a94b');
+      R(x, 5, 25, 8, 3, PAL.wood); R(x, 5, 25, 8, 1, PAL.woodL);
+      R(x, 7, 21, 1, 4, PAL.metal); R(x, 9, 22, 1, 3, '#9aa0aa');
+      // door + windows
+      R(x, 13, 26, 6, 8, PAL.door); R(x, 13, 26, 6, 1, '#7a5a34');
+      R(x, 6, 19, 4, 4, '#2c2c34'); R(x, 21, 19, 4, 4, '#2c2c34');
+      S.barracks = c;
+    }
   },
 
   /* ================= MONSTERS ================= */
@@ -888,6 +1205,62 @@ const Art = {
       R(x, 6, 11, 2, 4, '#191628'); R(x, 8, 11, 2, 3, '#191628');
       S['mon_stalker' + f] = c;
     }
+    // bonecaster — hunched skeleton hurling bones
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 16);
+      R(x, 6, 1, 4, 4, '#d8d4c4'); // skull
+      R(x, 6, 2, 1, 1, '#8a1c1c'); R(x, 9, 2, 1, 1, '#8a1c1c');
+      R(x, 7, 4, 2, 1, '#241f30');
+      R(x, 6, 5, 4, 5, '#c4c0b0'); // ribcage
+      R(x, 7, 6, 2, 3, '#8a8678'); R(x, 6, 7, 4, 1, '#a8a494');
+      R(x, 6, 10, 1, 4, '#c4c0b0'); R(x, 9, 10, 1, 4, '#c4c0b0'); // legs
+      if (f) { R(x, 11, 5, 1, 3, '#c4c0b0'); R(x, 12, 3, 2, 2, '#e8e4d4'); } // throwing arm + bone
+      else { R(x, 11, 4, 1, 4, '#c4c0b0'); R(x, 4, 6, 1, 3, '#c4c0b0'); }
+      R(x, 5, 6, 1, 3, '#c4c0b0');
+      S['mon_boner' + f] = c;
+    }
+    // wraith — pale phasing spirit (baked translucency)
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 20);
+      x.globalAlpha = 0.85;
+      const body = 'rgba(150,180,220,0.9)';
+      x.fillStyle = body;
+      const rows = [[5, 6], [4, 8], [4, 8], [3, 10], [4, 8], [4, 8], [5, 6]];
+      rows.forEach((r, i) => x.fillRect(r[0], 3 + i, r[1] - r[0], 1));
+      x.fillRect(6, 1, 4, 2);
+      // hollow eyes + mouth
+      R(x, 6, 4, 1, 2, '#101828'); R(x, 9, 4, 1, 2, '#101828'); R(x, 7, 7, 2, 1, '#101828');
+      // tattered tail wisps
+      x.fillStyle = 'rgba(150,180,220,0.55)';
+      if (f) { x.fillRect(5, 10, 2, 4); x.fillRect(9, 10, 2, 5); x.fillRect(7, 10, 1, 3); }
+      else { x.fillRect(6, 10, 2, 5); x.fillRect(9, 10, 1, 3); x.fillRect(4, 10, 1, 2); }
+      x.globalAlpha = 1;
+      S['mon_wraith' + f] = c;
+    }
+    // colossus — 24x24 walking stone horror
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(24, 24);
+      x.fillStyle = 'rgba(0,0,0,.3)'; x.fillRect(5, 22, 14, 2);
+      // legs
+      R(x, 6, 17, 4, 6, '#5c5c68'); R(x, 14, 17, 4, 6, '#5c5c68');
+      R(x, 6, 17, 4, 1, '#7c7c88'); R(x, 14, 17, 4, 1, '#7c7c88');
+      // torso slab
+      R(x, 4, 6, 16, 12, '#6c6c78');
+      R(x, 4, 6, 16, 1, '#8c8c98'); R(x, 4, 17, 16, 1, '#4c4c58');
+      R(x, 5, 8, 3, 1, '#4c4c58'); R(x, 15, 11, 3, 1, '#4c4c58'); R(x, 8, 14, 4, 1, '#4c4c58');
+      R(x, 10, 8, 2, 6, '#4c4c58'); // crack
+      // arms (swing frames)
+      if (f) { R(x, 1, 4, 3, 10, '#5c5c68'); R(x, 20, 8, 3, 8, '#5c5c68'); }
+      else { R(x, 1, 8, 3, 8, '#5c5c68'); R(x, 20, 4, 3, 10, '#5c5c68'); }
+      R(x, 1, 13, 3, 2, '#8c8c98'); R(x, 20, 13, 3, 2, '#8c8c98');
+      // head
+      R(x, 8, 1, 8, 6, '#7c7c88'); R(x, 8, 1, 8, 1, '#9c9ca8');
+      R(x, 9, 3, 2, 2, '#ff5a5a'); R(x, 13, 3, 2, 2, '#ff5a5a');
+      R(x, 9, 3, 1, 1, '#ffd0d0'); R(x, 13, 3, 1, 1, '#ffd0d0');
+      R(x, 10, 5, 4, 1, '#4c4c58');
+      R(x, 7, 0, 2, 2, '#5c5c68'); R(x, 15, 0, 2, 2, '#5c5c68'); // horns
+      S['mon_colossus' + f] = c;
+    }
     // night lord — 32x32 boss
     for (let f = 0; f < 2; f++) {
       const { c, x } = mkc(32, 32);
@@ -929,6 +1302,9 @@ const Art = {
     { const { c, x } = mkc(7, 6); R(x, 0, 1, 7, 2, PAL.wood); R(x, 0, 3, 7, 2, PAL.woodD); R(x, 1, 0, 1, 1, PAL.woodL); R(x, 4, 2, 1, 1, '#c9a86a'); S.carryWood = c; }
     { const { c, x } = mkc(7, 6); R(x, 1, 2, 2, 2, PAL.berry); R(x, 4, 2, 2, 2, PAL.berry); R(x, 2, 4, 2, 2, PAL.berryL); R(x, 3, 0, 1, 2, '#4e7a40'); S.carryFood = c; }
     { const { c, x } = mkc(7, 6); R(x, 0, 1, 7, 4, PAL.rock); R(x, 1, 1, 4, 1, PAL.rockL); R(x, 1, 4, 5, 1, PAL.rockD); S.carryStone = c; }
+    { const { c, x } = mkc(7, 6); R(x, 2, 0, 1, 2, '#3fa88c'); R(x, 1, 2, 2, 3, '#3fa88c'); R(x, 4, 2, 2, 3, '#6fd4b4'); R(x, 2, 5, 1, 1, '#f0f0e0'); S.carryHerb = c; }
+    // bone projectile
+    { const { c, x } = mkc(6, 3); R(x, 1, 0, 4, 1, '#e8e4d4'); R(x, 0, 0, 1, 2, '#d8d4c4'); R(x, 5, 1, 1, 2, '#d8d4c4'); R(x, 2, 1, 2, 1, '#c4c0b0'); S.bone = c; }
     // ghost placement tile
     { const { c, x } = mkc(16, 16); x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 1; x.strokeRect(.5, .5, 15, 15); S.ghostTile = c; }
   },
@@ -941,6 +1317,8 @@ const Art = {
     ic('food', x => { R(x, 3, 5, 4, 4, PAL.berry); R(x, 9, 6, 4, 4, PAL.berryL); R(x, 5, 10, 4, 4, PAL.berry); R(x, 7, 2, 1, 3, '#4e7a40'); R(x, 4, 3, 3, 1, '#4e7a40'); });
     ic('essence', x => { R(x, 5, 3, 6, 10, '#8a5cd0'); R(x, 4, 5, 8, 6, '#8a5cd0'); R(x, 6, 4, 2, 3, '#d0b0ff'); R(x, 6, 11, 4, 1, '#5c3a94'); });
     ic('pop', x => { R(x, 5, 2, 6, 6, '#f0c8a0'); R(x, 5, 2, 6, 2, '#6b4a26'); R(x, 3, 9, 10, 5, '#4a8f3c'); R(x, 6, 5, 1, 1, '#222'); R(x, 9, 5, 1, 1, '#222'); });
+    ic('herb', x => { R(x, 7, 2, 2, 12, '#3fa88c'); R(x, 4, 5, 3, 2, '#3fa88c'); R(x, 9, 7, 3, 2, '#6fd4b4'); R(x, 5, 9, 2, 2, '#6fd4b4'); R(x, 7, 1, 2, 2, '#f0f0e0'); R(x, 7, 1, 1, 1, '#e8a94b'); });
+    ic('stasis', x => { R(x, 7, 1, 2, 14, '#9ad4f0'); R(x, 1, 7, 14, 2, '#9ad4f0'); R(x, 4, 4, 2, 2, '#c8ecff'); R(x, 10, 10, 2, 2, '#c8ecff'); R(x, 10, 4, 2, 2, '#c8ecff'); R(x, 4, 10, 2, 2, '#c8ecff'); R(x, 7, 7, 2, 2, '#f0faff'); });
     ic('build', x => { R(x, 3, 7, 8, 2, '#7a5a34'); R(x, 9, 3, 4, 5, PAL.metal); R(x, 10, 3, 2, 1, PAL.metalD); R(x, 2, 12, 12, 2, PAL.plank); });
     ic('jobs', x => { R(x, 2, 4, 4, 4, '#f0c8a0'); R(x, 1, 9, 6, 5, '#c03030'); R(x, 10, 5, 4, 4, '#f0c8a0'); R(x, 9, 10, 6, 5, '#4a8f3c'); });
     ic('powers', x => { R(x, 7, 1, 2, 14, '#c9a94b'); R(x, 1, 7, 14, 2, '#c9a94b'); R(x, 4, 4, 8, 8, '#8a5cd0'); R(x, 6, 6, 4, 4, '#d0b0ff'); });
@@ -1067,9 +1445,10 @@ const Art = {
     x.fillStyle = vg; x.fillRect(0, 0, w, h);
   },
 };
-;
 
-/* ===== Bundled from js/world.js ===== */
+</script>
+<!-- ==== js/world.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — world.js
@@ -1121,8 +1500,10 @@ const World = {
     this.amt = new Uint8Array(W * H);
     this.occ = new Int32Array(W * H);
     G.regrow = new Map();
+    this.lairSpots = [];
     const elev = this.noiseGen(seed);
     const moist = this.noiseGen(seed * 7 + 13);
+    const forestN = this.noiseGen(seed * 5 + 71);
     const rocky = this.noiseGen(seed * 3 + 101);
     const cx = W / 2, cy = H / 2;
     this.center = { x: cx, y: cy };
@@ -1136,29 +1517,45 @@ const World = {
         const edge = Math.max(Math.abs(dx), Math.abs(dy));
         const e = elev.fbm(nx, ny, 4) * (1 - Math.pow(U.clamp((edge - .82) / .18, 0, 1), 1.6));
         const m = moist.fbm(nx, ny, 3);
+        const f = forestN.fbm(nx + .17, ny + .41, 3);
         const r = rocky.fbm(nx + .31, ny + .77, 3);
         const dc = U.dst(x, y, cx, cy);
-        if (e < 0.34) this.t[i] = T.WATER;
-        else {
-          this.t[i] = T.GRASS;
-          if (e > 0.36 && e < 0.42 && U.hash2(x, y) < .3) this.t[i] = T.DIRT; // patches
-          if (this.t[i] === T.GRASS) {
-            if (m > 0.60 && e > 0.42) {
-              this.obj[i] = (e > 0.58 || m > 0.74) ? OBJ.PINE : OBJ.TREE;
-              if (U.hash2(x + 9, y) < .18) this.obj[i] = OBJ.NONE; // gaps in woods
-            } else if (m > 0.52 && m <= 0.60 && U.hash2(x, y + 5) < 0.10) {
-              this.obj[i] = OBJ.BUSH;
-            } else if (m <= 0.52 && U.hash2(x + 3, y + 3) < 0.045) {
-              this.obj[i] = OBJ.FLOWER;
-            }
-            // stone: richer away from center (risk/reward)
-            if (r > 0.68 && dc > 14 && U.hash2(x + 1, y + 7) < .5) {
-              this.obj[i] = OBJ.ROCK;
-            } else if (r > 0.63 && dc > 10 && U.hash2(x + 4, y + 2) < .16) {
-              this.obj[i] = OBJ.ROCK;
-            }
-          }
+
+        if (e < 0.34) { this.t[i] = T.WATER; continue; }
+        if (e < 0.375) { this.t[i] = T.SAND; continue; }   // shore ring
+        this.t[i] = T.GRASS;
+        if (e > 0.36 && e < 0.42 && U.hash2(x, y) < .3) this.t[i] = T.DIRT; // clearings
+
+        if (this.t[i] !== T.GRASS) continue;
+        const h = U.hash2(x, y), h2 = U.hash2(x + 5, y + 9);
+
+        // ---- dark forest biome: dense pines, mushrooms, dead trees ----
+        if (f > 0.63 && e > 0.40) {
+          if (h < 0.62) this.obj[i] = h2 < .82 ? OBJ.PINE : OBJ.TREE;
+          else if (h < 0.70) this.obj[i] = OBJ.MUSH;
+          else if (h < 0.735) this.obj[i] = OBJ.DEADTREE;
+          else if (h < 0.76) this.obj[i] = OBJ.HERB;
+          continue;
         }
+        // ---- highland biome: boulders, crystals, birch ----
+        if (r > 0.66 && dc > 13) {
+          if (h < 0.42) this.obj[i] = h2 < 0.10 ? OBJ.CRYSTAL : OBJ.ROCK;
+          else if (h < 0.47) this.obj[i] = OBJ.PINE;
+          else if (h < 0.50) this.obj[i] = OBJ.BIRCH;
+          continue;
+        }
+        // ---- meadow biome: oaks, berries, herbs, flowers, tall grass ----
+        if (m > 0.48) {
+          if (h < 0.13) this.obj[i] = OBJ.TREE;
+          else if (h < 0.155) this.obj[i] = OBJ.BIRCH;
+          else if (h < 0.23) this.obj[i] = OBJ.BUSH;
+          else if (h < 0.265) this.obj[i] = OBJ.HERB;
+          else if (h < 0.34) this.obj[i] = h2 < .5 ? OBJ.FLOWER : OBJ.TGRASS;
+        } else if (h < 0.05) {
+          this.obj[i] = OBJ.TGRASS;
+        }
+        // stray stone even in meadows, farther out
+        if (!this.obj[i] && r > 0.63 && dc > 10 && U.hash2(x + 4, y + 2) < .12) this.obj[i] = OBJ.ROCK;
       }
     }
 
@@ -1173,7 +1570,7 @@ const World = {
     // guarantee starting resources (idempotent placement on grass)
     const sprinkle = (type, count, rMin, rMax, amt) => {
       let placed = 0, tries = 0;
-      while (placed < count && tries++ < 800) {
+      while (placed < count && tries++ < 900) {
         const a = Math.random() * Math.PI * 2;
         const r = rMin + Math.random() * (rMax - rMin);
         const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r);
@@ -1181,20 +1578,62 @@ const World = {
         const i = this.idx(x, y);
         if (this.t[i] !== T.GRASS) continue;
         if (this.obj[i] === type) { placed++; continue; }
-        if (this.obj[i] !== OBJ.NONE && this.obj[i] !== OBJ.FLOWER) continue;
+        if (this.obj[i] !== OBJ.NONE && this.obj[i] !== OBJ.FLOWER && this.obj[i] !== OBJ.TGRASS && this.obj[i] !== OBJ.MUSH) continue;
         this.obj[i] = type; if (amt) this.amt[i] = amt;
         placed++;
       }
     };
     sprinkle(OBJ.BUSH, 16, 5, 13, OBJ_AMT[OBJ.BUSH]);
-    sprinkle(OBJ.TREE, 26, 7, 17, OBJ_AMT[OBJ.TREE]);
-    sprinkle(OBJ.PINE, 10, 12, 22, OBJ_AMT[OBJ.PINE]);
+    sprinkle(OBJ.TREE, 24, 7, 17, OBJ_AMT[OBJ.TREE]);
+    sprinkle(OBJ.PINE, 8, 12, 22, OBJ_AMT[OBJ.PINE]);
     sprinkle(OBJ.ROCK, 8, 13, 20, OBJ_AMT[OBJ.ROCK]);
+    sprinkle(OBJ.HERB, 6, 6, 14, OBJ_AMT[OBJ.HERB]);
+
+    // ancient ruins scattered at mid distance
+    sprinkle(OBJ.RUIN, 8, 14, 30, CONFIG.RUIN.stone);
+    // essence crystal lodes, far out (risk/reward)
+    sprinkle(OBJ.CRYSTAL, 5, 16, 28, OBJ_AMT[OBJ.CRYSTAL]);
+
+    // ---- monster lairs: 3 monoliths, spread angles, far from camp ----
+    const baseA = Math.random() * Math.PI * 2;
+    for (let k = 0; k < CONFIG.LAIR.count; k++) {
+      let placed = false;
+      for (let tries = 0; tries < 60 && !placed; tries++) {
+        const a = baseA + k * (Math.PI * 2 / CONFIG.LAIR.count) + (Math.random() - .5) * 0.7;
+        const r = 19 + Math.random() * 7;
+        const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r);
+        if (!this.inB(x, y)) continue;
+        const i = this.idx(x, y);
+        if (this.t[i] === T.WATER || this.t[i] === T.SAND) continue;
+        this.t[i] = T.GRASS;
+        this.obj[i] = OBJ.NONE;
+        // keep the lair's tile & neighbors clear so monsters can leave
+        let ok = true;
+        for (const [ddx, ddy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+          const j = this.inB(x + ddx, y + ddy) ? this.idx(x + ddx, y + ddy) : -1;
+          if (j >= 0 && this.t[j] === T.WATER) ok = false;
+          if (j >= 0) { this.obj[j] = OBJ.NONE; }
+        }
+        if (!ok) continue;
+        this.lairSpots.push({ x, y });
+        // dead trees & mushrooms ring the lair (visual tell)
+        for (let d = 0; d < 8; d++) {
+          const da = Math.random() * Math.PI * 2, dr = 1.5 + Math.random() * 2.5;
+          const dx2 = Math.round(x + Math.cos(da) * dr), dy2 = Math.round(y + Math.sin(da) * dr);
+          if (this.inB(dx2, dy2)) {
+            const j = this.idx(dx2, dy2);
+            if (this.t[j] === T.GRASS && this.obj[j] === OBJ.NONE && U.dst(dx2, dy2, cx, cy) > 6)
+              this.obj[j] = U.hash2(dx2, dy2) < .6 ? OBJ.DEADTREE : OBJ.MUSH;
+          }
+        }
+        placed = true;
+      }
+    }
 
     // fill amounts for all generated objects
     for (let i = 0; i < this.obj.length; i++) {
       const o = this.obj[i];
-      if ((o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BUSH || o === OBJ.ROCK) && this.amt[i] === 0)
+      if (OBJ_AMT[o] && this.amt[i] === 0)
         this.amt[i] = OBJ_AMT[o] + (U.hash2(i, 17) < .3 ? 1 : 0);
     }
 
@@ -1245,6 +1684,7 @@ const World = {
     if (t === T.GRASS) x.drawImage(Art.s['g' + v], px, py);
     else if (t === T.DIRT) x.drawImage(Art.s.dirt, px, py);
     else if (t === T.ROAD) x.drawImage(Art.s['road' + (v % 2)], px, py);
+    else if (t === T.SAND) x.drawImage(Art.s.sand, px, py);
   },
 
   bakeTile(tx, ty) {
@@ -1275,32 +1715,43 @@ const World = {
     this.obj[i] = o; this.amt[i] = amt || 0;
   },
 
-  // depleted → regrowth scheduling
+  // depleted → regrowth scheduling; returns a bonus tag for the caller
   deplete(tx, ty) {
     const i = this.idx(tx, ty), o = this.obj[i];
     this.amt[i] = 0;
+    let bonus = null;
     if (o === OBJ.TREE || o === OBJ.PINE) {
       this.obj[i] = OBJ.STUMP;
       G.regrow.set(i, { t: 150 + Math.random() * 60, kind: o });   // stump → sapling → tree
     } else if (o === OBJ.BUSH) {
-      this.obj[i] = OBJ.BUSH; // keep bush sprite-empty state via amt
       G.regrow.set(i, { t: 170 + Math.random() * 50, kind: OBJ.BUSH });
-    } else if (o === OBJ.ROCK) {
-      this.obj[i] = OBJ.NONE; // lode exhausted forever
+    } else if (o === OBJ.HERB) {
+      G.regrow.set(i, { t: CONFIG.HERB.regrow, kind: OBJ.HERB });
+    } else if (o === OBJ.CRYSTAL) {
+      this.obj[i] = OBJ.NONE;
+      bonus = 'crystal';
+    } else if (o === OBJ.RUIN) {
+      this.obj[i] = OBJ.NONE;
+      bonus = 'ruin';
+    } else if (o === OBJ.ROCK || o === OBJ.DEADTREE) {
+      this.obj[i] = OBJ.NONE; // exhausted
     }
+    return bonus;
   },
 
-  // walkability for pathing/movement. opts: {monster}
+  // walkability for pathing/movement. opts: {monster, phase}
   walkable(tx, ty, opts) {
     if (!this.inB(tx, ty)) return false;
     const i = this.idx(tx, ty);
     if (this.t[i] === T.WATER) return false;
     const o = this.obj[i];
-    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK) return false;
+    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.GRAVE) return false;
+    if (opts && opts.phase) return true; // wraiths drift through walls
     const id = this.occ[i];
-    if (id) {
+    if (id && !(opts && opts.phase)) {
       const b = Buildings.byId(id);
       if (b && b.built) {
+        if (b.def.kind === 'trap') return !!(opts && opts.monster); // monsters stride onto spikes
         if (b.def.kind === 'gate' && !(opts && opts.monster)) return true;
         return false;
       }
@@ -1311,17 +1762,18 @@ const World = {
   },
 
   // movement cost for A*. monsters treat solid buildings as pricey breakables.
-  cost(tx, ty, monster) {
+  cost(tx, ty, monster, phase) {
     if (!this.inB(tx, ty)) return Infinity;
     const i = this.idx(tx, ty);
     if (this.t[i] === T.WATER) return Infinity;
     const o = this.obj[i];
-    let c = this.t[i] === T.ROAD ? 0.72 : 1;
-    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK) return Infinity;
+    let c = this.t[i] === T.ROAD ? 0.72 : this.t[i] === T.SAND ? 1.15 : 1;
+    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.GRAVE) return Infinity;
     const id = this.occ[i];
-    if (id) {
+    if (id && !phase) {
       const b = Buildings.byId(id);
       if (b && b.built) {
+        if (b.def.kind === 'trap') return monster ? 1 : Infinity; // spikes are walked over
         if (b.def.kind === 'gate') return monster ? 22 : 0.8;
         if (monster) return 24 + b.hp / 60;  // will have to break it
         return Infinity;
@@ -1344,7 +1796,8 @@ const World = {
           const i = this.idx(x, y);
           const o = this.obj[i];
           if (types.includes(o)) {
-            if (o === OBJ.BUSH && this.amt[i] <= 0) continue;
+            const needsAmt = o === OBJ.BUSH || o === OBJ.HERB;
+            if (needsAmt && this.amt[i] <= 0) continue;
             cands.push({ x, y, i, d: r });
           }
         }
@@ -1377,9 +1830,10 @@ const World = {
     return { x: this.W / 2, y: 1.5 };
   },
 };
-;
 
-/* ===== Bundled from js/path.js ===== */
+</script>
+<!-- ==== js/path.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — path.js
@@ -1392,14 +1846,14 @@ const World = {
 const Path = {
   find(sx, sy, tx, ty, opts) {
     opts = opts || {};
-    const monster = !!opts.monster, adjacent = !!opts.adjacent;
+    const monster = !!opts.monster, adjacent = !!opts.adjacent, phase = !!opts.phase;
     sx |= 0; sy |= 0; tx |= 0; ty |= 0;
     const W = World.W, H = World.H;
     if (!World.inB(tx, ty)) return null;
 
     // If goal blocked and adjacent allowed, snap to a nearby walkable tile
-    if (adjacent && !this.pass(tx, ty, monster)) {
-      const spot = this.nearbyFree(tx, ty, monster, 2);
+    if (adjacent && !this.pass(tx, ty, monster, phase)) {
+      const spot = this.nearbyFree(tx, ty, monster, 2, phase);
       if (!spot) return null;
       tx = spot.x; ty = spot.y;
     }
@@ -1431,11 +1885,11 @@ const Path = {
         const dx = DIR8[d][0], dy = DIR8[d][1];
         const nx = cx + dx, ny = cy + dy;
         if (!World.inB(nx, ny)) continue;
-        const step = World.cost(nx, ny, monster);
+        const step = World.cost(nx, ny, monster, phase);
         if (step === Infinity) continue;
         if (dx && dy) { // no corner cutting
-          if (World.cost(cx + dx, cy, monster) === Infinity) continue;
-          if (World.cost(cx, cy + dy, monster) === Infinity) continue;
+          if (World.cost(cx + dx, cy, monster, phase) === Infinity) continue;
+          if (World.cost(cx, cy + dy, monster, phase) === Infinity) continue;
         }
         const ni = World.idx(nx, ny);
         if (closed[ni]) continue;
@@ -1460,17 +1914,17 @@ const Path = {
     return pts.length ? pts : null;
   },
 
-  pass(tx, ty, monster) {
+  pass(tx, ty, monster, phase) {
     if (!World.inB(tx, ty)) return false;
-    return World.cost(tx, ty, monster) !== Infinity;
+    return World.cost(tx, ty, monster, phase) !== Infinity;
   },
 
-  nearbyFree(tx, ty, monster, r) {
+  nearbyFree(tx, ty, monster, r, phase) {
     let best = null, bd = 1e9;
     for (let dy = -r; dy <= r; dy++)
       for (let dx = -r; dx <= r; dx++) {
         const x = tx + dx, y = ty + dy;
-        if (!this.pass(x, y, monster)) continue;
+        if (!this.pass(x, y, monster, phase)) continue;
         const d = dx * dx + dy * dy;
         if (d < bd) { bd = d; best = { x, y }; }
       }
@@ -1517,9 +1971,10 @@ class Heap {
     return top;
   }
 }
-;
 
-/* ===== Bundled from js/buildings.js ===== */
+</script>
+<!-- ==== js/buildings.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — buildings.js
@@ -1588,6 +2043,36 @@ const BUILD = {
     kind: 'store', light: 3.0, unlock: 5,
     desc: 'A second stockpile — shorten hauling trips and guard outer farms.',
   },
+  fisher: {
+    name: 'Fishing Dock', cat: 'basics', w: 1, h: 1, hp: 160, cost: { wood: 10 }, time: 22,
+    kind: 'fisher', needsWater: true, tall: 8, unlock: 3,
+    desc: 'Must touch water. A Fisher brings in steady food — no farmland used.',
+  },
+  windmill: {
+    name: 'Windmill', cat: 'basics', w: 2, h: 2, hp: 300, cost: { wood: 20, stone: 8 }, time: 55,
+    kind: 'windmill', tall: 28, unlock: 4,
+    desc: 'Wheat plots within 6 tiles grow 35% faster in its breeze.',
+  },
+  trap: {
+    name: 'Spike Trap', cat: 'defense', w: 1, h: 1, hp: 120, cost: { wood: 2, stone: 1 }, time: 5,
+    kind: 'trap', paint: true, unlock: 5,
+    desc: 'Wounds and slows monsters that walk over it. Wears out. Drag to lay rows.',
+  },
+  herbalistHut: {
+    name: 'Herbalist Hut', cat: 'basics', w: 1, h: 1, hp: 180, cost: { wood: 10, stone: 4 }, time: 26,
+    kind: 'healer', light: 2.0, tall: 6, unlock: 6,
+    desc: 'Herbalists stock it with herbs; the hut slowly mends wounded villagers nearby.',
+  },
+  mine: {
+    name: 'Mine Shaft', cat: 'basics', w: 1, h: 1, hp: 260, cost: { wood: 12 }, time: 30,
+    kind: 'mine', onRock: true, tall: 4, unlock: 7,
+    desc: 'Build atop a boulder. Miners work it forever — slow but endless stone.',
+  },
+  barracks: {
+    name: 'Barracks', cat: 'defense', w: 2, h: 2, hp: 500, cost: { wood: 25, stone: 20 }, time: 60,
+    kind: 'barracks', capOne: true, light: 2.0, tall: 4, unlock: 8,
+    desc: 'Drill yard and armory: all Guards deal +30% damage. Only one may stand.',
+  },
   shrine: {
     name: 'Shrine', cat: 'mystic', w: 1, h: 1, hp: 200, cost: { stone: 16 }, time: 28,
     kind: 'shrine', light: 3.1, tall: 8, essence: true, unlock: 8,
@@ -1606,10 +2091,16 @@ const CAMP_DEF = {
   kind: 'store', light: 3.2, housing: 2, tall: 0, desc: 'Where it all began. Stores goods and shelters two.',
 };
 
+// monster lair (not buildable — placed by the map, destroyed by raids)
+const LAIR_DEF = {
+  name: 'Dark Monolith', cat: null, w: 1, h: 1, hp: CONFIG.LAIR.hp, cost: {}, time: 0,
+  kind: 'lair', light: 1.8, tall: 12, desc: 'The horde crawls out of this each night. Select it and order a RAID — destroy all three and the nights grow thin.',
+};
+
 const Buildings = {
   byIdMap: new Map(),
 
-  def(key) { return key === 'camp' ? CAMP_DEF : BUILD[key]; },
+  def(key) { return key === 'camp' ? CAMP_DEF : key === 'lair' ? LAIR_DEF : BUILD[key]; },
 
   byId(id) { return this.byIdMap.get(id) || null; },
 
@@ -1632,6 +2123,19 @@ const Buildings = {
   canPlace(key, tx, ty) {
     const def = BUILD[key];
     if (!def) return { ok: false, reason: 'Unknown' };
+    if (def.capOne && this.count(key) >= 1) return { ok: false, reason: 'Only one allowed' };
+    // fishing docks must touch water
+    if (def.needsWater) {
+      let wet = false;
+      for (let dy = -1; dy <= 1 && !wet; dy++)
+        for (let dx = -1; dx <= 1 && !wet; dx++)
+          if ((dx || dy) && World.tileT(tx + dx, ty + dy) === T.WATER) wet = true;
+      if (!wet) return { ok: false, reason: 'Must touch water' };
+    }
+    // mine shafts consume the boulder they stand on
+    if (def.onRock) {
+      if (World.objAt(tx, ty) !== OBJ.ROCK) return { ok: false, reason: 'Place on a boulder' };
+    }
     for (let dy = 0; dy < def.h; dy++) {
       for (let dx = 0; dx < def.w; dx++) {
         const x = tx + dx, y = ty + dy;
@@ -1639,18 +2143,18 @@ const Buildings = {
         const i = World.idx(x, y);
         const t = World.t[i];
         if (t === T.WATER) return { ok: false, reason: 'On water' };
-        if (def.terrain) { // roads can overwrite grass/dirt but not objects/farms
+        if (def.terrain) { // roads can overwrite grass/dirt/sand but not objects/farms
           if (t === T.ROAD) return { ok: false, reason: '' };
           const o = World.obj[i];
-          if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.BUSH) return { ok: false, reason: 'Blocked' };
+          if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.BUSH || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE) return { ok: false, reason: 'Blocked' };
           if (World.occ[i]) return { ok: false, reason: 'Occupied' };
           continue;
         }
-        if (t !== T.GRASS && t !== T.DIRT) return { ok: false, reason: 'Bad ground' };
+        if (t !== T.GRASS && t !== T.DIRT && t !== T.SAND) return { ok: false, reason: 'Bad ground' };
         if (def.grassOnly && t !== T.GRASS) return { ok: false, reason: 'Needs grass' };
         const o = World.obj[i];
-        if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.ROCK || o === OBJ.BUSH || o === OBJ.SAPLING)
-          return { ok: false, reason: 'Blocked — clear first' };
+        const blocking = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.BUSH || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.GRAVE;
+        if (blocking && !(def.onRock && o === OBJ.ROCK)) return { ok: false, reason: 'Blocked — clear first' };
         if (World.occ[i]) return { ok: false, reason: 'Occupied' };
       }
     }
@@ -1691,6 +2195,7 @@ const Buildings = {
         if (World.obj[i] === OBJ.FLOWER || World.obj[i] === OBJ.STUMP) World.obj[i] = OBJ.NONE;
       }
     const b = this.create(key, tx, ty, false);
+    if (def.onRock) World.setObj(tx, ty, OBJ.NONE, 0); // shaft swallows the boulder
     G.stats.built++;
     // nudge villagers out of footprint
     for (const v of G.villagers) {
@@ -1703,6 +2208,7 @@ const Buildings = {
   },
 
   demolish(b, silent) {
+    if (b.key === 'lair') return; // lairs are destroyed by raiding, never demolished
     const i = G.buildings.indexOf(b);
     if (i < 0) return;
     G.buildings.splice(i, 1);
@@ -1729,6 +2235,9 @@ const Buildings = {
   },
 
   stores() { return G.buildings.filter(b => b.built && b.def.kind === 'store'); },
+  lairs() { return G.buildings.filter(b => b.key === 'lair'); },
+  fisherHuts() { return G.buildings.filter(b => b.built && b.def.kind === 'fisher'); },
+  mines() { return G.buildings.filter(b => b.built && b.def.kind === 'mine'); },
 
   nearestStore(tx, ty) {
     let best = null, bd = 1e9;
@@ -1751,13 +2260,36 @@ const Buildings = {
   // per-frame building logic
   update(dt) {
     const night = isNightLike();
+    const hasBarracks = G.buildings.some(b => b.built && b.key === 'barracks');
+    const windmills = [];
+    for (const b of G.buildings) if (b.built && b.key === 'windmill') windmills.push(b);
     for (const b of G.buildings) {
       if (b.cd > 0) b.cd -= dt;
       if (b.tendedT < 90) b.tendedT += dt;
-      // farms grow in daylight (faster while tended)
+      // farms grow in daylight (faster while tended, faster near a windmill)
       if (b.def.kind === 'farm' && b.built && !night) {
         const boost = b.tendedT < 2 ? CONFIG.FARM.tendBoost : 1;
-        b.growth = Math.min(1, b.growth + dt * boost / CONFIG.FARM.grow);
+        let breeze = 1;
+        for (const wm of windmills) {
+          if (U.dst(b.x + 1, b.y + 1, wm.x + 1, wm.y + 1) <= 6) { breeze = 1.35; break; }
+        }
+        b.growth = Math.min(1, b.growth + dt * boost * breeze / CONFIG.FARM.grow);
+      }
+      // herbalist hut mends wounded villagers nearby, consuming stored herbs
+      if (b.def.kind === 'healer' && b.built && G.res.herbs >= 1) {
+        let patient = null;
+        for (const v of G.villagers) {
+          if (v.hp < v.maxHp - 1 && U.dst2(v.x, v.y, b.x + .5, b.y + .5) < 16) { patient = v; break; }
+        }
+        if (patient) {
+          patient.hp = Math.min(patient.maxHp, patient.hp + CONFIG.HERB.healRate * dt);
+          b.healDebt = (b.healDebt || 0) + CONFIG.HERB.healRate * dt;
+          while (b.healDebt >= CONFIG.HERB.herbPerHeal && G.res.herbs >= 1) {
+            b.healDebt -= CONFIG.HERB.herbPerHeal;
+            G.res.herbs -= 1;
+          }
+          if (Math.random() < dt * 2) Sim.fx('spark', patient.x, patient.y - .5, .3);
+        }
       }
       // towers shoot
       if (b.def.kind === 'tower' && b.built && b.cd <= 0) {
@@ -1774,6 +2306,7 @@ const Buildings = {
         }
       }
     }
+    return hasBarracks;
   },
 
   windowGlows() {
@@ -1790,9 +2323,10 @@ const Buildings = {
     return out;
   },
 };
-;
 
-/* ===== Bundled from js/entities.js ===== */
+</script>
+<!-- ==== js/entities.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — entities.js
@@ -1837,13 +2371,14 @@ const Entities = {
     const st = CONFIG.MONS[type];
     const hpMul = G.diffM.hp * (1 + Math.max(0, G.day - CONFIG.WAVE.hpScaleDay) * CONFIG.WAVE.hpScale);
     const m = {
-      kind: 'm', id: NID(), type, name: st.name,
+      kind: 'm', id: NID(), type, name: st.name, st,
       x, y, hp: Math.round(st.hp * hpMul), maxHp: Math.round(st.hp * hpMul),
       dmg: st.dmg, spd: st.spd, atkT: st.atkT, ess: st.ess,
       state: 'advance', path: null, pi: 0,
       tgtE: null, tgtB: null, atkCd: 0,
       anim: Math.random() * 2, aiT: Math.random() * 0.5,
       stuckT: 0, lastD: 1e9, burning: 0, dead: false,
+      frozenT: 0, slowT: 0, trapCd: 0,
       bld: st.bld || 1, r: st.r || 0.5,
     };
     return m;
@@ -1872,9 +2407,10 @@ const Entities = {
 
   farmYield(v) { return CONFIG.FARM.yield; },
 };
-;
 
-/* ===== Bundled from js/game.js ===== */
+</script>
+<!-- ==== js/game.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — game.js
@@ -1910,6 +2446,10 @@ const Sim = {
     const cx = World.W / 2 | 0, cy = World.H / 2 | 0;
     // starting camp slightly left of center, tents around it
     Buildings.create('camp', cx - 1, cy - 1, true);
+    // monster lairs from the generator
+    for (const spot of World.lairSpots) Buildings.create('lair', spot.x, spot.y, true);
+    G.bloodMoon = false;
+    G.raidTarget = null;
     const starters = ['forager', 'forager', 'lumber', 'lumber', 'miner', 'builder'];
     for (let i = 0; i < C.VIL_START; i++) {
       const a = (i / C.VIL_START) * Math.PI * 2;
@@ -1922,7 +2462,7 @@ const Sim = {
     G.unlocks = {};
     for (const k in BUILD) if (BUILD[k].unlock <= 0) G.unlocks[k] = true;
 
-    this.log(`Day 1 — ${C.VIL_START} settlers raise the camp of Dawnhold beneath a dimming sun.`, 'good');
+    this.log(`Day 1 — ${C.VIL_START} settlers raise the camp of Dawnhold beneath a dimming sun. Three dark monoliths brood on the horizon.`, 'good');
     UI.toast('Shelter is short — raise Tents before dark.', 'good');
     UI.tutStart();
     UI.refreshAll();
@@ -1980,6 +2520,8 @@ const Sim = {
           const x = i % World.W, y = (i / World.W) | 0;
           if (rg.kind === OBJ.BUSH) {
             World.amt[i] = OBJ_AMT[OBJ.BUSH];
+          } else if (rg.kind === OBJ.HERB) {
+            World.amt[i] = OBJ_AMT[OBJ.HERB];
           } else if (rg.kind === OBJ.TREE || rg.kind === OBJ.PINE) {
             if (World.obj[i] === OBJ.STUMP) {
               World.obj[i] = OBJ.SAPLING;
@@ -2009,14 +2551,28 @@ const Sim = {
   /* ---------------- phases ---------------- */
   dusk() {
     G.phase = 'dusk';
-    const n = this.waveSize(G.day);
+    G.bloodMoon = G.day >= CONFIG.WAVE.bloodEvery && G.day % CONFIG.WAVE.bloodEvery === 0 && this.waveSize(G.day) > 0;
+    const n = this.waveSize(G.day) * (G.bloodMoon ? CONFIG.WAVE.bloodMult : 1);
     if (n > 0) {
-      // pre-pick the attack direction(s) so the player can prepare (readable tactics)
-      G.nextSides = G.day >= 5 ? [U.irnd(0, 3), U.irnd(0, 3)] : [U.irnd(0, 3)];
-      const names = ['north', 'south', 'west', 'east'];
-      const dir = [...new Set(G.nextSides)].map(s => names[s]).join(' and ');
-      UI.toast(`The sun slips away. ${n} shapes stir to the ${dir}...`, 'bad');
-      this.log(`Dusk of day ${G.day} — ${n} shades gather to the ${dir}.`, 'bad');
+      // direction telegraph from the nearest living lair (readable tactics)
+      const lairs = Buildings.lairs();
+      if (lairs.length) {
+        let nearest = null, bd = 1e9;
+        for (const l of lairs) {
+          const d = U.dst2(World.center.x, World.center.y, l.x, l.y);
+          if (d < bd) { bd = d; nearest = l; }
+        }
+        const ang = Math.atan2(nearest.y - World.center.y, nearest.x - World.center.x);
+        const dirs = ['east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'north', 'northeast'];
+        const dir = dirs[((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8];
+        UI.toast(G.bloodMoon
+          ? `A BLOOD MOON rises — a greater horde boils from the monolith to the ${dir}!`
+          : `The sun slips away. ${n} shapes crawl from the monolith to the ${dir}...`, 'bad');
+        this.log(G.bloodMoon ? `Blood moon — the lairs empty themselves upon the valley.` : `Dusk of day ${G.day} — the horde stirs to the ${dir}.`, 'bad');
+      } else {
+        UI.toast(G.bloodMoon ? 'A BLOOD MOON rises — the dark has no home left, so all of it comes!' : `The sun slips away. ${n} shapes drift in from the wilds...`, 'bad');
+        this.log(`Dusk of day ${G.day} — no lairs remain, yet ${n} shapes gather from the wilds.`, 'bad');
+      }
     } else if (G.diff === 'peaceful') {
       UI.toast('Night falls. Peaceful valley — nothing stirs.', 'good');
     }
@@ -2030,11 +2586,13 @@ const Sim = {
 
   night() {
     G.phase = 'night';
-    const n = this.waveSize(G.day);
-    if (n > 0) {
+    const base = this.waveSize(G.day);
+    if (base > 0) {
       const isFinal = G.finalNight;
+      const lairs = Buildings.lairs();
+      const noLairMult = lairs.length ? 1 : CONFIG.WAVE.noLairMult;
+      const total = Math.max(1, Math.round((base * (G.bloodMoon ? CONFIG.WAVE.bloodMult : 1) * noLairMult) * (isFinal ? CONFIG.WAVE.final : 1)));
       let comps = [];
-      const total = isFinal ? Math.round(n * CONFIG.WAVE.final) : n;
       for (let i = 0; i < total; i++) comps.push(this.rollType(G.day));
       G.wave = { left: total, comps, t: 0, window: CONFIG.WAVE.spawnWindow };
       G.stats.wavePeak = Math.max(G.stats.wavePeak, total);
@@ -2043,8 +2601,6 @@ const Sim = {
         G.finalNightDay = G.day;
         UI.toast('THE LONG NIGHT — the horde answers the Beacon!', 'bad');
         this.log('The Long Night begins. Everything the dark has, it sends.', 'bad');
-      } else {
-        this.log(`Night ${G.day} — the horde attacks.`, 'bad');
       }
     } else G.wave = null;
   },
@@ -2086,8 +2642,12 @@ const Sim = {
       const d = BUILD[k];
       if (!G.unlocks[k] && d.unlock > 0 && d.unlock <= G.day) { G.unlocks[k] = true; newU.push(d.name); }
     }
-    if (!G.unlocks.__meteor && CONFIG.POWERS.meteor.unlockDay <= G.day) {
-      G.unlocks.__meteor = true; newU.push('Meteor (Powers)');
+    for (const pk in POWERS) {
+      const p = POWERS[pk];
+      if (p.unlockDay && !G.unlocks['__pw_' + pk] && p.unlockDay <= G.day) {
+        G.unlocks['__pw_' + pk] = true;
+        newU.push(`${p.name} (Power)`);
+      }
     }
     if (newU.length) {
       UI.toast('Unlocked: ' + newU.join(', '), 'good');
@@ -2154,6 +2714,9 @@ const Sim = {
     if (day >= M.runner.from) pool.push({ t: 'runner', w: M.runner.w });
     if (day >= M.brute.from) pool.push({ t: 'brute', w: M.brute.w });
     if (day >= M.stalker.from) pool.push({ t: 'stalker', w: M.stalker.w });
+    if (day >= M.boner.from) pool.push({ t: 'boner', w: M.boner.w });
+    if (day >= M.wraith.from) pool.push({ t: 'wraith', w: M.wraith.w });
+    if (day >= M.colossus.from) pool.push({ t: 'colossus', w: M.colossus.w });
     let tot = pool.reduce((s, p) => s + p.w, 0);
     let r = Math.random() * tot;
     for (const p of pool) { r -= p.w; if (r <= 0) return p.t; }
@@ -2164,13 +2727,25 @@ const Sim = {
     const w = G.wave;
     w.t += dt;
     const should = Math.min(w.comps.length, Math.floor(w.t / w.window * (w.comps.length + 2)));
+    const lairs = Buildings.lairs();
     while (w.left > 0 && G.monsters.length < 70 && w.comps.length - w.left < should) {
       const type = w.comps[w.comps.length - w.left];
       w.left--;
-      const p = World.edgePoint(type === 'lord' && G.nextSides ? [G.nextSides[0]] : G.nextSides);
-      const m = Entities.makeMonster(type, p.x, p.y);
+      let px, py;
+      if (lairs.length) {
+        // crawl out of a living lair (with a little jitter)
+        const l = U.choice(lairs);
+        px = l.x + .5 + (Math.random() - .5) * 1.6;
+        py = l.y + .5 + (Math.random() - .5) * 1.6;
+      } else {
+        const p = World.edgePoint(G.nextSides);
+        px = p.x; py = p.y;
+      }
+      const m = Entities.makeMonster(type, px, py);
       G.monsters.push(m);
+      if (lairs.length && Math.random() < .4) this.fx('spark', px, py - .4, .3);
       if (type === 'lord') { G.boss = m; UI.bossBar(m); UI.toast('A NIGHT LORD rises with the horde!', 'bad'); G.shake = Math.max(G.shake, 6); }
+      if (type === 'colossus') { UI.toast('The ground shakes — a COLOSSUS has come!', 'bad'); G.shake = Math.max(G.shake, 5); }
     }
     if (w.left <= 0 && G.monsters.length === 0) G.wave = null;
   },
@@ -2318,7 +2893,7 @@ const Sim = {
           v.path = null;
           if (v.atkCd <= 0) {
             v.atkCd = CONFIG.GUARD.atkT;
-            this.hitMonster(m, CONFIG.GUARD.dmg, v);
+            this.hitMonster(m, this.guardDmg(), v);
             this.fx('spark', m.x, m.y, .25);
           }
         } else if (!v.path || v.pi >= v.path.length || (v.aiT > .3 && !v.path)) {
@@ -2345,6 +2920,23 @@ const Sim = {
         if (dc < 30 * 30 && (dm < bd || dm < 64)) { bd = Math.min(bd, dm); best = m; }
       }
       if (best) { v.tgt = best; v.state = 'fight'; return; }
+      // raid order: march on a dark monolith and tear it down
+      if (G.raidTarget && G.buildings.includes(G.raidTarget)) {
+        const rt = G.raidTarget;
+        const d = U.dst(v.x, v.y, rt.x + .5, rt.y + .5);
+        if (d < 1.15) {
+          v.path = null;
+          if (v.atkCd <= 0) {
+            v.atkCd = CONFIG.GUARD.atkT;
+            this.hitBuilding(rt, this.guardDmg());
+            this.fx('spark', rt.x + .5, rt.y + .3, .3);
+          }
+        } else if (!v.path || v.pi >= v.path.length) {
+          v.path = Path.find(v.x | 0, v.y | 0, rt.x, rt.y, { adjacent: true });
+          v.pi = 0;
+        }
+        return;
+      }
       // idle patrol
       if (Math.random() < .3) {
         const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 3;
@@ -2390,10 +2982,29 @@ const Sim = {
       return;
     }
 
-    // gatherers: forager / lumber / miner
-    if (job === 'forager' || job === 'lumber' || job === 'miner') {
-      const types = job === 'forager' ? [OBJ.BUSH] : job === 'lumber' ? [OBJ.TREE, OBJ.PINE] : [OBJ.ROCK];
-      const resType = job === 'forager' ? 'food' : job === 'lumber' ? 'wood' : 'stone';
+    // fishers work the docks
+    if (job === 'fisher') {
+      if (v.carry.amt >= Entities.carryMax(v)) { this.sendToStore(v); return; }
+      const huts = Buildings.fisherHuts();
+      if (huts.length) {
+        let best = huts[0], bc = 1e9;
+        for (const h of huts) {
+          const crew = G.villagers.filter(o => o !== v && o.workB === h && (o.state === 'work' || o.state === 'toWork')).length;
+          const d = U.dst2(v.x, v.y, h.x, h.y) * (1 + crew);
+          if (d < bc) { bc = d; best = h; }
+        }
+        if (this.sendToBuilding(v, best, 'fish')) return;
+      }
+      return;
+    }
+
+    // gatherers: forager / lumber / miner / herbalist
+    if (job === 'forager' || job === 'lumber' || job === 'miner' || job === 'herbalist') {
+      const types = job === 'forager' ? [OBJ.BUSH]
+        : job === 'lumber' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
+          : job === 'miner' ? [OBJ.ROCK, OBJ.RUIN, OBJ.CRYSTAL]
+            : [OBJ.HERB];
+      const resType = job === 'forager' ? 'food' : job === 'lumber' ? 'wood' : job === 'miner' ? 'stone' : 'herbs';
       if (v.carry.amt >= Entities.carryMax(v)) { this.sendToStore(v); return; }
       const near = World.findNearestObj(v.x | 0, v.y | 0, types, 36);
       if (near) {
@@ -2406,6 +3017,20 @@ const Sim = {
           return;
         }
       }
+      // miners with no lodes left work the mine shafts instead
+      if (job === 'miner') {
+        const mines = Buildings.mines();
+        if (mines.length) {
+          let best = null, bd = 1e9;
+          for (const mn of mines) {
+            const crew = G.villagers.filter(o => o !== v && o.workB === mn && (o.state === 'work' || o.state === 'toWork')).length;
+            if (crew >= 2) continue;
+            const d = U.dst2(v.x, v.y, mn.x, mn.y);
+            if (d < bd) { bd = d; best = mn; }
+          }
+          if (best && this.sendToBuilding(v, best, 'mine')) return;
+        }
+      }
       // nothing in range — if carrying something, store it; else truly idle
       if (v.carry.amt > 0) this.sendToStore(v);
       return;
@@ -2415,9 +3040,11 @@ const Sim = {
   vArriveWork(v) {
     if (v.workKind && v.tgtTile) {
       const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
-      const want = v.workKind === 'food' ? OBJ.BUSH : v.workKind === 'wood' ? [OBJ.TREE, OBJ.PINE] : [OBJ.ROCK];
-      const ok = Array.isArray(want) ? want.includes(o) : o === want;
-      if (ok && World.amtAt(v.tgtTile.x, v.tgtTile.y) > 0) { v.state = 'work'; v.workT = 0; return; }
+      const want = v.workKind === 'food' ? [OBJ.BUSH]
+        : v.workKind === 'wood' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
+          : v.workKind === 'stone' ? [OBJ.ROCK, OBJ.RUIN, OBJ.CRYSTAL]
+            : v.workKind === 'herbs' ? [OBJ.HERB] : [];
+      if (want.includes(o) && World.amtAt(v.tgtTile.x, v.tgtTile.y) > 0) { v.state = 'work'; v.workT = 0; return; }
       v.state = 'idle'; v.tgtTile = null;
       return;
     }
@@ -2429,6 +3056,7 @@ const Sim = {
       if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
       if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
       if (v.workMode === 'tend' && b.built && b.growth < 1) { v.state = 'work'; v.workT = 0; return; }
+      if ((v.workMode === 'fish' || v.workMode === 'mine') && b.built) { v.state = 'work'; v.workT = 0; return; }
       v.workB = null; v.state = 'idle';
       return;
     }
@@ -2440,7 +3068,7 @@ const Sim = {
     if (v.workKind && v.tgtTile) {
       const { x, y } = v.tgtTile;
       v.workT += dt * ws;
-      const jobKey = v.workKind === 'food' ? 'forager' : v.workKind === 'wood' ? 'lumber' : v.workKind === 'stone' ? 'miner' : v.job;
+      const jobKey = v.workKind === 'food' ? 'forager' : v.workKind === 'wood' ? 'lumber' : v.workKind === 'stone' ? 'miner' : v.workKind === 'herbs' ? 'herbalist' : v.job;
       const interval = CONFIG.WORK_T[jobKey] || 0.9;
       while (v.workT >= interval) {
         v.workT -= interval;
@@ -2451,7 +3079,12 @@ const Sim = {
         v.carry.amt++;
         this.fx('spark', x + .5, y + .3, .2);
         if (amt - 1 <= 0) {
-          World.deplete(x, y);
+          const bonus = World.deplete(x, y);
+          if (bonus === 'crystal') {
+            G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.CRYSTAL.essence);
+            this.float(x + .5, y + .3, '+' + CONFIG.CRYSTAL.essence + ' essence', '#b48ae0');
+            this.log('Miners cracked an essence crystal — its light flows to you.', 'magic');
+          }
           v.state = 'idle'; v.tgtTile = null;
           break;
         }
@@ -2462,6 +3095,34 @@ const Sim = {
     }
     const b = v.workB;
     if (!b || !G.buildings.includes(b)) { v.workB = null; v.state = 'idle'; return; }
+    if (v.workMode === 'fish' && b.built) {
+      v.workT += dt * ws;
+      if (v.workT >= CONFIG.FISHER.rate) {
+        v.workT = 0;
+        v.carry.type = 'food';
+        v.carry.amt++;
+        this.fx('spark', v.x, v.y - .4, .2);
+        if (v.carry.amt >= Math.min(Entities.carryMax(v), CONFIG.FISHER.carry + 4)) {
+          v.workB = null; v.state = 'idle';
+          this.sendToStore(v);
+        }
+      }
+      return;
+    }
+    if (v.workMode === 'mine' && b.built) {
+      v.workT += dt * ws;
+      if (v.workT >= CONFIG.MINE.rate) {
+        v.workT = 0;
+        v.carry.type = 'stone';
+        v.carry.amt++;
+        this.fx('spark', v.x, v.y - .4, .2);
+        if (v.carry.amt >= Entities.carryMax(v)) {
+          v.workB = null; v.state = 'idle';
+          this.sendToStore(v);
+        }
+      }
+      return;
+    }
     if (v.workMode === 'build' && !b.built) {
       b.progress = Math.min(1, b.progress + dt * ws / b.def.time);
       b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
@@ -2537,6 +3198,7 @@ const Sim = {
 
   /* ---------------- monsters ---------------- */
   updateMonster(m, dt) {
+    if (m.frozenT > 0) { m.frozenT -= dt; return; }   // held by Stasis
     if (m.burning > 0) {
       m.burning -= dt;
       m.hp -= 26 * dt;
@@ -2544,15 +3206,58 @@ const Sim = {
       if (m.hp <= 0) { this.monsterDeath(m, 'dawn'); return; }
       return;
     }
+    if (m.slowT > 0) m.slowT -= dt;
+    if (m.trapCd > 0) m.trapCd -= dt;
     if (m.atkCd > 0) m.atkCd -= dt;
     m.aiT -= dt;
     if (m.aiT <= 0) { m.aiT = 0.45 + Math.random() * 0.2; this.mThink(m); }
+
+    // spike traps wound & slow whatever walks over them (wraiths drift above)
+    if (m.trapCd <= 0 && !m.st.phase) {
+      const tb = World.bldAt(m.x | 0, m.y | 0);
+      if (tb && tb.built && tb.def.kind === 'trap') {
+        m.trapCd = 0.8;
+        this.hitMonster(m, CONFIG.TRAP.dmg);
+        m.slowT = Math.max(m.slowT, CONFIG.TRAP.slow);
+        tb.hp -= CONFIG.TRAP.hpCost;
+        this.fx('spark', m.x, m.y - .3, .25);
+        if (tb.hp <= 0) {
+          this.fx('smoke', tb.x + .5, tb.y + .5, .6);
+          Buildings.demolish(tb, true);
+        }
+      }
+    }
+
+    // bonecasters snipe from stand-off range
+    if (m.type === 'boner') {
+      const rng = m.st.range;
+      if (m.tgtE && m.tgtE.hp > 0 && U.dst(m.x, m.y, m.tgtE.x, m.tgtE.y) < rng) {
+        m.path = null;
+        if (m.atkCd <= 0) {
+          m.atkCd = m.atkT;
+          this.fx('bone', m.x, m.y - .5, .35, { tx: m.tgtE.x, ty: m.tgtE.y });
+          this.hitVillager(m.tgtE, m.dmg);
+        }
+        return;
+      }
+      if (m.tgtB && G.buildings.includes(m.tgtB)) {
+        if (U.dst(m.x, m.y, m.tgtB.x + m.tgtB.w / 2, m.tgtB.y + m.tgtB.h / 2) < rng) {
+          m.path = null;
+          if (m.atkCd <= 0) {
+            m.atkCd = m.atkT;
+            this.fx('bone', m.x, m.y - .5, .35, { tx: m.tgtB.x + m.tgtB.w / 2, ty: m.tgtB.y + m.tgtB.h / 2 });
+            this.hitBuilding(m.tgtB, m.dmg * m.bld);
+          }
+          return;
+        }
+      }
+    }
 
     if (m.path && m.pi < m.path.length) {
       // check if next waypoint is inside a solid building → attack it
       const wp = m.path[m.pi];
       const bt = World.bldAt(wp.x | 0, wp.y | 0);
-      if (bt && bt.built && bt.def.kind !== 'gate') {
+      if (bt && bt.built && bt.def.kind !== 'gate' && bt.def.kind !== 'trap' && !m.st.phase) {
         const d = U.dst(m.x, m.y, wp.x, wp.y);
         if (d < 1.25) {
           if (m.atkCd <= 0) {
@@ -2562,7 +3267,7 @@ const Sim = {
           return;
         }
       }
-      this.moveAlong(m, dt, m.spd);
+      this.moveAlong(m, dt, m.spd * (m.slowT > 0 ? 0.5 : 1) * (G.bloodMoon ? 1.1 : 1));
       m.anim += dt * 8;
     } else {
       // direct attack checks when pathless/adjacent
@@ -2581,18 +3286,19 @@ const Sim = {
     if (m.tgtE && (m.tgtE.hp <= 0 || !G.villagers.includes(m.tgtE))) m.tgtE = null;
     if (m.tgtB && !G.buildings.includes(m.tgtB)) m.tgtB = null;
 
-    // pick target: stalker prefers villagers; others nearest villager then building
+    // pick target: stalkers & wraiths prefer villagers; others nearest villager then building
     if (!m.tgtE && !m.tgtB) {
       let bestV = null, bd = 1e9;
       for (const v of G.villagers) {
         const d = U.dst2(m.x, m.y, v.x, v.y);
         if (d < bd) { bd = d; bestV = v; }
       }
-      const preferV = m.type === 'stalker' || bd < 20 * 20;
+      const preferV = m.type === 'stalker' || m.type === 'wraith' || bd < 20 * 20;
       if (bestV && preferV) m.tgtE = bestV;
       else {
         let bestB = null, bdd = 1e9;
         for (const b of G.buildings) {
+          if (b.key === 'lair') continue; // never sack their own home
           const d = U.dst2(m.x, m.y, b.x + b.w / 2, b.y + b.h / 2);
           const w = b.key === 'camp' ? d * .6 : d; // drawn to the heart of the village
           if (w < bdd) { bdd = w; bestB = b; }
@@ -2611,7 +3317,7 @@ const Sim = {
       }
     }
 
-    // (re)path
+    // (re)path — wraiths drift straight through walls
     const goalE = m.tgtE;
     const goalB = m.tgtB;
     const gx = goalE ? goalE.x : goalB ? goalB.x + goalB.w / 2 : World.center.x;
@@ -2619,20 +3325,18 @@ const Sim = {
     const needPath = !m.path || m.pi >= m.path.length || (m.pathT = (m.pathT || 0) + .5) > 2.5;
     if (needPath) {
       m.pathT = 0;
-      const p = Path.find(m.x | 0, m.y | 0, gx | 0, gy | 0, { adjacent: true, monster: true });
+      const p = Path.find(m.x | 0, m.y | 0, gx | 0, gy | 0, { adjacent: true, monster: true, phase: !!m.st.phase });
       if (p) { m.path = p; m.pi = 0; }
       else {
-        // fully sealed & unpathable — batter nearest wall
+        // fully sealed & unpathable — batter nearest structure
         let best = null, bd = 1e9;
         for (const b of G.buildings) {
-          if (!b.built || b.def.kind === 'torch' || b.def.kind === 'shrine') {
-            // torches/shrines get smashed too, but walls first
-          }
+          if (b.key === 'lair') continue;
           const d = U.dst2(m.x, m.y, b.x + b.w / 2, b.y + b.h / 2);
           if (d < bd) { bd = d; best = b; }
         }
         m.tgtB = best; m.tgtE = null;
-        const p2 = best ? Path.find(m.x | 0, m.y | 0, (best.x + best.w / 2) | 0, (best.y + best.h / 2) | 0, { adjacent: true, monster: true }) : null;
+        const p2 = best ? Path.find(m.x | 0, m.y | 0, (best.x + best.w / 2) | 0, (best.y + best.h / 2) | 0, { adjacent: true, monster: true, phase: !!m.st.phase }) : null;
         if (p2) { m.path = p2; m.pi = 0; }
       }
     }
@@ -2656,7 +3360,8 @@ const Sim = {
   monsterDeath(m, how) {
     if (m.dead) return;
     m.dead = true;
-    const ess = how === 'dawn' ? Math.ceil(m.ess / 2) : m.ess;
+    const base = how === 'dawn' ? m.ess / 2 : m.ess;
+    const ess = Math.ceil(base * (G.bloodMoon ? 2 : 1));
     G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + ess);
     G.stats.kills++;
     this.float(m.x, m.y - .5, '+' + ess + ' essence', '#b48ae0');
@@ -2678,6 +3383,13 @@ const Sim = {
     this.fx('corpse', v.x, v.y, 2.2, { look: v.look });
     this.log(`${v.name}${v.trait ? ' the ' + v.trait.name : ''} (${v.job}) was lost to ${cause}.`, 'bad');
     UI.toast(`${v.name} has died — ${cause}.`, 'bad');
+    // leave a small grave so the dead are remembered
+    const gx = v.x | 0, gy = v.y | 0;
+    const o = World.objAt(gx, gy);
+    if ((o === OBJ.NONE || o === OBJ.FLOWER || o === OBJ.TGRASS || o === OBJ.MUSH) && !World.bldAt(gx, gy)
+      && World.tileT(gx, gy) !== T.WATER && World.inB(gx, gy)) {
+      World.setObj(gx, gy, OBJ.GRAVE, 0);
+    }
     if (G.follow === v) G.follow = null;
     if (G.sel && G.sel.ref === v) { G.sel = null; UI.selHide(); }
     this.reassign();
@@ -2688,6 +3400,7 @@ const Sim = {
     b.hp -= dmg;
     this.fx('spark', b.x + b.w / 2 + (Math.random() - .5), b.y + b.h / 2 - Math.random(), .2);
     if (b.hp <= 0) {
+      if (b.key === 'lair') { this.lairDestroyed(b); return; }
       const wasStore = b.def.kind === 'store';
       const wasBeacon = b.key === 'beacon';
       this.fx('smoke', b.x + b.w / 2, b.y + b.h / 2, 1.0);
@@ -2701,6 +3414,31 @@ const Sim = {
         this.log(`${b.def.name} was destroyed.`, 'bad');
       }
     }
+  },
+
+  lairDestroyed(b) {
+    const idx = G.buildings.indexOf(b);
+    if (idx >= 0) G.buildings.splice(idx, 1);
+    Buildings.byIdMap.delete(b.id);
+    World.occ[World.idx(b.x, b.y)] = 0;
+    if (G.raidTarget === b) G.raidTarget = null;
+    if (G.sel && G.sel.ref === b) { G.sel = null; UI.selHide(); }
+    G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.LAIR.ess);
+    this.fx('smoke', b.x + .5, b.y + .5, 1.2);
+    for (let k = 0; k < 6; k++) this.fx('spark', b.x + (Math.random() - .5), b.y - Math.random() * .8, .5);
+    G.shake = Math.max(G.shake, 5);
+    UI.toast(`A Dark Monolith shatters! +${CONFIG.LAIR.ess} essence`, 'good');
+    this.log('The guards tore down a Dark Monolith. Its night-spawn is ended.', 'good');
+    if (!Buildings.lairs().length) {
+      UI.toast('The last monolith has fallen — the nights grow thin!', 'good');
+      this.log('No lairs remain. The dark must now crawl in from the wilds.', 'good');
+    }
+  },
+
+  guardDmg() {
+    let d = CONFIG.GUARD.dmg;
+    if (G.buildings.some(b => b.built && b.key === 'barracks')) d *= CONFIG.BARRACKS.dmgMult;
+    return d;
   },
 
   shootTower(b, m) {
@@ -2846,7 +3584,11 @@ const Sim = {
 
 // ---- debug/test hooks (also handy for tinkering) ----
 window.DBG = {
-  res(k, n) { G.res[k] += n; UI.updateHUD(); },
+  lairs() {
+    const s = Buildings.lairs().map(l => `${l.x},${l.y}`).join(' | ') || 'none';
+    UI.toast('LAIRS: ' + s, 'magic');
+    return s;
+  },  res(k, n) { G.res[k] += n; UI.updateHUD(); },
   dusk() { if (G.phase === 'day') { G.time = CONFIG.DAY_LEN - 0.01; } },
   night() { DBG.dusk(); },
   day(n) { G.day = n; },
@@ -2859,9 +3601,10 @@ window.DBG = {
   build(key, tx, ty) { return Buildings.place(key, tx, ty); },
   save() { SaveSys.save('auto'); },
 };
-;
 
-/* ===== Bundled from js/powers.js ===== */
+</script>
+<!-- ==== js/powers.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — powers.js
@@ -2877,6 +3620,10 @@ const POWERS = {
     name: 'Smite', cost: CONFIG.POWERS.smite.cost, icon: 'spark', target: 'area', r: CONFIG.POWERS.smite.r,
     desc: `Holy light burns ${CONFIG.POWERS.smite.dmg} damage in a small circle — wipes out shades. Costs ${CONFIG.POWERS.smite.cost} essence.`,
   },
+  stasis: {
+    name: 'Stasis', cost: CONFIG.POWERS.stasis.cost, icon: 'stasis', target: 'area', r: CONFIG.POWERS.stasis.r, unlockDay: CONFIG.POWERS.stasis.unlockDay,
+    desc: `Freeze every monster in a circle for ${CONFIG.POWERS.stasis.dur}s — buy your towers time. Costs ${CONFIG.POWERS.stasis.cost} essence.`,
+  },
   meteor: {
     name: 'Meteor', cost: CONFIG.POWERS.meteor.cost, icon: 'meteor', target: 'area', r: CONFIG.POWERS.meteor.r, unlockDay: CONFIG.POWERS.meteor.unlockDay,
     desc: `Call a falling star: ${CONFIG.POWERS.meteor.dmg} damage in a wide circle. Costs ${CONFIG.POWERS.meteor.cost} essence.`,
@@ -2887,7 +3634,7 @@ const Powers = {
   unlocked(key) {
     const p = POWERS[key];
     if (!p) return false;
-    if (key === 'meteor') return G.day >= p.unlockDay || G.unlocks.__meteor || G.unlocks['__meteor'];
+    if (p.unlockDay) return G.day >= p.unlockDay || !!G.unlocks['__pw_' + key];
     return true;
   },
   canAfford(key) { return G.res.essence >= POWERS[key].cost; },
@@ -2930,6 +3677,14 @@ const Powers = {
         if (U.dst(wx, wy, m.x, m.y) <= C.r) Sim.hitMonster(m, C.dmg);
       }
       G.shake = Math.max(G.shake, 2.5);
+    } else if (key === 'stasis') {
+      Sim.fx('ring', wx, wy, .6, { col: '#9ad4f0', r: C.r });
+      Sim.float(wx, wy - .8, 'STASIS', '#9ad4f0');
+      let n = 0;
+      for (const m of G.monsters) {
+        if (U.dst(wx, wy, m.x, m.y) <= C.r) { m.frozenT = C.dur; n++; }
+      }
+      if (!n) { UI.toast('Nothing to freeze there.', ''); return false; }
     } else if (key === 'meteor') {
       Sim.fx('meteor', wx, wy, 1.0, { r: C.r, dmg: C.dmg });
       return true; // essence deducted, boom comes on impact
@@ -2949,9 +3704,10 @@ const Powers = {
     UI.updateHUD();
   },
 };
-;
 
-/* ===== Bundled from js/save.js ===== */
+</script>
+<!-- ==== js/save.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — save.js
@@ -3035,8 +3791,9 @@ const SaveSys = {
     G.seed = d.seed; G.day = d.day; G.time = d.time; G.phase = d.phase;
     G.diff = d.diff in CONFIG.DIFF ? d.diff : 'normal';
     G.diffM = CONFIG.DIFF[G.diff];
-    G.res = { ...d.res };
-    G.jobs = { ...d.jobs };
+    G.res = { wood: d.res.wood || 0, stone: d.res.stone || 0, food: d.res.food || 0, essence: d.res.essence || 0, herbs: d.res.herbs || 0 };
+    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, herbalist: 0, builder: 0, guard: 0 };
+    for (const k of JOBS) if (k !== 'idle') G.jobs[k] = d.jobs[k] || 0;
     G.unlocks = d.unlocks || {};
     G.stats = { ...d.stats };
     G.chronicle = d.chronicle || [];
@@ -3089,9 +3846,10 @@ const SaveSys = {
     return true;
   },
 };
-;
 
-/* ===== Bundled from js/render.js ===== */
+</script>
+<!-- ==== js/render.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — render.js
@@ -3176,24 +3934,35 @@ const Render = {
     const draws = [];
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
-        const o = World.obj[World.idx(tx, ty)];
-        if (!o || o === OBJ.FLOWER) continue;
+        const oi = World.idx(tx, ty);
+        const o = World.obj[oi];
+        if (!o || o === OBJ.FLOWER || o === OBJ.MUSH || o === OBJ.TGRASS) continue;
         let spr = null;
         const h = U.hash2(tx, ty);
         switch (o) {
           case OBJ.TREE: spr = Art.s['tree' + ((h * 2) | 0)]; break;
           case OBJ.PINE: spr = Art.s['pine' + ((h * 2) | 0)]; break;
-          case OBJ.BUSH: spr = World.amt[World.idx(tx, ty)] > 0 ? Art.s.bushF : Art.s.bushE; break;
-          case OBJ.ROCK: spr = Art.s['rock' + ((h * 2) | 0)]; break;
+          case OBJ.BIRCH: spr = Art.s['birch' + ((h * 2) | 0)]; break;
+          case OBJ.DEADTREE: spr = Art.s.deadtree; break;
+          case OBJ.BUSH: spr = World.amt[oi] > 0 ? Art.s.bushF : Art.s.bushE; break;
+          case OBJ.HERB: spr = World.amt[oi] > 0 ? Art.s.herbF : Art.s.herbE; break;
+          case OBJ.ROCK: spr = h < .22 ? Art.s.rockS : Art.s['rock' + ((h * 2) | 0)]; break;
+          case OBJ.RUIN: spr = Art.s.ruin; break;
+          case OBJ.CRYSTAL: spr = Art.s.crystal; break;
           case OBJ.STUMP: spr = Art.s.stump; break;
           case OBJ.SAPLING: spr = Art.s.sapling; break;
+          case OBJ.GRAVE: spr = Art.s.grave; break;
         }
-        if (spr) draws.push({ y: ty * 16 + 16, fn: () => ctx.drawImage(spr, tx * 16, ty * 16) });
+        if (spr) {
+          const py = (ty + 1) * 16 - spr.height;
+          draws.push({ y: ty * 16 + 16, fn: () => ctx.drawImage(spr, tx * 16, py) });
+        }
       }
-      // flowers drawn flat (no sort needed)
+      // flat decor drawn directly (no y-sort needed)
       for (let tx = x0; tx <= x1; tx++) {
-        if (World.obj[World.idx(tx, ty)] === OBJ.FLOWER) {
-          const spr = Art.s['flw' + ((U.hash2(tx, ty) * 2) | 0)];
+        const o = World.obj[World.idx(tx, ty)];
+        if (o === OBJ.FLOWER || o === OBJ.MUSH || o === OBJ.TGRASS) {
+          const spr = o === OBJ.MUSH ? Art.s.mush : o === OBJ.TGRASS ? Art.s['tgrass' + ((U.hash2(tx, ty) * 2) | 0)] : Art.s['flw' + ((U.hash2(tx, ty) * 2) | 0)];
           ctx.drawImage(spr, tx * 16, ty * 16);
         }
       }
@@ -3248,10 +4017,14 @@ const Render = {
   drawBuilding(ctx, b) {
     const px = b.x * 16, py = (b.y + b.h) * 16; // anchor bottom of footprint
     let spr;
+    const animF = ((this._t * 5) | 0) % 2;
     if (b.key === 'farm') {
       const st = b.growth >= 1 ? 3 : b.growth > .55 ? 2 : b.growth > .18 ? 1 : 0;
       spr = Art.s['farm' + st];
-    } else if (b.key === 'torch') spr = Art.s['torch' + (((this._t * 6) | 0) % 2)];
+    } else if (b.key === 'torch') spr = Art.s['torch' + animF];
+    else if (b.key === 'lair') spr = Art.s['lair' + animF];
+    else if (b.key === 'windmill') spr = Art.s['windmill' + animF];
+    else if (b.key === 'herbalistHut') spr = Art.s.herbalist;
     else spr = Art.s[b.key];
 
     if (!b.built) {
@@ -3302,7 +4075,7 @@ const Render = {
     ctx.drawImage(spr, px | 0, py | 0);
     // carry icon
     if (v.carry.amt > 0) {
-      const ic = v.carry.type === 'wood' ? Art.s.carryWood : v.carry.type === 'stone' ? Art.s.carryStone : Art.s.carryFood;
+      const ic = v.carry.type === 'wood' ? Art.s.carryWood : v.carry.type === 'stone' ? Art.s.carryStone : v.carry.type === 'herbs' ? Art.s.carryHerb : Art.s.carryFood;
       ctx.drawImage(ic, (v.x * 16 - 3) | 0, (v.y * 16 - 24) | 0);
     }
     // hp
@@ -3328,16 +4101,24 @@ const Render = {
   },
 
   drawMonster(ctx, m) {
-    const big = m.type === 'lord';
+    const big = m.type === 'lord' || m.type === 'colossus';
     const spr = Art.monster(m.type, ((m.anim | 0) % 2));
     if (!spr) return;
-    const bob = (m.type === 'shade' || m.type === 'lord') ? Math.sin(this._t * 3 + m.id) * 1.6 : 0;
+    const bob = (m.type === 'shade' || m.type === 'lord' || m.type === 'wraith') ? Math.sin(this._t * 3 + m.id) * (m.type === 'wraith' ? 2.4 : 1.6) : 0;
     const px = m.x * 16 - spr.width / 2, py = m.y * 16 - spr.height + 2 + bob;
     ctx.fillStyle = 'rgba(0,0,0,.3)';
     ctx.beginPath();
     ctx.ellipse(m.x * 16, m.y * 16 + 1, big ? 9 : 5, big ? 4 : 2.2, 0, 0, Math.PI * 2);
     ctx.fill();
+    if (m.type === 'wraith') ctx.globalAlpha = 0.8;
     ctx.drawImage(spr, px | 0, py | 0);
+    ctx.globalAlpha = 1;
+    if (m.frozenT > 0) {
+      ctx.globalAlpha = .45;
+      ctx.fillStyle = '#9ad4f0';
+      ctx.fillRect(px | 0, py | 0, spr.width, spr.height);
+      ctx.globalAlpha = 1;
+    }
     if (m.flash > 0) {
       m.flash -= 0.016;
       ctx.globalAlpha = Math.min(.7, m.flash * 6);
@@ -3389,6 +4170,11 @@ const Render = {
         case 'arrow': {
           const ax = U.lerp(e.x, e.tx, p), ay = U.lerp(e.y, e.ty, p) - Math.sin(p * Math.PI) * .5;
           ctx.drawImage(Art.s.arrow, (ax * 16 - 4) | 0, (ay * 16) | 0);
+          break;
+        }
+        case 'bone': {
+          const ax = U.lerp(e.x, e.tx, p), ay = U.lerp(e.y, e.ty, p) - Math.sin(p * Math.PI) * .9;
+          ctx.drawImage(Art.s.bone, (ax * 16 - 3) | 0, (ay * 16 - 1) | 0);
           break;
         }
         case 'ring': {
@@ -3448,7 +4234,8 @@ const Render = {
         }
       if (ok && !def.terrain) {
         ctx.globalAlpha = .6;
-        const spr = Art.s[mode.key === 'farm' ? 'farm0' : mode.key];
+        const GHOST_SPR = { farm: 'farm0', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
+        const spr = Art.s[GHOST_SPR[mode.key] || mode.key];
         if (spr) {
           const hgt = Math.max(spr.height, def.h * 16);
           ctx.drawImage(spr, gx * 16, (gy + def.h) * 16 - hgt);
@@ -3538,6 +4325,10 @@ const Render = {
       ctx.globalCompositeOperation = 'source-over';
       this.firefliesDraw();
     }
+    if (dark > 0.02 && G.bloodMoon) {
+      ctx.fillStyle = `rgba(160,30,40,${0.16 * dark})`;
+      ctx.fillRect(0, 0, this.cw, this.ch);
+    }
     if (warm > 0.02) {
       ctx.fillStyle = `rgba(255,140,50,${warm * 0.14})`;
       ctx.fillRect(0, 0, this.cw, this.ch);
@@ -3601,26 +4392,35 @@ const Render = {
     const d = img.data;
     const MM = Art.MM;
     const col = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
-    const cGrass = col(MM.grass), cWater = col(MM.water), cTree = col(MM.tree), cRoad = col(MM.road), cRock = col(MM.rock), cDirt = col(MM.dirt);
+    const cGrass = col(MM.grass), cWater = col(MM.water), cTree = col(MM.tree), cRoad = col(MM.road), cRock = col(MM.rock), cDirt = col(MM.dirt), cSand = col(MM.sand);
     for (let i = 0; i < W * H; i++) {
       let c = cGrass;
       const t = World.t[i], o = World.obj[i];
       if (t === T.WATER) c = cWater;
       else if (t === T.ROAD) c = cRoad;
+      else if (t === T.SAND) c = cSand;
       else if (t === T.DIRT) c = cDirt;
-      else if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.SAPLING) c = cTree;
-      else if (o === OBJ.ROCK) c = cRock;
+      else if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.SAPLING) c = cTree;
+      else if (o === OBJ.ROCK || o === OBJ.RUIN) c = cRock;
+      else if (o === OBJ.CRYSTAL) c = [140, 92, 208];
       d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 255;
     }
-    // buildings
+    // buildings (lairs glow purple)
     for (const b of G.buildings) {
-      const cc = col(MM.bld);
+      const cc = b.key === 'lair' ? [180, 110, 240] : col(MM.bld);
       for (let dy = 0; dy < b.h; dy++) for (let dx = 0; dx < b.w; dx++) {
         const i = (b.y + dy) * W + (b.x + dx);
         if (i >= 0 && i < W * H) { d[i * 4] = cc[0]; d[i * 4 + 1] = cc[1]; d[i * 4 + 2] = cc[2]; }
       }
     }
     x.putImageData(img, 0, 0);
+    // lairs get a hot-pink 3px cross so they never blend into crystal purple
+    x.fillStyle = '#ff6ae0';
+    for (const b of G.buildings) {
+      if (b.key !== 'lair') continue;
+      x.fillRect(b.x - 1, b.y, 3, 1);
+      x.fillRect(b.x, b.y - 1, 1, 3);
+    }
     // entities as dots (crisper on top)
     x.fillStyle = '#fff';
     for (const v of G.villagers) x.fillRect(v.x | 0, v.y | 0, 1, 1);
@@ -3634,9 +4434,10 @@ const Render = {
     x.strokeRect(G.cam.x / 16 - vw / 2, G.cam.y / 16 - vh / 2, vw, vh);
   },
 };
-;
 
-/* ===== Bundled from js/ui.js ===== */
+</script>
+<!-- ==== js/ui.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — ui.js
@@ -3663,8 +4464,8 @@ const UI = {
     { text: 'Shelter first.<br>Open <b>Build</b> and place two <b>Tents</b> — your six settlers outnumber the beds they have.', done: () => Buildings.housingCap() >= 8 },
     { text: 'Set the work.<br>Open <b>Jobs</b>: 2 Foragers, 2 Lumberjacks, 1 Miner, 1 Builder is a strong start. Add a <b>Guard</b> before dark.', done: () => G.jobs.guard >= 1 },
     { text: 'Before nightfall...<br>Draw a <b>Palisade</b> ring around camp (drag to paint) and plant <b>Torches</b>. Towers unlock on day 3.', done: () => Buildings.count('wallW') + Buildings.count('wallS') >= 6 || G.day > 1 },
-    { text: 'The night is theirs — until it isn\u2019t.<br><b>Powers</b> burn Essence: <b>Smite</b> erases shades. Essence flows back from every kill. Watch your people; the dark goes for stragglers.', done: () => !isNightLike() && G.day > 1 },
-    { text: 'Grow, fortify, advance.<br>Wheat plots feed a village; stone walls laugh at brutes; new craft unlocks each dawn. The Beacon awaits on day 10.', done: () => G.day >= 2 },
+    { text: 'The night is theirs — until it isn\u2019t.<br><b>Powers</b> burn Essence: <b>Smite</b> erases shades. The horde crawls from the <b>Dark Monoliths</b> — the purple dots on your map. Essence flows back from every kill.', done: () => !isNightLike() && G.day > 1 },
+    { text: 'Grow, fortify, hunt.<br>Wheat plots and Fishing Docks feed a village; tap a <b>Dark Monolith</b> and press <b>Raid</b> to send guards to destroy it — fewer lairs, smaller nights. The Beacon awaits on day 10.', done: () => G.day >= 2 },
   ],
 
   /* ================= init ================= */
@@ -3724,6 +4525,7 @@ const UI = {
       else if (e.key === '2') Sim.speedSet(2);
       else if (e.key === '3') Sim.speedSet(3);
       else if (e.key === 'Escape') { if (this.open) this.closePanel(); else this.cancelMode(); }
+      else if (e.key === 'l' || e.key === 'L') { if (window.DBG && DBG.lairs) DBG.lairs(); }
     });
     // continue button availability
     if (SaveSys.has('auto') || SaveSys.has(1) || SaveSys.has(2) || SaveSys.has(3)) $('btnContinue').classList.remove('hidden');
@@ -3748,6 +4550,7 @@ const UI = {
     const e = mk('essence', 'essence', 'Essence — fuels your Powers');
     const bar = document.createElement('div'); bar.id = 'essBar'; bar.innerHTML = '<div id="essFill"></div>';
     e.appendChild(bar); e.id = 'essChip';
+    mk('herbs', 'herb', 'Herbs — consumed by the Herbalist Hut to heal the wounded');
     mk('pop', 'pop', 'Villagers / housing capacity');
   },
 
@@ -3758,6 +4561,7 @@ const UI = {
     set('stone', Math.floor(G.res.stone));
     set('food', Math.floor(G.res.food));
     set('essence', Math.floor(G.res.essence));
+    set('herbs', Math.floor(G.res.herbs || 0));
     const cap = Buildings.housingCap();
     set('pop', G.villagers.length + '/' + cap);
     document.getElementById('chip_food').classList.toggle('low', G.res.food < 15 && G.villagers.length > 0);
@@ -3896,6 +4700,24 @@ const UI = {
     } else if (s.kind === 'b') {
       const b = s.ref;
       if (!G.buildings.includes(b)) return this.selHide();
+      if (b.key === 'lair') {
+        const raiding = G.raidTarget === b;
+        el.innerHTML = `
+          <h3 style="color:#b48ae0">${U.esc(b.def.name)}</h3>
+          <div class="sub">${U.esc(b.def.desc)}</div>
+          <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(b.hp / b.maxHp * 100, 0, 100)}%;background:#b48ae0"></div></div></div>
+          <div class="selActs">
+            <button id="selRaid" ${raiding ? 'style="border-color:var(--amber);color:var(--amber2)"' : ''}>${raiding ? 'Cancel Raid' : '\u2694 Raid!'}</button>
+            <button id="selClose">Close</button>
+          </div>`;
+        document.getElementById('selRaid').onclick = () => {
+          G.raidTarget = raiding ? null : b;
+          this.toast(raiding ? 'The guards stand down.' : 'Guards: RAID THE MONOLITH!', raiding ? '' : 'good');
+          this.selRender();
+        };
+        document.getElementById('selClose').onclick = () => this.selHide();
+        return;
+      }
       let extra = '';
       if (!b.built) extra = `<div class="row"><span class="mLbl">Build</span><div class="meter mProg"><div style="width:${(b.progress * 100).toFixed(0)}%"></div></div></div>`;
       else if (b.key === 'farm') extra = `<div class="row"><span class="mLbl">Wheat</span><div class="meter mGrow"><div style="width:${(b.growth * 100).toFixed(0)}%"></div></div></div>`;
@@ -4036,7 +4858,8 @@ const UI = {
     const x = cv.getContext('2d');
     x.imageSmoothingEnabled = false;
     if (locked) x.globalAlpha = 0.4;
-    let spr = Art.s[key === 'road' ? 'road0' : key === 'farm' ? 'farm3' : key];
+    const MAP = { farm: 'farm3', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
+    let spr = Art.s[MAP[key] || key];
     if (key === '__demolish' || !spr) spr = Art.s.wallW;
     const s = Math.min(38 / spr.width, 38 / spr.height);
     const w = spr.width * s, h = spr.height * s;
@@ -4381,7 +5204,7 @@ const UI = {
       this._lastTile = null;
       if (!p) return;
       const dt = performance.now() - p.t;
-      if (!p.moved && dt < 400 && G.state === 'playing') this.tap(e.clientX, e.clientY);
+      if (!p.moved && dt < 800 && G.state === 'playing') this.tap(e.clientX, e.clientY);
     };
     cv.addEventListener('pointerup', up);
     cv.addEventListener('pointercancel', up);
@@ -4437,7 +5260,13 @@ const UI = {
       }
     }
     if (!best) {
-      const b = World.bldAt(wx | 0, wy | 0);
+      let b = World.bldAt(wx | 0, wy | 0);
+      if (!b) {
+        // tall sprites (towers, lairs, windmills) overhang the tile above their
+        // footprint — a tap on the visible body should still select them
+        const up = World.bldAt(wx | 0, (wy | 0) - 1);
+        if (up && up.def.tall) b = up;
+      }
       if (b) best = { kind: 'b', ref: b };
     }
     if (best) { this.select(best.kind, best.ref); G.follow = null; }
@@ -4529,41 +5358,48 @@ const UI = {
       <h2>Your Goal</h2>
       <p>You are the guardian spirit of a tiny settlement. Keep your villagers alive, grow the village, and raise <b>The Beacon</b> (unlocks day 10). Light it and survive the <b>Long Night</b> that follows — dawn returns forever. Lose only when every villager dies.</p>
       <h2>The Rhythm</h2>
-      <p><b>Day (~3.5 min):</b> villagers with jobs gather food, wood and stone, build and repair.<br>
-      <b>Night (~1.5 min):</b> monsters attack. Villagers shelter indoors; guards and towers fight; you cast powers. Survivors of the dark burn away at dawn.</p>
+      <p><b>Day (~3.5 min):</b> villagers with jobs gather food, wood, stone and herbs; they build, farm, fish and repair.<br>
+      <b>Night (~1.5 min):</b> monsters attack from their <b>Dark Monoliths</b>. Guards and towers fight; you cast powers. Survivors burn at dawn.<br>
+      Every 5th night is a <b>BLOOD MOON</b> — a much bigger horde, but double essence from kills.</p>
+      <h2>Dark Monoliths & Raids</h2>
+      <p>Three lairs sit out in the wilds — the horde crawls out of them every night. Tap one and press <b>Raid</b>: your Guards will march out and tear it down (+25 essence, and that lair never spawns again). Destroy all three and the nights grow thin... but the dark still comes from the wilds.</p>
       <h2>Controls</h2>
       <ul>
-        <li><b>Tap</b> a villager, monster or building to inspect it.</li>
-        <li><b>Drag</b> to pan. <b>Pinch</b> or use <b>+/&minus;</b> buttons to zoom. Tap the <b>minimap</b> (top right) to jump.</li>
-        <li><b>Build:</b> pick a building, then tap the map. Walls, gates and roads <b>paint as you drag</b>.</li>
+        <li><b>Tap</b> a villager, monster, building or monolith to inspect it.</li>
+        <li><b>Drag</b> to pan. <b>Pinch</b> or use <b>+/&minus;</b> buttons to zoom. Tap the <b>minimap</b> (top right) to jump — purple dots are lairs.</li>
+        <li><b>Build:</b> pick a building, then tap the map. Walls, gates, roads and traps <b>paint as you drag</b>.</li>
         <li>Speed: pause / 1\u00d7 / 2\u00d7 / 3\u00d7 (space bar pauses on desktop).</li>
       </ul>
       <h2>Jobs</h2>
       <ul>
         <li><b>Forager</b> — berries. Fast early food; bushes regrow daily.</li>
         <li><b>Lumberjack</b> — wood for tents, palisades, towers.</li>
-        <li><b>Miner</b> — stone. Lodes are finite and richer far from camp.</li>
-        <li><b>Farmer</b> — tends wheat plots: the engine that feeds a big village.</li>
+        <li><b>Miner</b> — stone from boulders; salvages ancient ruins; cracks crystal lodes for essence; works Mine Shafts when lodes run dry.</li>
+        <li><b>Farmer</b> — tends wheat plots. A Windmill nearby grows them 35% faster.</li>
+        <li><b>Fisher</b> — works a Fishing Dock on the shore. Steady food, no farmland.</li>
+        <li><b>Herbalist</b> — gathers herbs; an Herbalist Hut turns them into healing for the wounded.</li>
         <li><b>Builder</b> — raises construction and repairs damage (costs materials).</li>
-        <li><b>Guard</b> — patrols and fights. Keep 1 early, more as nights grow.</li>
+        <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage.</li>
       </ul>
       <h2>Surviving the Night</h2>
       <ul>
         <li>Walls route the horde; they break gates and weak walls, so ring your camp and mind the gaps.</li>
-        <li><b>Watchtowers</b> (day 3) shoot automatically; <b>Ballistae</b> (day 7) pierce brutes.</li>
-        <li><b>Runners</b> are fast and fragile, <b>Brutes</b> (day 6) smash walls, <b>Stalkers</b> (day 9) hunt villagers.</li>
-        <li><b>Powers</b>: Mend heals, Smite erases shades, Meteor (day 6) wipes waves. Essence refills over time and from kills.</li>
-        <li>Food alarms mean idle villagers emergency-forage — but farms before day 4 is the reliable path.</li>
+        <li><b>Watchtowers</b> (day 3) shoot automatically; <b>Ballistae</b> (day 7) out-range everything.</li>
+        <li><b>Runners</b> are fast and fragile; <b>Brutes</b> (day 6) smash walls; <b>Bonecasters</b> (day 7) lob bones from range; <b>Stalkers</b> (day 9) hunt villagers; <b>Wraiths</b> drift <i>through</i> walls — keep guards inside; <b>Colossi</b> (day 15, endless) are walking sieges.</li>
+        <li><b>Spike Traps</b> wound and slow whatever steps on them; lay rows before your gates.</li>
+        <li><b>Powers</b>: Mend heals, Smite erases shades, Stasis (day 5) freezes a circle for 5s, Meteor (day 6) wipes waves. Essence flows from time, kills and Shrines.</li>
+        <li>The dead are buried where they fall — little graves remember them.</li>
       </ul>
       <h2>People</h2>
-      <p>Villagers are named individuals with traits (Hardy, Swift, Diligent, Strong Back). New folks arrive at dawn if there's <b>housing and food</b>. Starvation kills — keep the store above ~10.</p>
+      <p>Villagers are named individuals with traits (Hardy, Swift, Diligent, Strong Back). New folks arrive at dawn if there's <b>housing and food</b>. Starvation kills — keep the store above ~15.</p>
       <h2>Saving</h2>
       <p>Autosaves at every dawn, plus three manual slots (Menu \u2192 Save). Saves live in this browser.</p>`;
   },
 };
-;
 
-/* ===== Bundled from js/main.js ===== */
+</script>
+<!-- ==== js/main.js ==== -->
+<script>
 'use strict';
 /* ============================================================
    Dawnhold — main.js
@@ -4613,7 +5449,7 @@ const UI = {
   window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 })();
-;
+
 </script>
 </body>
 </html>

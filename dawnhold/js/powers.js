@@ -13,6 +13,10 @@ const POWERS = {
     name: 'Smite', cost: CONFIG.POWERS.smite.cost, icon: 'spark', target: 'area', r: CONFIG.POWERS.smite.r,
     desc: `Holy light burns ${CONFIG.POWERS.smite.dmg} damage in a small circle — wipes out shades. Costs ${CONFIG.POWERS.smite.cost} essence.`,
   },
+  stasis: {
+    name: 'Stasis', cost: CONFIG.POWERS.stasis.cost, icon: 'stasis', target: 'area', r: CONFIG.POWERS.stasis.r, unlockDay: CONFIG.POWERS.stasis.unlockDay,
+    desc: `Freeze every monster in a circle for ${CONFIG.POWERS.stasis.dur}s — buy your towers time. Costs ${CONFIG.POWERS.stasis.cost} essence.`,
+  },
   meteor: {
     name: 'Meteor', cost: CONFIG.POWERS.meteor.cost, icon: 'meteor', target: 'area', r: CONFIG.POWERS.meteor.r, unlockDay: CONFIG.POWERS.meteor.unlockDay,
     desc: `Call a falling star: ${CONFIG.POWERS.meteor.dmg} damage in a wide circle. Costs ${CONFIG.POWERS.meteor.cost} essence.`,
@@ -23,7 +27,7 @@ const Powers = {
   unlocked(key) {
     const p = POWERS[key];
     if (!p) return false;
-    if (key === 'meteor') return G.day >= p.unlockDay || G.unlocks.__meteor || G.unlocks['__meteor'];
+    if (p.unlockDay) return G.day >= p.unlockDay || !!G.unlocks['__pw_' + key];
     return true;
   },
   canAfford(key) { return G.res.essence >= POWERS[key].cost; },
@@ -66,6 +70,14 @@ const Powers = {
         if (U.dst(wx, wy, m.x, m.y) <= C.r) Sim.hitMonster(m, C.dmg);
       }
       G.shake = Math.max(G.shake, 2.5);
+    } else if (key === 'stasis') {
+      Sim.fx('ring', wx, wy, .6, { col: '#9ad4f0', r: C.r });
+      Sim.float(wx, wy - .8, 'STASIS', '#9ad4f0');
+      let n = 0;
+      for (const m of G.monsters) {
+        if (U.dst(wx, wy, m.x, m.y) <= C.r) { m.frozenT = C.dur; n++; }
+      }
+      if (!n) { UI.toast('Nothing to freeze there.', ''); return false; }
     } else if (key === 'meteor') {
       Sim.fx('meteor', wx, wy, 1.0, { r: C.r, dmg: C.dmg });
       return true; // essence deducted, boom comes on impact
