@@ -626,6 +626,11 @@ const Sim = {
 
   vArriveWork(v) {
     if (v.workKind && v.tgtTile) {
+      // must truly stand beside the resource — a cut or partial path means no work
+      if (Math.max(Math.abs(v.x - (v.tgtTile.x + .5)), Math.abs(v.y - (v.tgtTile.y + .5))) > 2.6) {
+        v.state = 'idle'; v.tgtTile = null;
+        return;
+      }
       const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
       const want = v.workKind === 'food' ? [OBJ.BUSH]
         : v.workKind === 'wood' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
@@ -639,6 +644,11 @@ const Sim = {
       const b = v.workB;
       const alive = G.buildings.includes(b);
       if (!alive) { v.workB = null; v.state = 'idle'; return; }
+      // same rule for buildings: adjacent to the footprint, not across the map
+      if (!(v.x > b.x - 2.6 && v.x < b.x + b.w + 2.6 && v.y > b.y - 2.6 && v.y < b.y + b.h + 2.6)) {
+        v.workB = null; v.state = 'idle';
+        return;
+      }
       if (v.workMode === 'build' && !b.built) { v.state = 'work'; return; }
       if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
       if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
@@ -1047,15 +1057,22 @@ const Sim = {
   /* ---------------- helpers ---------------- */
   moveAlong(e, dt, spd) {
     if (!e.path || e.pi >= e.path.length) return;
+    // fresh path object → reset stuck bookkeeping (paths get reassigned all over the brain)
+    if (e._lastPath !== e.path) { e._lastPath = e.path; e.stuckT = 0; e.lastD = 1e9; }
     let step = spd * dt;
     while (step > 0 && e.pi < e.path.length) {
       const wp = e.path[e.pi];
+      // villagers never enter a solid tile — walls may have risen since this path was made
+      if (e.kind === 'v' && !Path.pass(wp.x | 0, wp.y | 0, false)) { e.path = null; e.pi = 0; return; }
       const d = U.dst(e.x, e.y, wp.x, wp.y);
       if (d <= step || d < 0.03) {
         e.x = wp.x; e.y = wp.y; e.pi++; step -= d;
       } else {
-        e.x += (wp.x - e.x) / d * step;
-        e.y += (wp.y - e.y) / d * step;
+        const nx = e.x + (wp.x - e.x) / d * step, ny = e.y + (wp.y - e.y) / d * step;
+        // a villager already inside a solid tile (wall built on them) may walk out
+        const escaping = e.kind === 'v' && !Path.pass(e.x | 0, e.y | 0, false);
+        if (!escaping && e.kind === 'v' && !Path.pass(nx | 0, ny | 0, false)) { e.path = null; e.pi = 0; return; }
+        e.x = nx; e.y = ny;
         e.facing = wp.x >= e.x ? 1 : -1;
         step = 0;
       }
@@ -1067,6 +1084,16 @@ const Sim = {
       if (e.stuckT > 1.4) { e.stuckT = 0; e.path = null; e.pi = 0; } // force rethink
     } else { e.stuckT = 0; }
     e.lastD = d2;
+  },
+
+  // wall-safe nudge: villagers slide along solids instead of being shoved inside them
+  nudge(e, dx, dy) {
+    if (e.kind !== 'v') { e.x += dx; e.y += dy; return; }
+    const out = !Path.pass(e.x | 0, e.y | 0, false); // already stuck inside → any exit allowed
+    const nx = e.x + dx;
+    if (out || Path.pass(nx | 0, e.y | 0, false)) e.x = nx;
+    const ny = e.y + dy;
+    if (out || Path.pass(e.x | 0, ny | 0, false)) e.y = ny;
   },
 
   separate() {
@@ -1083,8 +1110,8 @@ const Sim = {
         if (d2 < .16 && d2 > 0.0001) {
           const d = Math.sqrt(d2), push = (0.4 - d) * .5;
           const ux = dx / d, uy = dy / d;
-          a.x -= ux * push; a.y -= uy * push;
-          b.x += ux * push; b.y += uy * push;
+          this.nudge(a, -ux * push, -uy * push);
+          this.nudge(b, ux * push, uy * push);
         }
       }
     }

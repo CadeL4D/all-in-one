@@ -46,6 +46,10 @@ Great Beacon to bring back the dawn.
   forgiveness for tall buildings (towers, lairs, windmills); the dead are
   buried where they fall; herbs chip in the HUD; old saves keep working
   (lair-less worlds fall back to wilderness spawns).
+- **Fixed (villager pathfinding):** villagers no longer walk through walls
+  raised across their route, get shoved inside solid tiles by each other, or
+  "work" a target across the map when their path is cut — they repath cleanly
+  (and a villager caught inside a new wall simply steps out).
 
 ### v1.0 — First Light
 - Initial release: day/night survival loop, 8 jobs, 15 buildings, 5 monsters,
