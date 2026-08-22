@@ -406,7 +406,7 @@ const UI = {
         card.className = 'bcard' + (this.mode && this.mode.type === 'clear' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#2a3320"></canvas>
           <div><div class="bn">Clear Land</div><div class="bc"><span>builders</span></div>
-          <div class="bd">Mark trees, boulders, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap again to cancel.</div></div>`;
+          <div class="bd">Mark trees, boulders, berry bushes, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap again to cancel.</div></div>`;
         card.onclick = () => { this.setMode({ type: 'clear' }); this.closePanel(); };
         this.drawCardIcon(card, 'tree0', true);
         grid.appendChild(card);
@@ -711,7 +711,7 @@ const UI = {
       this.updateHUD();
     } else if (m.type === 'clear') {
       const o = World.objAt(tileX, tileY);
-      const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING;
+      const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING || o === OBJ.BUSH;
       if (!wild) return;
       const queued = G.clearJobs.some(t => t.x === tileX && t.y === tileY);
       if (queued) {

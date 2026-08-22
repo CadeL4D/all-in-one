@@ -184,8 +184,8 @@ const Buildings = {
         if (t !== T.GRASS && t !== T.DIRT && t !== T.SAND) return { ok: false, reason: 'Bad ground' };
         if (def.grassOnly && t !== T.GRASS) return { ok: false, reason: 'Needs grass' };
         const o = World.obj[i];
-        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE;
-        const blocking = wild || o === OBJ.BUSH || o === OBJ.GRAVE;
+        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.BUSH;
+        const blocking = wild || o === OBJ.GRAVE;
         if (blocking && !(def.onRock && o === OBJ.ROCK)) {
           if (!(clearable && wild)) return { ok: false, reason: 'Blocked — clear first' };
           clearTiles.push({ x, y });

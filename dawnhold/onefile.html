@@ -2193,8 +2193,8 @@ const Buildings = {
         if (t !== T.GRASS && t !== T.DIRT && t !== T.SAND) return { ok: false, reason: 'Bad ground' };
         if (def.grassOnly && t !== T.GRASS) return { ok: false, reason: 'Needs grass' };
         const o = World.obj[i];
-        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE;
-        const blocking = wild || o === OBJ.BUSH || o === OBJ.GRAVE;
+        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.SAPLING || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.BUSH;
+        const blocking = wild || o === OBJ.GRAVE;
         if (blocking && !(def.onRock && o === OBJ.ROCK)) {
           if (!(clearable && wild)) return { ok: false, reason: 'Blocked — clear first' };
           clearTiles.push({ x, y });
@@ -3134,7 +3134,7 @@ const Sim = {
       // land clearing: any wild growth still standing is fair game
       if (v.workKind === 'clear') {
         const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
-        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING;
+        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING || o === OBJ.BUSH;
         if (wild) { v.state = 'work'; v.workT = 0; return; }
         this.dropClearJob(v.tgtTile.x, v.tgtTile.y);
         v.state = 'idle'; v.tgtTile = null;
@@ -3320,6 +3320,9 @@ const Sim = {
     if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE) {
       G.res.wood += gain; G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' wood', '#c9964b');
+    } else if (o === OBJ.BUSH) {
+      G.res.food += gain; G.stats.gathered += gain;
+      this.float(x + .5, y + .3, '+' + gain + ' food', '#7dc95e');
     } else if (o === OBJ.ROCK || o === OBJ.RUIN) {
       G.res.stone += gain; G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' stone', '#a5a5ae');
@@ -5116,7 +5119,7 @@ const UI = {
         card.className = 'bcard' + (this.mode && this.mode.type === 'clear' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#2a3320"></canvas>
           <div><div class="bn">Clear Land</div><div class="bc"><span>builders</span></div>
-          <div class="bd">Mark trees, boulders, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap again to cancel.</div></div>`;
+          <div class="bd">Mark trees, boulders, berry bushes, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap again to cancel.</div></div>`;
         card.onclick = () => { this.setMode({ type: 'clear' }); this.closePanel(); };
         this.drawCardIcon(card, 'tree0', true);
         grid.appendChild(card);
@@ -5421,7 +5424,7 @@ const UI = {
       this.updateHUD();
     } else if (m.type === 'clear') {
       const o = World.objAt(tileX, tileY);
-      const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING;
+      const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING || o === OBJ.BUSH;
       if (!wild) return;
       const queued = G.clearJobs.some(t => t.x === tileX && t.y === tileY);
       if (queued) {

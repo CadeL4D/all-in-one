@@ -676,7 +676,7 @@ const Sim = {
       // land clearing: any wild growth still standing is fair game
       if (v.workKind === 'clear') {
         const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
-        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING;
+        const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING || o === OBJ.BUSH;
         if (wild) { v.state = 'work'; v.workT = 0; return; }
         this.dropClearJob(v.tgtTile.x, v.tgtTile.y);
         v.state = 'idle'; v.tgtTile = null;
@@ -862,6 +862,9 @@ const Sim = {
     if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE) {
       G.res.wood += gain; G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' wood', '#c9964b');
+    } else if (o === OBJ.BUSH) {
+      G.res.food += gain; G.stats.gathered += gain;
+      this.float(x + .5, y + .3, '+' + gain + ' food', '#7dc95e');
     } else if (o === OBJ.ROCK || o === OBJ.RUIN) {
       G.res.stone += gain; G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' stone', '#a5a5ae');

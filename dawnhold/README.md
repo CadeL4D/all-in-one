@@ -43,9 +43,10 @@ Great Beacon to bring back the dawn.
   one allowed), Hospital (day 2; heals 6 hp/s nearby, 1 herb per 5 hp; unlocks
   the Medic job).
 - **Land clearing:** buildings can be staked straight over trees, boulders,
-  ruins and crystals — builders clear the footprint first (half the yield is
-  salvaged) and then raise it. A **Clear Land** tool in the Build menu queues
-  individual wild tiles for builders; tap again to cancel an order.
+  berry bushes, ruins and crystals — builders clear the footprint first (half
+  the yield is salvaged) and then raise it. A **Clear Land** tool in the Build
+  menu queues individual wild tiles for builders; tap again to cancel an
+  order. Cleared ground stays clear — nothing regrows.
 - **Timed demolition:** Demolish no longer removes a building instantly —
   builders tear it down at the same pace they build, then half the cost is
   refunded. Tap a marked building again to cancel. Unstarted sites still go
