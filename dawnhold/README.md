@@ -61,6 +61,12 @@ Great Beacon to bring back the dawn.
   raised across their route, get shoved inside solid tiles by each other, or
   "work" a target across the map when their path is cut — they repath cleanly
   (and a villager caught inside a new wall simply steps out).
+- **Villager collisions prevented:** villagers keep half-tile personal space
+  and sidestep around each other instead of overlapping and being shoved off
+  their routes (the old post-hoc shoving caused repath churn). Crowds finish
+  a trip just short of an occupied destination instead of orbiting it, and a
+  hard jam (head-on in a one-wide corridor) briefly phases through rather
+  than deadlocking.
 - **Fixed (stuck guards):** chasing a quarry with no route (across water or
   sealed behind walls) used to hand guards a degenerate one-tile path they
   followed forever while the horde rolled in. Unreachable targets now return

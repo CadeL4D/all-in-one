@@ -1174,34 +1174,73 @@ const Sim = {
   },
 
   /* ---------------- helpers ---------------- */
+  // is another villager standing within personal space of (x, y)?
+  // (a villager phasing out of a hard jam walks through — returns false)
+  crowded(e, x, y) {
+    if (e._ghost > 0) return false;
+    for (const o of G.villagers) {
+      if (o === e) continue;
+      if (U.dst2(x, y, o.x, o.y) < 0.20) return true;   // ~0.45-tile radius
+    }
+    return false;
+  },
+
   moveAlong(e, dt, spd) {
     if (!e.path || e.pi >= e.path.length) return;
     // fresh path object → reset stuck bookkeeping (paths get reassigned all over the brain)
-    if (e._lastPath !== e.path) { e._lastPath = e.path; e.stuckT = 0; e.lastD = 1e9; }
+    if (e._lastPath !== e.path) { e._lastPath = e.path; e.stuckT = 0; e.lastD = 1e9; e.crowdT = 0; }
+    if (e._ghost > 0) e._ghost -= dt;
     let step = spd * dt;
+    let blockedByVillager = false;
     while (step > 0 && e.pi < e.path.length) {
       const wp = e.path[e.pi];
       // villagers never enter a solid tile — walls may have risen since this path was made
       if (e.kind === 'v' && !Path.pass(wp.x | 0, wp.y | 0, false)) { e.path = null; e.pi = 0; return; }
       const d = U.dst(e.x, e.y, wp.x, wp.y);
+      // final waypoint occupied by a villager → finish the trip short so crowds
+      // don't orbit the spot forever
+      if (e.kind === 'v' && e.pi === e.path.length - 1 && d < 0.75 && this.crowded(e, wp.x, wp.y)) {
+        e.pi = e.path.length;
+        break;
+      }
       if (d <= step || d < 0.03) {
+        // never step onto another villager mid-route — wait this tick
+        if (e.kind === 'v' && this.crowded(e, wp.x, wp.y)) { blockedByVillager = true; break; }
         e.x = wp.x; e.y = wp.y; e.pi++; step -= d;
       } else {
-        const nx = e.x + (wp.x - e.x) / d * step, ny = e.y + (wp.y - e.y) / d * step;
+        const ux = (wp.x - e.x) / d, uy = (wp.y - e.y) / d;
+        const nx = e.x + ux * step, ny = e.y + uy * step;
         // a villager already inside a solid tile (wall built on them) may walk out
         const escaping = e.kind === 'v' && !Path.pass(e.x | 0, e.y | 0, false);
         if (!escaping && e.kind === 'v' && !Path.pass(nx | 0, ny | 0, false)) { e.path = null; e.pi = 0; return; }
+        if (e.kind === 'v' && this.crowded(e, nx, ny)) {
+          // sidestep around the neighbor; boxed in → wait this tick
+          const sx = -uy, sy = ux;
+          for (const s of [1, -1]) {
+            const ox = e.x + sx * s * 0.35, oy = e.y + sy * s * 0.35;
+            if (Path.pass(ox | 0, oy | 0, false) && !this.crowded(e, ox, oy)) { e.x = ox; e.y = oy; break; }
+          }
+          blockedByVillager = true;
+          break;
+        }
         e.x = nx; e.y = ny;
         e.facing = wp.x >= e.x ? 1 : -1;
         step = 0;
       }
     }
-    // stuck watch
-    const d2 = e.pi < e.path.length ? U.dst2(e.x, e.y, e.path[e.pi].x, e.path[e.pi].y) : 0;
-    if (d2 > e.lastD - 0.0004 && e.pi < e.path.length) {
-      e.stuckT += dt;
-      if (e.stuckT > 1.4) { e.stuckT = 0; e.path = null; e.pi = 0; } // force rethink
-    } else { e.stuckT = 0; }
+    // stuck watch — waiting on a neighbor is not stuck-on-terrain, but a long
+    // jam (head-on in a corridor) earns a brief phase-through instead of deadlock
+    const d2 = e.path && e.pi < e.path.length ? U.dst2(e.x, e.y, e.path[e.pi].x, e.path[e.pi].y) : 0;
+    if (e.path && e.pi < e.path.length) {
+      if (blockedByVillager) {
+        e.stuckT = 0;
+        e.crowdT = (e.crowdT || 0) + dt;
+        if (e.crowdT > 2.5) { e._ghost = 1.2; e.crowdT = 0; }
+      } else if (d2 > e.lastD - 0.0004) {
+        e.stuckT += dt;
+        if (e.stuckT > 1.4) { e.stuckT = 0; e.path = null; e.pi = 0; } // force rethink
+      } else { e.stuckT = 0; e.crowdT = 0; }
+    }
     e.lastD = d2;
   },
 
