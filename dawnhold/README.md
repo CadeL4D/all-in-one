@@ -9,7 +9,8 @@ Great Beacon to bring back the dawn.
 
 > **v1.1 — The Wilds Update:** biome map overhaul (dark forests, meadows,
 > highlands, sand shores) with fully redrawn, readable tree & rock art;
-> **3 raidable Dark Monolith lairs** the horde crawls out of each night;
+> **3 raidable Dark Monolith lairs** the horde crawls out of each night — and
+> defends with its own brood when you raid it;
 > **blood moons** every 5th night; two new jobs (**Fisher**, **Medic**) with
 > herbs & a **Hospital**; **Fishing Docks, Mine Shafts, Windmills, Spike Traps,
 > Barracks**; three new monsters (**Bonecasters** that snipe from range,
@@ -31,7 +32,10 @@ Great Beacon to bring back the dawn.
   added a Hospital sprite to match.
 - **Lairs & raids:** three raidable Dark Monoliths spawn the night horde;
   select one and press **Raid** to send guards to destroy it (+25 essence,
-  permanently smaller nights). Pink crosses mark them on the minimap.
+  permanently smaller nights). Monoliths are stone-hard (1100 hp), slowly mend
+  when not being battered, and **call day-scaled defenders every few seconds
+  while raided** (max 5 alive) — raids are fights, not demolitions. Pink
+  crosses mark them on the minimap.
 - **Blood moons:** every 5th night the horde grows 50% — but kills pay double
   essence.
 - **New jobs:** Fisher (works shore docks) and Medic (gathers herbs to stock
@@ -46,7 +50,10 @@ Great Beacon to bring back the dawn.
   berry bushes, ruins and crystals — builders clear the footprint first (half
   the yield is salvaged) and then raise it. A **Clear Land** tool in the Build
   menu queues individual wild tiles for builders; tap again to cancel an
-  order. Cleared ground stays clear — nothing regrows.
+  order. Cleared ground stays clear — nothing regrows. The same tool
+  **fills shore water with stone** (2 stone a tile, ~4s each), turning lakes
+  into buildable sand — cancel a fill order before it's done and the stone is
+  refunded.
 - **Timed demolition:** Demolish no longer removes a building instantly —
   builders tear it down at the same pace they build, then half the cost is
   refunded. Tap a marked building again to cancel. Unstarted sites still go
@@ -113,7 +120,9 @@ Fisher, Medic, Builder, Guard) and they work autonomously.
   dawn.
 - **Raids:** tap a monolith and press **Raid** — your guards march out and
   tear it down (+25 essence, that lair never spawns again; wipe all three and
-  nights shrink to stragglers from the wilds).
+  nights shrink to stragglers from the wilds). The monolith fights back:
+  defenders pour out while it's struck and it mends between blows, so commit
+  several guards.
 - **Grow:** wanderers join at dawn if you have **food + beds**.
 - **Win:** raise **The Beacon** (day 10), survive the **Long Night** assault
   (with the Night Lord boss) → dawn returns forever. Then keep playing endless
@@ -170,8 +179,10 @@ This game was designed from a review-driven audit of its inspirations.
 - **Defense math:** shade 28hp/4dmg vs guard 7.5dmg/0.72s (+30% with
   Barracks), tower 8dmg/1.1s (range 5.5), ballista 27dmg/2.3s (range 7.5 —
   out-ranges bonecasters). Palisade 220hp/2w, stone wall 520hp/4s. Spike traps
-  15 dmg + slow per step, wear out after ~3 monsters. Lair 450hp — two guards
-  break it in ~20s.
+  15 dmg + slow per step, wear out after ~3 monsters. Lair 1100hp, mends
+  0.6%/s when not struck for 8s, and spawns day-scaled defenders (up to 5
+  alive, every ~7s) while raided — a 3-guard raid is a rolling fight, not a
+  20-second teardown.
 - **Essence:** starts 40, cap 120, ~0.1/s day · 0.05/s night (×difficulty),
   +2 per kill (double on blood moons; lairs +25, crystals +8, boss +40),
   shrines +0.06/s. Mend 12, Smite 22, Stasis 30 (day 5), Meteor 65 (day 6).

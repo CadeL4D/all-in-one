@@ -20,7 +20,7 @@ const CONFIG = {
   // --- work ---
   CARRY: 8,                       // units hauled per trip
   WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0, medic: 0.8 },
-  CLEAR: { time: 1.3 },           // builder work-seconds per cleared tile (half the yield is salvaged)
+  CLEAR: { time: 1.3, waterTime: 4, waterCost: 2 }, // secs/tile (half yield salvaged); water fill is slower and costs stone
   FARM: { grow: 95, yield: 15, tendBoost: 1.2 },
   REPAIR: { rate: 22, cost: 24 }, // hp/s while repairing, hp per 1 resource
 
@@ -56,7 +56,8 @@ const CONFIG = {
   },
 
   // --- lairs & raids ---
-  LAIR: { hp: 450, ess: 25, count: 3 },
+  LAIR: { hp: 1100, ess: 25, count: 3, regenDelay: 8, regenPct: 0.006 },
+  RAID: { defEvery: 7, defCap: 5 },  // monolith defenders while raided: spawn interval, alive cap
 
   // --- herb / healing economy ---
   HERB: { amt: 5, regrow: 210, healRate: 6, herbPerHeal: 5 },

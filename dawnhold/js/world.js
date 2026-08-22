@@ -264,6 +264,12 @@ const World = {
     this.obj[i] = o; this.amt[i] = amt || 0;
   },
 
+  setT(tx, ty, t) {
+    if (!this.inB(tx, ty)) return;
+    this.t[this.idx(tx, ty)] = t;
+    this.bakeTile(tx, ty); // rebakes water neighbors too, so the foam ring stays right
+  },
+
   // depleted → regrowth scheduling; returns a bonus tag for the caller
   deplete(tx, ty) {
     const i = this.idx(tx, ty), o = this.obj[i];

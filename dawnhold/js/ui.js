@@ -406,7 +406,7 @@ const UI = {
         card.className = 'bcard' + (this.mode && this.mode.type === 'clear' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#2a3320"></canvas>
           <div><div class="bn">Clear Land</div><div class="bc"><span>builders</span></div>
-          <div class="bd">Mark trees, boulders, berry bushes, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap again to cancel.</div></div>`;
+          <div class="bd">Mark trees, boulders, berry bushes, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap shore water to fill it with stone (${CONFIG.CLEAR.waterCost} stone a tile) and make new land. Tap again to cancel.</div></div>`;
         card.onclick = () => { this.setMode({ type: 'clear' }); this.closePanel(); };
         this.drawCardIcon(card, 'tree0', true);
         grid.appendChild(card);
@@ -663,7 +663,7 @@ const UI = {
     } else if (m.type === 'demolish') {
       this.els.modeChipText.textContent = 'Demolish — tap buildings';
     } else if (m.type === 'clear') {
-      this.els.modeChipText.textContent = 'Clear Land — tap trees & rocks';
+      this.els.modeChipText.textContent = 'Clear Land — trees, rocks & shore water';
     } else if (m.type === 'power') {
       this.els.modeChipText.textContent = `${POWERS[m.key].name} — tap target`;
     }
@@ -710,17 +710,10 @@ const UI = {
       }
       this.updateHUD();
     } else if (m.type === 'clear') {
-      const o = World.objAt(tileX, tileY);
-      const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING || o === OBJ.BUSH;
-      if (!wild) return;
-      const queued = G.clearJobs.some(t => t.x === tileX && t.y === tileY);
-      if (queued) {
-        Sim.dropClearJob(tileX, tileY);
-        this.toast('Clearing order cancelled.', '');
-      } else {
-        G.clearJobs.push({ x: tileX, y: tileY });
-        this.toast('A Builder will clear this tile.', '');
-      }
+      const r = Sim.toggleClearJob(tileX, tileY);
+      if (r === 'off') this.toast('Order cancelled.', '');
+      else if (r === 'water') this.toast('A Builder will fill this water with stone.', '');
+      else if (r === 'on') this.toast('A Builder will clear this tile.', '');
       this.updateHUD();
     } else if (m.type === 'power') {
       Powers.cast(m.key, tileX + 0.5, tileY + 0.5);
@@ -970,7 +963,7 @@ const UI = {
       <b>Night (~1.5 min):</b> monsters attack from their <b>Dark Monoliths</b>. Guards and towers fight; you cast powers. Survivors burn at dawn.<br>
       Every 5th night is a <b>BLOOD MOON</b> — a much bigger horde, but double essence from kills.</p>
       <h2>Dark Monoliths & Raids</h2>
-      <p>Three lairs sit out in the wilds — the horde crawls out of them every night. Tap one and press <b>Raid</b>: your Guards will march out and tear it down (+25 essence, and that lair never spawns again). Destroy all three and the nights grow thin... but the dark still comes from the wilds.</p>
+      <p>Three lairs sit out in the wilds — the horde crawls out of them every night. Tap one and press <b>Raid</b>: your Guards will march out and tear it down (+25 essence, and that lair never spawns again). Monoliths are stone-hard, slowly <b>mend themselves</b>, and <b>spawn defenders while raided</b> — bring several guards and see it through, because a half-hearted raid heals back. Destroy all three and the nights grow thin... but the dark still comes from the wilds.</p>
       <h2>Controls</h2>
       <ul>
         <li><b>Tap</b> a villager, monster, building or monolith to inspect it.</li>
@@ -985,8 +978,8 @@ const UI = {
         <li><b>Miner</b> — stone from boulders; salvages ancient ruins; cracks crystal lodes for essence; works Mine Shafts when lodes run dry.</li>
         <li><b>Farmer</b> — tends wheat plots. A Windmill nearby grows them 35% faster.</li>
         <li><b>Fisher</b> — works a Fishing Dock on the shore. Steady food, no farmland.</li>
-        <li><b>Herbalist</b> — gathers herbs; an Herbalist Hut turns them into healing for the wounded.</li>
-        <li><b>Builder</b> — raises construction and repairs damage (costs materials).</li>
+        <li><b>Medic</b> — gathers herbs to stock the Hospital, which mends the wounded nearby. Needs a built Hospital (day 2).</li>
+        <li><b>Builder</b> — raises construction, repairs damage (costs materials), clears marked wild tiles and <b>fills shore water with stone</b> to make new land.</li>
         <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage.</li>
       </ul>
       <h2>Surviving the Night</h2>

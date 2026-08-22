@@ -35,7 +35,7 @@ const SaveSys = {
         demo: !!b.demo,
         clear: (b.clearTiles || []).map(t => [t.x, t.y]),
       })),
-      clears: (G.clearJobs || []).map(t => [t.x, t.y]),
+      clears: (G.clearJobs || []).map(t => t.water ? [t.x, t.y, 1] : [t.x, t.y]),
       villagers: G.villagers.map(v => ({
         name: v.name, trait: v.trait ? v.trait.key : null, look: { ...v.look },
         job: v.job, x: v.x, y: v.y, hp: v.hp, maxHp: v.maxHp, hunger: v.hunger, state: v.state === 'arrive' ? 'arrive' : 'idle',
@@ -110,7 +110,7 @@ const SaveSys = {
       if (bs.clear && bs.clear.length) b.clearTiles = bs.clear.map(([x, y]) => ({ x, y }));
       if (!b.built) b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
     }
-    G.clearJobs = (d.clears || []).map(([x, y]) => ({ x, y }));
+    G.clearJobs = (d.clears || []).map(([x, y, w]) => ({ x, y, water: !!w }));
 
     G.villagers = d.villagers.map(vs => {
       const tr = TRAITS.find(t => t.key === vs.trait) || null;

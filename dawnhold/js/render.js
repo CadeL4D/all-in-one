@@ -428,11 +428,11 @@ const Render = {
   // amber X over tiles queued for clearing
   drawClearMarks(ctx, x0, y0, x1, y1) {
     if (!G.clearJobs || !G.clearJobs.length) return;
-    ctx.strokeStyle = 'rgba(255,196,107,.95)';
     ctx.lineWidth = 2;
     for (const t of G.clearJobs) {
       if (t.x < x0 - 1 || t.x > x1 + 1 || t.y < y0 - 1 || t.y > y1 + 1) continue;
       const px = t.x * 16, py = t.y * 16;
+      ctx.strokeStyle = t.water ? 'rgba(133,183,222,.95)' : 'rgba(255,196,107,.95)';
       ctx.beginPath();
       ctx.moveTo(px + 4, py + 4); ctx.lineTo(px + 12, py + 12);
       ctx.moveTo(px + 12, py + 4); ctx.lineTo(px + 4, py + 12);

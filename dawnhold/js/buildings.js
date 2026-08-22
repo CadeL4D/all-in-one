@@ -122,7 +122,7 @@ const CAMP_DEF = {
 // monster lair (not buildable — placed by the map, destroyed by raids)
 const LAIR_DEF = {
   name: 'Dark Monolith', cat: null, w: 1, h: 1, hp: CONFIG.LAIR.hp, cost: {}, time: 0,
-  kind: 'lair', light: 1.8, tall: 12, desc: 'The horde crawls out of this each night. Select it and order a RAID — destroy all three and the nights grow thin.',
+  kind: 'lair', light: 1.8, tall: 12, desc: 'The horde crawls out of this each night. Stone-hard and slow to break — and it calls its brood to defend it while raided. Order a RAID; destroy all three and the nights grow thin.',
 };
 
 const Buildings = {

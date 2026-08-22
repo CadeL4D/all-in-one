@@ -330,7 +330,7 @@ const CONFIG = {
   // --- work ---
   CARRY: 8,                       // units hauled per trip
   WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0, medic: 0.8 },
-  CLEAR: { time: 1.3 },           // builder work-seconds per cleared tile (half the yield is salvaged)
+  CLEAR: { time: 1.3, waterTime: 4, waterCost: 2 }, // secs/tile (half yield salvaged); water fill is slower and costs stone
   FARM: { grow: 95, yield: 15, tendBoost: 1.2 },
   REPAIR: { rate: 22, cost: 24 }, // hp/s while repairing, hp per 1 resource
 
@@ -366,7 +366,8 @@ const CONFIG = {
   },
 
   // --- lairs & raids ---
-  LAIR: { hp: 450, ess: 25, count: 3 },
+  LAIR: { hp: 1100, ess: 25, count: 3, regenDelay: 8, regenPct: 0.006 },
+  RAID: { defEvery: 7, defCap: 5 },  // monolith defenders while raided: spawn interval, alive cap
 
   // --- herb / healing economy ---
   HERB: { amt: 5, regrow: 210, healRate: 6, herbPerHeal: 5 },
@@ -491,6 +492,7 @@ function darknessLevel() {
   }
   return 0;
 }
+
 </script>
 <!-- ==== js/art.js ==== -->
 <script>
@@ -1479,6 +1481,7 @@ const Art = {
     x.fillStyle = vg; x.fillRect(0, 0, w, h);
   },
 };
+
 </script>
 <!-- ==== js/world.js ==== -->
 <script>
@@ -1748,6 +1751,12 @@ const World = {
     this.obj[i] = o; this.amt[i] = amt || 0;
   },
 
+  setT(tx, ty, t) {
+    if (!this.inB(tx, ty)) return;
+    this.t[this.idx(tx, ty)] = t;
+    this.bakeTile(tx, ty); // rebakes water neighbors too, so the foam ring stays right
+  },
+
   // depleted → regrowth scheduling; returns a bonus tag for the caller
   deplete(tx, ty) {
     const i = this.idx(tx, ty), o = this.obj[i];
@@ -1863,6 +1872,7 @@ const World = {
     return { x: this.W / 2, y: 1.5 };
   },
 };
+
 </script>
 <!-- ==== js/path.js ==== -->
 <script>
@@ -2004,6 +2014,7 @@ class Heap {
     return top;
   }
 }
+
 </script>
 <!-- ==== js/buildings.js ==== -->
 <script>
@@ -2131,7 +2142,7 @@ const CAMP_DEF = {
 // monster lair (not buildable — placed by the map, destroyed by raids)
 const LAIR_DEF = {
   name: 'Dark Monolith', cat: null, w: 1, h: 1, hp: CONFIG.LAIR.hp, cost: {}, time: 0,
-  kind: 'lair', light: 1.8, tall: 12, desc: 'The horde crawls out of this each night. Select it and order a RAID — destroy all three and the nights grow thin.',
+  kind: 'lair', light: 1.8, tall: 12, desc: 'The horde crawls out of this each night. Stone-hard and slow to break — and it calls its brood to defend it while raided. Order a RAID; destroy all three and the nights grow thin.',
 };
 
 const Buildings = {
@@ -2370,6 +2381,7 @@ const Buildings = {
     return out;
   },
 };
+
 </script>
 <!-- ==== js/entities.js ==== -->
 <script>
@@ -2453,6 +2465,7 @@ const Entities = {
 
   farmYield(v) { return CONFIG.FARM.yield; },
 };
+
 </script>
 <!-- ==== js/game.js ==== -->
 <script>
@@ -2537,6 +2550,7 @@ const Sim = {
 
     // ----- spawner -----
     if (G.wave && G.phase === 'night') this.waveSpawn(dt);
+    this.lairTick(dt);
 
     // ----- essence -----
     let regen = (isDayLike() ? C.ESSENCE.regenDay : C.ESSENCE.regenNight) * G.diffM.regen;
@@ -2802,6 +2816,55 @@ const Sim = {
     if (w.left <= 0 && G.monsters.length === 0) G.wave = null;
   },
 
+  // monoliths shrug off old wounds, and a raided one calls its brood to defend it
+  lairTick(dt) {
+    const rt = G.raidTarget;
+    for (const b of G.buildings) {
+      if (b.key !== 'lair') continue;
+      if (b.hitT > 0) b.hitT = Math.max(0, b.hitT - dt);
+      else if (b.hp < b.maxHp) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * CONFIG.LAIR.regenPct * dt);
+      // struck within the last ~2.5s → the raid is live, the brood answers
+      if (b === rt && b.hitT > CONFIG.LAIR.regenDelay - 2.5) {
+        b.defT = (b.defT == null ? 1.2 : b.defT) - dt;
+        if (b.defT <= 0) {
+          b.defT = CONFIG.RAID.defEvery;
+          this.lairDefenders(b);
+        }
+      } else if (b === rt) {
+        b.defT = null; // guards stopped hacking — the brood settles
+      }
+    }
+  },
+
+  // spawn a few day-scaled monsters at the lair, capped so a raid stays winnable
+  lairDefenders(b) {
+    const guards = G.villagers.filter(v => v.job === 'guard' && v.hp > 0).length;
+    if (!guards) return;
+    const alive = G.monsters.filter(m => !m.dead && m.defend === b).length;
+    if (alive >= CONFIG.RAID.defCap) return;
+    const want = Math.min(CONFIG.RAID.defCap - alive, 1 + (guards >= 3 ? 1 : 0) + (G.day >= 8 ? 1 : 0));
+    let spawned = 0;
+    for (let k = 0; k < want; k++) {
+      let sx = U.clamp((b.x + .5 + (Math.random() - .5) * 3) | 0, 1, World.W - 2);
+      let sy = U.clamp((b.y + .5 + (Math.random() - .5) * 3) | 0, 1, World.H - 2);
+      if (!World.walkable(sx, sy)) {
+        const sp = Path.nearbyFree(sx, sy, true, 3);
+        if (!sp) continue;
+        sx = sp.x; sy = sp.y;
+      }
+      const m = Entities.makeMonster(this.rollType(G.day), sx + .5, sy + .5);
+      m.defend = b;
+      G.monsters.push(m);
+      this.fx('spark', sx + .5, sy + .1, .35);
+      spawned++;
+    }
+    if (spawned && alive === 0) {
+      UI.toast('The Dark Monolith shrieks — its brood rises to defend it!', 'bad');
+      this.log('The raided monolith called its brood to its defense.', 'bad');
+      G.shake = Math.max(G.shake, 3);
+    }
+  },
+
   arrivals() {
     const C = CONFIG.ARRIVE;
     const cap = Buildings.housingCap();
@@ -2933,7 +2996,9 @@ const Sim = {
       }
       case 'fight': {
         const m = v.tgt;
-        if (!m || m.dead || m.hp <= 0 || U.dst(v.x, v.y, World.center.x, World.center.y) > CONFIG.GUARD.leash + 6) {
+        // on a raid the leash lifts — guards fight freely out at the monolith
+        const raiding = G.raidTarget && G.buildings.includes(G.raidTarget);
+        if (!m || m.dead || m.hp <= 0 || (!raiding && U.dst(v.x, v.y, World.center.x, World.center.y) > CONFIG.GUARD.leash + 6)) {
           v.tgt = null; v.state = 'idle'; v.path = null; return;
         }
         const d = U.dst(v.x, v.y, m.x, m.y);
@@ -3135,7 +3200,9 @@ const Sim = {
       if (v.workKind === 'clear') {
         const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
         const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING || o === OBJ.BUSH;
-        if (wild) { v.state = 'work'; v.workT = 0; return; }
+        const waterJob = World.tileT(v.tgtTile.x, v.tgtTile.y) === T.WATER
+          && G.clearJobs.some(t => t.x === v.tgtTile.x && t.y === v.tgtTile.y && t.water);
+        if (wild || waterJob) { v.state = 'work'; v.workT = 0; return; }
         this.dropClearJob(v.tgtTile.x, v.tgtTile.y);
         v.state = 'idle'; v.tgtTile = null;
         return;
@@ -3174,8 +3241,22 @@ const Sim = {
     const ws = Entities.workSpeed(v);
     if (v.workKind && v.tgtTile) {
       const { x, y } = v.tgtTile;
-      // land clearing: one burst of labor, salvage half the yield, tile goes bare
+      // land clearing: one burst of labor, salvage half the yield, tile goes bare.
+      // water filling is slower — builders throw stone until there's ground to stand on
       if (v.workKind === 'clear') {
+        const job = G.clearJobs.find(t => t.x === x && t.y === y);
+        if (World.tileT(x, y) === T.WATER) {
+          if (!job || !job.water) { this.dropClearJob(x, y); v.tgtTile = null; v.state = 'idle'; return; }
+          v.workT += dt * ws;
+          if (v.workT >= CONFIG.CLEAR.waterTime) {
+            World.setT(x, y, T.SAND);
+            this.dropClearJob(x, y);
+            this.float(x + .5, y + .3, 'land filled', '#c9b47a');
+            this.fx('spark', x + .5, y + .3, .25);
+            v.tgtTile = null; v.state = 'idle';
+          }
+          return;
+        }
         v.workT += dt * ws;
         if (v.workT >= CONFIG.CLEAR.time) {
           this.grantClear(x, y, v);
@@ -3339,6 +3420,36 @@ const Sim = {
   dropClearJob(x, y) {
     const i = G.clearJobs.findIndex(t => t.x === x && t.y === y);
     if (i >= 0) G.clearJobs.splice(i, 1);
+  },
+
+  // queue/cancel a clearing order (UI toggles this). Water fills cost stone up
+  // front — refunded if the order is cancelled before the builder finishes.
+  toggleClearJob(x, y) {
+    const i = G.clearJobs.findIndex(t => t.x === x && t.y === y);
+    if (i >= 0) {
+      if (G.clearJobs[i].water) G.res.stone += CONFIG.CLEAR.waterCost;
+      G.clearJobs.splice(i, 1);
+      return 'off';
+    }
+    if (World.tileT(x, y) === T.WATER) {
+      if (G.res.stone < CONFIG.CLEAR.waterCost) {
+        UI.toast(`Filling water takes ${CONFIG.CLEAR.waterCost} stone a tile.`, 'bad');
+        return 'no';
+      }
+      let shore = false;
+      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, 1], [-1, 1], [1, -1]]) {
+        if (World.inB(x + dx, y + dy) && World.tileT(x + dx, y + dy) !== T.WATER) { shore = true; break; }
+      }
+      if (!shore) {
+        UI.toast('Fill at the shore — builders need footing to throw stone.', 'bad');
+        return 'no';
+      }
+      G.res.stone -= CONFIG.CLEAR.waterCost;
+      G.clearJobs.push({ x, y, water: true });
+      return 'water';
+    }
+    G.clearJobs.push({ x, y });
+    return 'on';
   },
 
   // flag a built building for teardown — builders un-build it, then half the cost is refunded
@@ -3575,6 +3686,7 @@ const Sim = {
   hitBuilding(b, dmg) {
     if (!b || !G.buildings.includes(b)) return;
     b.hp -= dmg;
+    if (b.key === 'lair') b.hitT = CONFIG.LAIR.regenDelay; // wounded monoliths mend (and defend)
     this.fx('spark', b.x + b.w / 2 + (Math.random() - .5), b.y + b.h / 2 - Math.random(), .2);
     if (b.hp <= 0) {
       if (b.key === 'lair') { this.lairDestroyed(b); return; }
@@ -3836,6 +3948,7 @@ window.DBG = {
   build(key, tx, ty) { return Buildings.place(key, tx, ty); },
   save() { SaveSys.save('auto'); },
 };
+
 </script>
 <!-- ==== js/powers.js ==== -->
 <script>
@@ -3938,6 +4051,7 @@ const Powers = {
     UI.updateHUD();
   },
 };
+
 </script>
 <!-- ==== js/save.js ==== -->
 <script>
@@ -3978,7 +4092,7 @@ const SaveSys = {
         demo: !!b.demo,
         clear: (b.clearTiles || []).map(t => [t.x, t.y]),
       })),
-      clears: (G.clearJobs || []).map(t => [t.x, t.y]),
+      clears: (G.clearJobs || []).map(t => t.water ? [t.x, t.y, 1] : [t.x, t.y]),
       villagers: G.villagers.map(v => ({
         name: v.name, trait: v.trait ? v.trait.key : null, look: { ...v.look },
         job: v.job, x: v.x, y: v.y, hp: v.hp, maxHp: v.maxHp, hunger: v.hunger, state: v.state === 'arrive' ? 'arrive' : 'idle',
@@ -4053,7 +4167,7 @@ const SaveSys = {
       if (bs.clear && bs.clear.length) b.clearTiles = bs.clear.map(([x, y]) => ({ x, y }));
       if (!b.built) b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
     }
-    G.clearJobs = (d.clears || []).map(([x, y]) => ({ x, y }));
+    G.clearJobs = (d.clears || []).map(([x, y, w]) => ({ x, y, water: !!w }));
 
     G.villagers = d.villagers.map(vs => {
       const tr = TRAITS.find(t => t.key === vs.trait) || null;
@@ -4086,6 +4200,7 @@ const SaveSys = {
     return true;
   },
 };
+
 </script>
 <!-- ==== js/render.js ==== -->
 <script>
@@ -4519,11 +4634,11 @@ const Render = {
   // amber X over tiles queued for clearing
   drawClearMarks(ctx, x0, y0, x1, y1) {
     if (!G.clearJobs || !G.clearJobs.length) return;
-    ctx.strokeStyle = 'rgba(255,196,107,.95)';
     ctx.lineWidth = 2;
     for (const t of G.clearJobs) {
       if (t.x < x0 - 1 || t.x > x1 + 1 || t.y < y0 - 1 || t.y > y1 + 1) continue;
       const px = t.x * 16, py = t.y * 16;
+      ctx.strokeStyle = t.water ? 'rgba(133,183,222,.95)' : 'rgba(255,196,107,.95)';
       ctx.beginPath();
       ctx.moveTo(px + 4, py + 4); ctx.lineTo(px + 12, py + 12);
       ctx.moveTo(px + 12, py + 4); ctx.lineTo(px + 4, py + 12);
@@ -4708,6 +4823,7 @@ const Render = {
     x.strokeRect(G.cam.x / 16 - vw / 2, G.cam.y / 16 - vh / 2, vw, vh);
   },
 };
+
 </script>
 <!-- ==== js/ui.js ==== -->
 <script>
@@ -5119,7 +5235,7 @@ const UI = {
         card.className = 'bcard' + (this.mode && this.mode.type === 'clear' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#2a3320"></canvas>
           <div><div class="bn">Clear Land</div><div class="bc"><span>builders</span></div>
-          <div class="bd">Mark trees, boulders, berry bushes, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap again to cancel.</div></div>`;
+          <div class="bd">Mark trees, boulders, berry bushes, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap shore water to fill it with stone (${CONFIG.CLEAR.waterCost} stone a tile) and make new land. Tap again to cancel.</div></div>`;
         card.onclick = () => { this.setMode({ type: 'clear' }); this.closePanel(); };
         this.drawCardIcon(card, 'tree0', true);
         grid.appendChild(card);
@@ -5376,7 +5492,7 @@ const UI = {
     } else if (m.type === 'demolish') {
       this.els.modeChipText.textContent = 'Demolish — tap buildings';
     } else if (m.type === 'clear') {
-      this.els.modeChipText.textContent = 'Clear Land — tap trees & rocks';
+      this.els.modeChipText.textContent = 'Clear Land — trees, rocks & shore water';
     } else if (m.type === 'power') {
       this.els.modeChipText.textContent = `${POWERS[m.key].name} — tap target`;
     }
@@ -5423,17 +5539,10 @@ const UI = {
       }
       this.updateHUD();
     } else if (m.type === 'clear') {
-      const o = World.objAt(tileX, tileY);
-      const wild = o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.SAPLING || o === OBJ.BUSH;
-      if (!wild) return;
-      const queued = G.clearJobs.some(t => t.x === tileX && t.y === tileY);
-      if (queued) {
-        Sim.dropClearJob(tileX, tileY);
-        this.toast('Clearing order cancelled.', '');
-      } else {
-        G.clearJobs.push({ x: tileX, y: tileY });
-        this.toast('A Builder will clear this tile.', '');
-      }
+      const r = Sim.toggleClearJob(tileX, tileY);
+      if (r === 'off') this.toast('Order cancelled.', '');
+      else if (r === 'water') this.toast('A Builder will fill this water with stone.', '');
+      else if (r === 'on') this.toast('A Builder will clear this tile.', '');
       this.updateHUD();
     } else if (m.type === 'power') {
       Powers.cast(m.key, tileX + 0.5, tileY + 0.5);
@@ -5683,7 +5792,7 @@ const UI = {
       <b>Night (~1.5 min):</b> monsters attack from their <b>Dark Monoliths</b>. Guards and towers fight; you cast powers. Survivors burn at dawn.<br>
       Every 5th night is a <b>BLOOD MOON</b> — a much bigger horde, but double essence from kills.</p>
       <h2>Dark Monoliths & Raids</h2>
-      <p>Three lairs sit out in the wilds — the horde crawls out of them every night. Tap one and press <b>Raid</b>: your Guards will march out and tear it down (+25 essence, and that lair never spawns again). Destroy all three and the nights grow thin... but the dark still comes from the wilds.</p>
+      <p>Three lairs sit out in the wilds — the horde crawls out of them every night. Tap one and press <b>Raid</b>: your Guards will march out and tear it down (+25 essence, and that lair never spawns again). Monoliths are stone-hard, slowly <b>mend themselves</b>, and <b>spawn defenders while raided</b> — bring several guards and see it through, because a half-hearted raid heals back. Destroy all three and the nights grow thin... but the dark still comes from the wilds.</p>
       <h2>Controls</h2>
       <ul>
         <li><b>Tap</b> a villager, monster, building or monolith to inspect it.</li>
@@ -5698,8 +5807,8 @@ const UI = {
         <li><b>Miner</b> — stone from boulders; salvages ancient ruins; cracks crystal lodes for essence; works Mine Shafts when lodes run dry.</li>
         <li><b>Farmer</b> — tends wheat plots. A Windmill nearby grows them 35% faster.</li>
         <li><b>Fisher</b> — works a Fishing Dock on the shore. Steady food, no farmland.</li>
-        <li><b>Herbalist</b> — gathers herbs; an Herbalist Hut turns them into healing for the wounded.</li>
-        <li><b>Builder</b> — raises construction and repairs damage (costs materials).</li>
+        <li><b>Medic</b> — gathers herbs to stock the Hospital, which mends the wounded nearby. Needs a built Hospital (day 2).</li>
+        <li><b>Builder</b> — raises construction, repairs damage (costs materials), clears marked wild tiles and <b>fills shore water with stone</b> to make new land.</li>
         <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage.</li>
       </ul>
       <h2>Surviving the Night</h2>
@@ -5717,6 +5826,7 @@ const UI = {
       <p>Autosaves at every dawn, plus three manual slots (Menu \u2192 Save). Saves live in this browser.</p>`;
   },
 };
+
 </script>
 <!-- ==== js/main.js ==== -->
 <script>
@@ -5769,6 +5879,7 @@ const UI = {
   window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 })();
+
 </script>
 </body>
 </html>
