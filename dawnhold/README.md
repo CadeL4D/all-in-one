@@ -36,6 +36,17 @@ Great Beacon to bring back the dawn.
 
 ## Changelog
 
+### v1.2.2 — First Day & Panel Polish
+- **"Day 1" means day one:** buildings labelled *Unlocks day 1* (Granary,
+  Storehouse) are unlocked from the first minute of the run instead of
+  appearing at the next dawn.
+- **Locked duties are greyed out:** the jobs panel no longer appends a lock
+  emoji — locked rows dim and desaturate (keeping their "Requires a built X"
+  hint), and they **sink to the bottom of the list**, rejoining the main
+  roster the moment their workplace is built.
+- **Same order rule in the Build menu:** day-locked building cards sort to
+  the bottom of their category and move up into place when they unlock.
+
 ### v1.2.1 — Movement & Reach
 - **Villagers pass through each other** (reverses v1.1's personal-space
   steering). That steering fought itself: perpendicular sidesteps rotate with

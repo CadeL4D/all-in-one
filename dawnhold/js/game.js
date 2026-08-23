@@ -46,9 +46,9 @@ const Sim = {
     }
     G.cam.x = (cx + .5) * C.TILE; G.cam.y = (cy + .5) * C.TILE; G.cam.z = C.ZOOM.start;
 
-    // grant day-0 unlocks
+    // grant start unlocks — "day 1" cards are available from the first minute
     G.unlocks = {};
-    for (const k in BUILD) if (BUILD[k].unlock <= 0) G.unlocks[k] = true;
+    for (const k in BUILD) if (BUILD[k].unlock <= 1) G.unlocks[k] = true;
 
     this.log(`Day 1 — ${C.VIL_START} settlers raise the camp of Dawnhold beneath a dimming sun. Three dark monoliths brood on the horizon.`, 'good');
     UI.toast('Shelter is short — raise Tents before dark.', 'good');

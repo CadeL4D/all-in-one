@@ -423,6 +423,9 @@ const UI = {
     const grid = document.createElement('div');
     grid.className = 'bgrid';
     const keys = Object.keys(BUILD).filter(k => BUILD[k].cat === cat);
+    // day-locked cards sink to the bottom of their category and rejoin the
+    // top group the moment they unlock (stable sort keeps roster order)
+    keys.sort((a, b) => (G.unlocks[a] ? 0 : 1) - (G.unlocks[b] ? 0 : 1));
     if (cat === 'basics' || cat === 'defense') keys.push('__demolish');
     if (cat === 'basics') keys.push('__clear');
     for (const k of keys) {
@@ -496,12 +499,16 @@ const UI = {
     const cm = Sim.contentment();
     note.innerHTML = `Villagers: <b>${pop}</b> \u00b7 Assigned: <b>${Math.min(sum, pop)}</b> \u00b7 Resting: <b>${Math.max(0, pop - sum)}</b><br>Housing: <b>${cm.label}</b> \u00d7${cm.mult.toFixed(2)} work — beds and comfort pay off.<br>Tap <b>+</b>/<b>&minus;</b> to move people between duties. They start at once.`;
     wrap.appendChild(note);
-    for (const j of JOBS) {
-      if (j === 'idle') continue;
+    // locked duties grey out and sink to the bottom; building the workplace
+    // returns them to the roster (stable sort keeps the roster order)
+    const lockedJ = j => !!(JOB_NEEDS[j] && !Buildings.built(JOB_NEEDS[j]));
+    const ordered = JOBS.filter(j => j !== 'idle');
+    ordered.sort((a, b) => (lockedJ(a) ? 1 : 0) - (lockedJ(b) ? 1 : 0));
+    for (const j of ordered) {
       const info = JOB_INFO[j];
-      const locked = JOB_NEEDS[j] && !Buildings.built(JOB_NEEDS[j]);
+      const locked = lockedJ(j);
       const row = document.createElement('div');
-      row.className = 'jrow';
+      row.className = 'jrow' + (locked ? ' locked' : '');
       const icon = document.createElement('canvas');
       icon.width = 16; icon.height = 16;
       const ix = icon.getContext('2d');
@@ -510,7 +517,7 @@ const UI = {
       row.appendChild(icon);
       const txt = document.createElement('div');
       txt.style.flex = '1';
-      txt.innerHTML = `<div class="jn">${locked ? info.name + ' \u{1F512}' : info.name}</div><div class="jd">${locked ? `Requires a built ${U.esc(BUILD[JOB_NEEDS[j]].name)}.` : info.desc}</div>`;
+      txt.innerHTML = `<div class="jn">${info.name}</div><div class="jd">${locked ? `Requires a built ${U.esc(BUILD[JOB_NEEDS[j]].name)}.` : info.desc}</div>`;
       row.appendChild(txt);
       const cnt = document.createElement('div');
       cnt.className = 'cnt';
