@@ -320,3 +320,73 @@ Terrain is baked once to an offscreen canvas; entities are capped
 a half-resolution destination-out pass with capped light count; the minimap
 redraws at ~3Hz.
 
+---
+
+## Research backlog — v1.3 candidates from Rise to Ruins & friends
+
+Researched from how the inspirations actually work: Rise to Ruins'
+corruption/threat bar, firepit-push economy, Nightmare mode and meteor nights;
+Banished's tools↔firewood↔food death spiral; Oddrealm's winters and spoilage;
+Kingdom Two Crowns' winter income drought and Cursed mode; Frostpunk's
+shortage crises; RimWorld's wealth-scaled, adaptive raid points.
+
+### More to manage (new chains & needs)
+
+- **First Frost (Oddrealm/ Kingdom winters):** a 2-day frost hits days 7–8
+  (and each 10-day cycle in endless): farm growth pauses, bush regrow halves,
+  outdoors villagers take cold damage (0.5 hp/s) unless near a torch/hearth or
+  wearing a cloak. Cold counterplay is the point — stockpile food like Kingdom,
+  burn warmth like Banished.
+- **Charcoal kiln & lamp oil (RtR firepit economy):** kiln turns 2 wood → 1
+  charcoal; the press turns 1 charcoal + 1 herb → 3 lamp oil. Torches sip
+  1 oil/minute and gutter to half-light when dry; frost doubles the burn.
+  Wood becomes the deliberate crunch resource — arrows, tools, meals, oil and
+  walls all hunger for the same tree (RtR's lesson: every surplus is an input
+  somewhere else).
+- **Weaver & cloaks (Banished's tailor):** a flax plot (new crop — the only
+  one that grows in frost) feeds the Weaver's loom; cloaks halve cold damage
+  and add comfort, but wear out like tools. Naked-winter villagers work at
+  65% — the smith and weaver share the same "keep them equipped" rhythm.
+- **Smokehouse (Oddrealm's cook-before-it-rots):** from day 6 raw berries rot
+  −10%/day at dawn; smoked food, meals and ale keep forever. The Granary stops
+  being a dump stat — kitchen throughput becomes the real food cap.
+- **New god powers — Recall & Summon Guardian (RtR's recall/defender):**
+  Recall (8 essence) yanks a fleeing villager home mid-terror; Summon Guardian
+  (30 essence) raises a spirit fighter that fades at dawn. Priced against
+  0.1/s day regen: Recall is cheap mercy, Guardian is a deliberate splurge.
+- **Meteor-shower nights & fire elementals (RtR events):** a rare night event
+  rains flame patches; elementals shrug off spike traps, refuse to cross
+  water, and set wooden walls alight (−8 hp/s until a builder douses them).
+  Water moats and stone faces become real tactics, not decoration.
+
+### Harder difficulties (fair pressure, not stat inflation)
+
+- **Nightmare, a fifth difficulty (RtR Nightmare/ Kingdom Cursed):** shades
+  roam from day 1, night length and wave size ×1.6, essence regen halved,
+  lairs mend twice as fast. Learn the game on Easy; prove it here.
+- **Wealth-scaled waves (RimWorld raid points):** on Hard+ the wave grows
+  +8% per 15 built buildings past your first 10 — a tall, rich village earns
+  bigger hordes (still capped at 30). Sitting on a fortress is no longer free.
+- **Adaptive pressure (RimWorld adaptation/ RtR threat bar):** a flawless
+  night (no damage, no one hurt) makes the next wave +10%, stacking to +50%;
+  a rough night (a building lost, or two villagers hurt) eases it −10%. The
+  game leans in when you're bored and lets up when you're drowning.
+- **Hollow-larder crises (Frostpunk shortages):** on Hard+, an empty food
+  store for a full day means −20% village work speed until 20 food is laid in;
+  dry quivers for a full night do the same to guard damage (on top of the
+  existing ×0.75). Buffers stop being optional.
+- **The dark festers (RtR's day-15 clock):** every living lair past day 8
+  adds +4% monster HP (up to +12% with all three standing). Raids already
+  shrink the nights — now they also slow the festering, so raid timing
+  becomes a real decision instead of "whenever."
+
+### Balance guardrails
+
+All five new chains pull wood — that's the design: one crunch resource with
+four competing mouths (arrows, tools, oil, meals), like RtR's everything-eats-
+wood endgame. Frost is tuned so a Normal player with one kiln and six cloaks
+by day 7 sails through; Hard needs double that plus oil reserves. Wave math
+keeps its cap of 30 and guard/tower DPS stays untouched, so existing defense
+math holds — pressure comes from larders, timing and the fester, not bullet-
+sponge monsters.
+
