@@ -16,10 +16,10 @@ const Sim = {
     G.speed = 1; G.paused = false;
     G.diff = diff in C.DIFF ? diff : 'normal';
     G.diffM = C.DIFF[G.diff];
-    G.res = { wood: C.START.wood, stone: C.START.stone, food: C.START.food, essence: C.START.essence };
+    G.res = { ...C.START };
     G.villagers = []; G.monsters = []; G.buildings = []; G.clearJobs = [];
     G.effects = []; G.floaters = [];
-    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0 };
+    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0 };
     G.regrow = new Map();
     G.stats = { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: C.VIL_START };
     G.chronicle = [];
@@ -37,6 +37,7 @@ const Sim = {
     for (const spot of World.lairSpots) Buildings.create('lair', spot.x, spot.y, true);
     G.bloodMoon = false;
     G.raidTarget = null;
+    G.dryWarned = false;
     const starters = ['forager', 'forager', 'lumber', 'lumber', 'miner', 'builder'];
     for (let i = 0; i < C.VIL_START; i++) {
       const a = (i / C.VIL_START) * Math.PI * 2;
@@ -169,6 +170,20 @@ const Sim = {
       if (v.job === 'guard') continue;
       v.state = 'shelter'; v.path = null; v.tgt = null; v.workB = null;
     }
+    // the tavern pours at dusk — tomorrow's work goes quicker
+    for (const v of G.villagers) v.buzzed = false;
+    if (G.res.ale >= 1 && G.villagers.length) {
+      let served = 0;
+      for (const v of G.villagers) {
+        if (G.res.ale < 1) break;
+        G.res.ale -= 1; v.buzzed = true; served++;
+      }
+      if (served) {
+        UI.toast(served === G.villagers.length ? 'The tavern pours for the whole village — tomorrow\u2019s work will fly (+10%).' : `The tavern pours ${served} round${served > 1 ? 's' : ''} of ale — +10% tomorrow.`, 'good');
+        this.log('Ale at dusk — the village wakes quick tomorrow.', 'good');
+      }
+    }
+    G.dryWarned = false; // fresh night, fresh quiver warnings
     if (G.tut === 3) UI.tutAdvance(4);
   },
 
@@ -255,8 +270,36 @@ const Sim = {
 
   dayStart() {
     G.phase = 'day';
+    G._capNote = false;
+    // vermin and rot claim whatever outlasted the caps overnight
+    for (const k of ['food', 'wood', 'stone']) {
+      const cap = Buildings.capOf(k);
+      if (cap != null && G.res[k] > cap) {
+        G.res[k] = cap;
+        UI.toast('Vermin and rot claimed the overnight overflow — raise a Granary or Storehouse.', 'bad');
+        this.log('Stores past their caps spoiled in the night.', 'bad');
+        break;
+      }
+    }
+    // miserable, overcrowded villages thin out at dawn
+    if (this.contentment().label === 'Miserable' && G.day >= 4 && G.villagers.length >= 8 && Math.random() < CONFIG.COMFORT.leaveChance && G.villagers.length > 1) {
+      const v = U.choice(G.villagers.filter(o => o.state !== 'arrive'));
+      if (v) this.depart(v);
+    }
     // a little daytime texture: variety beats repetition (audit: Final Outpost)
     if (G.day >= 2 && Math.random() < 0.30) this.dayEvent();
+  },
+
+  // a discontent villager packs up and leaves for softer beds
+  depart(v) {
+    const i = G.villagers.indexOf(v);
+    if (i < 0) return;
+    G.villagers.splice(i, 1);
+    if (G.follow === v) G.follow = null;
+    if (G.sel && G.sel.ref === v) { G.sel = null; UI.selHide(); }
+    UI.toast(`${v.name} packed up and left for softer beds.`, 'bad');
+    this.log(`${v.name} left the village — the beds were too thin on the ground.`, 'bad');
+    this.reassign();
   },
 
   dayEvent() {
@@ -272,7 +315,7 @@ const Sim = {
       }
     } else if (roll < 0.68 && G.day >= 3) {
       const w = 10 + G.day * 2;
-      G.res.wood += w;
+      this.gain('wood', w);
       UI.toast(`Foragers drag home a storm-felled oak: +${w} wood.`, 'good');
       this.log('A storm-felled oak yielded seasoned timber.', 'good');
     } else if (roll < 0.86 && G.day >= 5 && G.monsters.length === 0) {
@@ -427,10 +470,17 @@ const Sim = {
     const C = CONFIG;
     // hunger always ticks
     v.hunger = Math.min(100, v.hunger + C.HUNGER.rate * dt);
-    if (v.hunger > C.HUNGER.mealAt && G.res.food >= C.HUNGER.mealCost) {
-      G.res.food -= C.HUNGER.mealCost;
-      v.hunger = Math.max(0, v.hunger - C.HUNGER.mealRestore);
-      this.float(v.x, v.y - .6, 'meal', '#e8a94b');
+    if (v.hunger > C.HUNGER.mealAt) {
+      // hot meals first — cooked food satisfies far better than raw berries
+      if (G.res.meals >= 1) {
+        G.res.meals -= 1;
+        v.hunger = Math.max(0, v.hunger - C.MEAL.restore);
+        this.float(v.x, v.y - .6, 'hot meal', '#e8a94b');
+      } else if (G.res.food >= C.HUNGER.mealCost) {
+        G.res.food -= C.HUNGER.mealCost;
+        v.hunger = Math.max(0, v.hunger - C.HUNGER.mealRestore);
+        this.float(v.x, v.y - .6, 'berries', '#7dc95e');
+      }
     }
     v.starving = v.hunger >= 99.5;
     if (v.starving) {
@@ -515,7 +565,7 @@ const Sim = {
         if (v.path && v.pi < v.path.length) return;
         // deposit
         if (v.carry.amt > 0) {
-          G.res[v.carry.type] += v.carry.amt;
+          this.gain(v.carry.type, v.carry.amt);
           G.stats.gathered += v.carry.amt;
           this.float(v.x, v.y - .7, '+' + v.carry.amt + ' ' + v.carry.type, v.carry.type === 'food' ? '#7dc95e' : v.carry.type === 'wood' ? '#c9964b' : '#a5a5ae');
           v.carry.amt = 0; v.carry.type = null;
@@ -679,6 +729,22 @@ const Sim = {
       return;
     }
 
+    // crafters: fletcher / smith / cook / brewer run their workplace
+    if (job === 'fletcher' || job === 'smith' || job === 'cook' || job === 'brewer') {
+      const hutKey = { fletcher: 'fletch', smith: 'smithy', cook: 'kitchen', brewer: 'tavern' }[job];
+      let best = null, bd = 1e9;
+      for (const h of G.buildings) {
+        if (!h.built || h.key !== hutKey) continue;
+        const crew = G.villagers.filter(o => o !== v && o.workB === h && (o.state === 'work' || o.state === 'toWork')).length;
+        if (crew >= 1) continue;
+        const d = U.dst2(v.x, v.y, h.x + h.w / 2, h.y + h.h / 2);
+        if (d < bd) { bd = d; best = h; }
+      }
+      if (best && this.sendToBuilding(v, best, 'craft')) return;
+      if (v.carry.amt > 0) this.sendToStore(v);
+      return;
+    }
+
     // gatherers: forager / lumber / miner / medic
     if (job === 'forager' || job === 'lumber' || job === 'miner' || job === 'medic') {
       const types = job === 'forager' ? [OBJ.BUSH]
@@ -759,7 +825,7 @@ const Sim = {
       if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
       if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
       if (v.workMode === 'tend' && b.built && b.growth < 1) { v.state = 'work'; v.workT = 0; return; }
-      if ((v.workMode === 'fish' || v.workMode === 'mine') && b.built) { v.state = 'work'; v.workT = 0; return; }
+      if ((v.workMode === 'fish' || v.workMode === 'mine' || v.workMode === 'craft') && b.built) { v.state = 'work'; v.workT = 0; return; }
       v.workB = null; v.state = 'idle';
       return;
     }
@@ -768,6 +834,9 @@ const Sim = {
 
   vWork(v, dt) {
     const ws = Entities.workSpeed(v);
+    // hands-on work wears tools out; a spare from the smithy slots right in
+    if (v.toolCond > 0) v.toolCond = Math.max(0, v.toolCond - CONFIG.TOOL.wear * dt);
+    else if (G.res.tools >= 1) { G.res.tools -= 1; v.toolCond = CONFIG.TOOL.cond; this.float(v.x, v.y - .6, 'fresh tool', '#a5a5ae'); }
     if (v.workKind && v.tgtTile) {
       const { x, y } = v.tgtTile;
       // land clearing: one burst of labor, salvage half the yield, tile goes bare.
@@ -822,6 +891,23 @@ const Sim = {
     }
     const b = v.workB;
     if (!b || !G.buildings.includes(b)) { v.workB = null; v.state = 'idle'; return; }
+    if (v.workMode === 'craft' && b.built) {
+      const spec = CONFIG.CRAFT[b.def.craft];
+      v.workT += dt * ws;
+      if (v.workT >= spec.time) {
+        v.workT = 0;
+        // inputs on hand, shelf room for the output — else stand down
+        let ok = G.res[b.def.craft] < Buildings.capOf(b.def.craft);
+        for (const k in spec.in) if (G.res[k] < spec.in[k]) ok = false;
+        if (!ok) { v.workB = null; v.state = 'idle'; if (v.carry.amt > 0) this.sendToStore(v); return; }
+        for (const k in spec.in) G.res[k] -= spec.in[k];
+        v.carry.type = b.def.craft;
+        v.carry.amt += spec.out;
+        this.fx('spark', v.x, v.y - .4, .2);
+        if (v.carry.amt >= Entities.carryMax(v)) { v.workB = null; v.state = 'idle'; this.sendToStore(v); }
+      }
+      return;
+    }
     if (v.workMode === 'fish' && b.built) {
       v.workT += dt * ws;
       if (v.workT >= CONFIG.FISHER.rate) {
@@ -901,7 +987,7 @@ const Sim = {
         b.growth = CONFIG.FARM.replant;
         b.tendedT = 99;
         v.carry.type = 'food';
-        v.carry.amt += CONFIG.FARM.yield;
+        v.carry.amt += b.def.yield || CONFIG.FARM.yield;
         this.fx('spark', b.x + 1, b.y + 1, .3);
         v.workB = null; v.state = 'idle';
         this.sendToStore(v);
@@ -928,16 +1014,16 @@ const Sim = {
     const amt = World.amtAt(x, y) || 0;
     const gain = amt > 0 ? Math.ceil(amt / 2) : 0;
     if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE) {
-      G.res.wood += gain; G.stats.gathered += gain;
+      this.gain('wood', gain); G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' wood', '#c9964b');
     } else if (o === OBJ.BUSH) {
-      G.res.food += gain; G.stats.gathered += gain;
+      this.gain('food', gain); G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' food', '#7dc95e');
     } else if (o === OBJ.ROCK || o === OBJ.RUIN) {
-      G.res.stone += gain; G.stats.gathered += gain;
+      this.gain('stone', gain); G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' stone', '#a5a5ae');
     } else if (o === OBJ.CRYSTAL) {
-      G.res.stone += gain; G.stats.gathered += gain;
+      this.gain('stone', gain); G.stats.gathered += gain;
       G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.CRYSTAL.essence);
       this.float(x + .5, y + .3, '+' + gain + ' stone, +' + CONFIG.CRYSTAL.essence + ' essence', '#b48ae0');
     }
@@ -999,7 +1085,7 @@ const Sim = {
     v.path = p; v.pi = 0;
     v.state = 'toWork';
     v.workB = b; v.workMode = mode; v.workKind = null; v.tgtTile = null;
-    if (mode === 'harvest' || mode === 'tend' || mode === 'build' || mode === 'repair') v.workT = 0;
+    if (mode === 'harvest' || mode === 'tend' || mode === 'build' || mode === 'repair' || mode === 'craft') v.workT = 0;
     return true;
   },
 
@@ -1256,7 +1342,32 @@ const Sim = {
   guardDmg() {
     let d = CONFIG.GUARD.dmg;
     if (G.buildings.some(b => b.built && b.key === 'barracks')) d *= CONFIG.BARRACKS.dmgMult;
+    if (G.res.arrows <= 0) d *= CONFIG.AMMO.dryMult; // no resupply for the quivers
     return d;
+  },
+
+  // add to a store, respecting caps (overflow never materializes)
+  gain(type, amt) {
+    const cap = Buildings.capOf(type);
+    if (cap == null) { G.res[type] += amt; return; }
+    const before = G.res[type];
+    G.res[type] = Math.min(cap, G.res[type] + amt);
+    if (G.res[type] >= cap && before < cap && !G._capNote && (type === 'wood' || type === 'stone' || type === 'food')) {
+      G._capNote = true; // one gentle nudge a day; cleared at dawn
+      UI.toast(`The ${type} store is full — build a ${type === 'food' ? 'Granary' : 'Storehouse'} to hoard more.`, '');
+    }
+  },
+
+  // village-wide housing contentment: beds × their comfort vs population
+  contentment() {
+    let pts = 0;
+    for (const b of G.buildings) if (b.built && b.def.housing) pts += (b.def.comfort || 1) * b.def.housing;
+    const r = pts / Math.max(1, G.villagers.length);
+    const C = CONFIG.COMFORT;
+    if (r >= C.snugAt) return { mult: C.snug, label: 'Snug' };
+    if (r >= C.crowdAt) return { mult: C.crowd, label: 'Content' };
+    if (r >= C.packedAt) return { mult: C.packed, label: 'Crowded' };
+    return { mult: C.packed - 0.03, label: 'Miserable' };
   },
 
   shootTower(b, m) {
@@ -1431,9 +1542,9 @@ const Sim = {
     const order = JOBS.filter(j => j !== 'idle');
     for (const job of order) {
       let have = G.villagers.filter(v => v.job === job);
-      // medics need a built Hospital — without one the duty cannot be staffed
+      // workplace-gated duties (Medic, Fletcher, Smith, Cook, Brewer) need their building
       let want = G.jobs[job] || 0;
-      if (job === 'medic' && !Buildings.hospitals().length) want = 0;
+      if (JOB_NEEDS[job] && !Buildings.built(JOB_NEEDS[job])) want = 0;
       if (have.length > want) {
         for (let i = have.length - 1; i >= want; i--) this.setJob(have[i], 'idle');
       } else if (have.length < want) {

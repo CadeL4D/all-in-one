@@ -8,13 +8,13 @@
 const BUILD = {
   tent: {
     name: 'Tent', cat: 'basics', w: 1, h: 1, hp: 130, cost: { wood: 8 }, time: 16,
-    housing: 2, light: 2.2, kind: 'house', unlock: 0,
-    desc: 'Shelter for two villagers. Cheap and quick — your first priority.',
+    housing: 2, comfort: 1, light: 2.2, kind: 'house', unlock: 0,
+    desc: 'Bedrolls for two villagers. Cheap and quick — your first priority.',
   },
   farm: {
     name: 'Wheat Plot', cat: 'basics', w: 2, h: 2, hp: 140, cost: { wood: 6 }, time: 18,
-    kind: 'farm', grassOnly: true, unlock: 0,
-    desc: 'Reliable food. Wheat ripens in the sun; a Farmer harvests ~15 food.',
+    kind: 'farm', grassOnly: true, unlock: 0, next: 'farm2',
+    desc: 'Reliable food. Wheat ripens in the sun; a Farmer harvests ~15 food. Can be upgraded to irrigated rows.',
   },
   road: {
     name: 'Road', cat: 'basics', w: 1, h: 1, hp: 1, cost: { stone: 1 }, time: 0,
@@ -23,13 +23,13 @@ const BUILD = {
   },
   cottage: {
     name: 'Cottage', cat: 'basics', w: 2, h: 2, hp: 380, cost: { wood: 14, stone: 12 }, time: 42,
-    housing: 4, light: 2.8, kind: 'house', unlock: 4,
-    desc: 'Sturdy stone home for four. Warm windows glow at night.',
+    housing: 4, comfort: 2, light: 2.8, kind: 'house', unlock: 4,
+    desc: 'Sturdy stone home for four — real beds, real rest. Warm windows glow at night.',
   },
   wallW: {
     name: 'Palisade', cat: 'defense', w: 1, h: 1, hp: 220, cost: { wood: 2 }, time: 5,
-    kind: 'wall', paint: true, unlock: 0,
-    desc: 'Wooden wall. Blocks the horde. Drag to draw long lines.',
+    kind: 'wall', paint: true, unlock: 0, next: 'wallSF',
+    desc: 'Wooden wall. Blocks the horde. Drag to draw long lines; can be stone-faced later.',
   },
   wallS: {
     name: 'Stone Wall', cat: 'defense', w: 1, h: 1, hp: 520, cost: { stone: 4 }, time: 9,
@@ -48,8 +48,8 @@ const BUILD = {
   },
   tower: {
     name: 'Watchtower', cat: 'defense', w: 1, h: 1, hp: 300, cost: { wood: 14, stone: 10 }, time: 32,
-    kind: 'tower', atk: CONFIG.TOWER, light: 2.7, tall: 16, unlock: 3,
-    desc: 'Rains arrows on the horde (8 dmg, range 5.5). Works alone, all night.',
+    kind: 'tower', atk: CONFIG.TOWER, light: 2.7, tall: 16, unlock: 3, next: 'tower2',
+    desc: 'Rains arrows on the horde (8 dmg, range 5.5) — 1 arrow a shot. Works alone, all night, while the quivers last.',
   },
   ballista: {
     name: 'Ballista', cat: 'defense', w: 1, h: 1, hp: 420, cost: { wood: 22, stone: 26 }, time: 50,
@@ -64,7 +64,7 @@ const BUILD = {
   warehouse: {
     name: 'Warehouse', cat: 'basics', w: 2, h: 2, hp: 420, cost: { wood: 18, stone: 8 }, time: 40,
     kind: 'store', light: 3.0, unlock: 5,
-    desc: 'A second stockpile — shorten hauling trips and guard outer farms.',
+    desc: 'A second stockpile — shortens hauling trips and raises wood & stone caps by 60.',
   },
   fisher: {
     name: 'Fishing Dock', cat: 'basics', w: 1, h: 1, hp: 160, cost: { wood: 10 }, time: 22,
@@ -101,6 +101,41 @@ const BUILD = {
     kind: 'barracks', capOne: true, light: 2.0, tall: 4, unlock: 8,
     desc: 'Drill yard and armory: all Guards deal +30% damage. Only one may stand.',
   },
+  granary: {
+    name: 'Granary', cat: 'basics', w: 2, h: 2, hp: 280, cost: { wood: 10, stone: 6 }, time: 24,
+    kind: 'store', light: 1.8, tall: 5, unlock: 1,
+    desc: 'Raises food, meal, ale & herb caps (+80 food, +10 herbs) and serves as a store. Build more to hoard more.',
+  },
+  storehouse: {
+    name: 'Storehouse', cat: 'basics', w: 2, h: 2, hp: 340, cost: { wood: 12, stone: 8 }, time: 30,
+    kind: 'store', light: 1.8, tall: 6, unlock: 1,
+    desc: 'Raises the wood & stone caps by 100 and serves as a store. Raw materials need room to pile.',
+  },
+  smithy: {
+    name: 'Smithy', cat: 'basics', w: 2, h: 2, hp: 340, cost: { wood: 12, stone: 12 }, time: 36,
+    kind: 'craft', craft: 'tools', light: 2.6, tall: 9, unlock: 2,
+    desc: 'A Smith forges tools (2 wood + 1 stone each); workers wear them out and bare hands are slow. Unlocks the Smith job.',
+  },
+  kitchen: {
+    name: 'Kitchen', cat: 'basics', w: 2, h: 2, hp: 300, cost: { wood: 12, stone: 6 }, time: 30,
+    kind: 'craft', craft: 'meals', light: 2.6, tall: 8, unlock: 2,
+    desc: 'A Cook simmers 3 food + 1 wood into 2 meals that satisfy far better than raw berries. Unlocks the Cook job.',
+  },
+  fletch: {
+    name: 'Fletcher Hut', cat: 'defense', w: 2, h: 2, hp: 280, cost: { wood: 12, stone: 4 }, time: 26,
+    kind: 'craft', craft: 'arrows', light: 2.0, tall: 7, unlock: 3,
+    desc: 'A Fletcher fashions arrows from wood. Towers burn 1 a shot (ballistae 2) and raids pack quivers. Unlocks the Fletcher job.',
+  },
+  tavern: {
+    name: 'Tavern', cat: 'basics', w: 2, h: 2, hp: 360, cost: { wood: 16, stone: 8 }, time: 44,
+    kind: 'craft', craft: 'ale', light: 3.2, tall: 8, unlock: 4,
+    desc: 'A Brewer mashes food + herbs into ale; a drink at dusk puts +10% into tomorrow\u2019s work. Unlocks the Brewer job.',
+  },
+  manor: {
+    name: 'Manor', cat: 'basics', w: 3, h: 2, hp: 520, cost: { wood: 24, stone: 16 }, time: 70,
+    housing: 6, comfort: 3, light: 3.0, tall: 10, kind: 'house', unlock: 6,
+    desc: 'Grand lodgings for six — the plushest beds in the valley. Snug villagers work better.',
+  },
   shrine: {
     name: 'Shrine', cat: 'mystic', w: 1, h: 1, hp: 200, cost: { stone: 16 }, time: 28,
     kind: 'shrine', light: 3.1, tall: 8, essence: true, unlock: 8,
@@ -111,12 +146,33 @@ const BUILD = {
     kind: 'beacon', light: 0, tall: 40, unlock: 10,
     desc: 'The Great Beacon of legend. Lighting it calls the final horde — survive that night and dawn returns forever.',
   },
+  // ---- upgrade tiers: reached by upgrading in place, never built directly ----
+  tower2: {
+    name: 'Watchtower II', cat: null, w: 1, h: 1, hp: 520, cost: { wood: 30, stone: 20 }, time: 40,
+    kind: 'tower', atk: { dmg: 12, rate: 1.0, range: 6.0 }, light: 2.8, tall: 18, unlock: 99, next: 'tower3',
+    desc: 'Taller, stronger, meaner (12 dmg, range 6.0). Can be raised further.',
+  },
+  tower3: {
+    name: 'Watchtower III', cat: null, w: 1, h: 1, hp: 800, cost: { wood: 60, stone: 45 }, time: 55,
+    kind: 'tower', atk: { dmg: 17, rate: 0.95, range: 6.4 }, light: 2.9, tall: 20, unlock: 99,
+    desc: 'The valley\u2019s best vantage (17 dmg, range 6.4).',
+  },
+  farm2: {
+    name: 'Irrigated Plot', cat: null, w: 2, h: 2, hp: 180, cost: { wood: 10, stone: 14 }, time: 30,
+    kind: 'farm', grassOnly: true, unlock: 99, yield: 22, growT: 70,
+    desc: 'Channel-fed rows: grows ~25% faster and harvests 22 food.',
+  },
+  wallSF: {
+    name: 'Stone-Faced Palisade', cat: null, w: 1, h: 1, hp: 400, cost: { stone: 3 }, time: 8,
+    kind: 'wall', unlock: 99,
+    desc: 'A palisade backed with stone — nearly a stone wall for half the stone.',
+  },
 };
 
 // starting camp (not buildable)
 const CAMP_DEF = {
   name: 'Settlers\u2019 Camp', cat: null, w: 2, h: 2, hp: 850, cost: {}, time: 0,
-  kind: 'store', light: 3.2, housing: 2, tall: 0, desc: 'Where it all began. Stores goods and shelters two.',
+  kind: 'store', light: 3.2, housing: 2, comfort: 1, tall: 0, desc: 'Where it all began. Stores goods and shelters two.',
 };
 
 // monster lair (not buildable — placed by the map, destroyed by raids)
@@ -256,8 +312,8 @@ const Buildings = {
       }
     if (b.built && !silent) {
       const def = b.def;
-      G.res.wood += Math.floor((def.cost.wood || 0) * 0.5);
-      G.res.stone += Math.floor((def.cost.stone || 0) * 0.5);
+      Sim.gain('wood', Math.floor((def.cost.wood || 0) * 0.5));
+      Sim.gain('stone', Math.floor((def.cost.stone || 0) * 0.5));
     }
     if (b.key === 'beacon' && G.beaconLit) { G.beaconLit = false; }
     if (G.sel && G.sel.ref === b) { G.sel = null; UI.selHide(); }
@@ -288,6 +344,38 @@ const Buildings = {
 
   count(key) { let n = 0; for (const b of G.buildings) if (b.key === key) n++; return n; },
 
+  built(key) { return G.buildings.some(b => b.built && b.key === key); },
+
+  // storage cap for a resource (null = uncapped). Granaries raise the larder,
+  // Storehouses/Warehouse raise the materials yard.
+  capOf(type) {
+    const S = CONFIG.STORE;
+    if (!(type in S)) return null;
+    let cap = S[type];
+    if (type === 'food' || type === 'meals' || type === 'ale' || type === 'herbs') {
+      const gran = G.buildings.filter(b => b.built && b.key === 'granary').length;
+      cap += gran * (type === 'herbs' ? 10 : S.perGranary);
+    }
+    if (type === 'wood' || type === 'stone') {
+      const sto = G.buildings.filter(b => b.built && b.key === 'storehouse').length;
+      const wh = G.buildings.filter(b => b.built && b.key === 'warehouse').length;
+      cap += sto * S.perStorehouse + wh * S.perWarehouse;
+    }
+    return cap;
+  },
+
+  // pay the next tier's price and transform a built building in place
+  upgrade(b) {
+    const nd = b.def.next && BUILD[b.def.next];
+    if (!nd || !b.built || b.demo) return false;
+    if ((nd.cost.wood || 0) > G.res.wood || (nd.cost.stone || 0) > G.res.stone) return false;
+    G.res.wood -= nd.cost.wood || 0;
+    G.res.stone -= nd.cost.stone || 0;
+    b.key = b.def.next; b.def = nd; b.w = nd.w; b.h = nd.h;
+    b.maxHp = nd.hp; b.hp = nd.hp;
+    return true;
+  },
+
   damaged() {
     return G.buildings.filter(b => b.built && !b.demo && b.hp < b.maxHp - 0.5)
       .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
@@ -311,7 +399,7 @@ const Buildings = {
         for (const wm of windmills) {
           if (U.dst(b.x + 1, b.y + 1, wm.x + 1, wm.y + 1) <= 6) { breeze = 1.35; break; }
         }
-        b.growth = Math.min(1, b.growth + dt * boost * breeze / CONFIG.FARM.grow);
+        b.growth = Math.min(1, b.growth + dt * boost * breeze / (b.def.growT || CONFIG.FARM.grow));
       }
       // hospital mends wounded villagers nearby, consuming stored herbs
       if (b.def.kind === 'healer' && b.built && G.res.herbs >= 1) {
@@ -339,8 +427,20 @@ const Buildings = {
           if (d < bd) { bd = d; tgt = m; }
         }
         if (tgt) {
-          b.cd = b.def.atk.rate;
-          Sim.shootTower(b, tgt);
+          // every shot spends arrows from the store — dry quivers hold fire
+          const shots = b.key === 'ballista' ? CONFIG.AMMO.ballistaShots : CONFIG.AMMO.perShot;
+          if (G.res.arrows >= shots) {
+            G.res.arrows -= shots;
+            b.cd = b.def.atk.rate;
+            Sim.shootTower(b, tgt);
+          } else {
+            b.cd = 1.0;
+            if (!G.dryWarned) {
+              G.dryWarned = true;
+              UI.toast('Quivers dry — the towers hold fire! Fletchers turn wood into arrows.', 'bad');
+              Sim.log('The towers stood silent for want of arrows.', 'bad');
+            }
+          }
         }
       }
     }
@@ -356,6 +456,8 @@ const Buildings = {
       if (k === 'cottage') out.push([b.x * 16 + 8, b.y * 16 + 24], [b.x * 16 + 25, b.y * 16 + 24]);
       else if (k === 'warehouse') out.push([b.x * 16 + 8, b.y * 16 + 21], [b.x * 16 + 26, b.y * 16 + 21]);
       else if (k === 'camp') out.push([b.x * 16 + 8, b.y * 16 + 21], [b.x * 16 + 26, b.y * 16 + 21]);
+      else if (k === 'manor') out.push([b.x * 16 + 10, b.y * 16 + 26], [b.x * 16 + 34, b.y * 16 + 26]);
+      else if (k === 'tavern') out.push([b.x * 16 + 8, b.y * 16 + 22], [b.x * 16 + 24, b.y * 16 + 22]);
       else if (k === 'cottage2') out.push([0, 0]);
     }
     return out;

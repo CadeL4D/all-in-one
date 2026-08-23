@@ -7,6 +7,13 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
+> **v1.2 — Supply Lines:** the economy becomes a balancing act — four new
+> jobs (**Fletcher, Smith, Cook, Brewer**) turn raw surplus into arrows,
+> tools, meals and ale; **towers burn arrows**, **workers wear out tools**,
+> **stores have caps** (Granaries & Storehouses raise them), **housing
+> comfort** changes work speed, and buildings **upgrade in place**
+> (Watchtower II/III, irrigated plots, stone-faced palisades).
+
 > **v1.1 — The Wilds Update:** biome map overhaul (dark forests, meadows,
 > highlands, sand shores) with fully redrawn, readable tree & rock art;
 > **3 raidable Dark Monolith lairs** the horde crawls out of each night — and
@@ -21,6 +28,35 @@ Great Beacon to bring back the dawn.
 ---
 
 ## Changelog
+
+### v1.2 — Supply Lines
+- **New jobs (4):** Fletcher (wood → arrows), Smith (wood + stone → tools),
+  Cook (3 food + 1 wood → 2 meals), Brewer (food + herbs → ale). Each needs
+  its workplace built — the duty stays locked in the jobs panel until then.
+- **Ammunition:** every tower shot spends 1 arrow (ballistae 2) and raids
+  pack quivers (5). Dry quivers: towers hold fire and guards fight at 75%
+  damage — the Fletcher Hut pays for itself before the first tower does.
+- **Tool wear:** every working villager wears out tools (~2 minutes each);
+  bare hands work at 65% speed. Smiths keep the village sharp.
+- **Meals:** a Kitchen meal restores 85 hunger where 3 raw berries restore
+  54 — villagers always eat the Cook's output first.
+- **Tavern nights:** ale poured at dusk gives every drinker +10% work speed
+  the next day.
+- **Storage caps:** wood/stone 120, food 80, herbs 20 by default; Granaries
+  (+80 food/pantry), Storehouses (+100 materials) and Warehouses (+60)
+  raise them, and overflow spoils to vermin at dawn. Hoarding now costs
+  buildings.
+- **Comfort tiers:** tent bedrolls < cottage beds < the new Manor. Snug
+  villagers work +5%, crowded ones work slower, and a miserable village can
+  lose someone at dawn — growth is a materials decision, not just food.
+- **Upgrades:** select a built Watchtower, Wheat Plot or Palisade for the ⬆
+  button — Watchtower II (12 dmg) → III (17 dmg, range 6.4), Irrigated
+  Plots (grow ~25% faster, harvest 22), stone-faced palisades (400 hp for
+  3 stone).
+- **New buildings (7):** Granary, Storehouse, Smithy, Kitchen, Fletcher
+  Hut, Tavern, Manor — plus 4 upgrade tiers.
+- **HUD:** arrows/tools/meals/ale chips appear when relevant; resource
+  tooltips show your caps.
 
 ### v1.1 — The Wilds Update
 - **World:** biome map generation (dark forests, meadows, highlands), sand
@@ -107,10 +143,11 @@ Great Beacon to bring back the dawn.
 
 You are the guardian spirit of six settlers. **You never directly control
 villagers** — you assign their **Jobs** (Forager, Lumberjack, Miner, Farmer,
-Fisher, Medic, Builder, Guard) and they work autonomously.
+Fisher, Medic, Fletcher, Smith, Cook, Brewer, Builder, Guard) and they work
+autonomously.
 
 - **Day (~3.5 min):** gather berries/wood/stone/herbs, build, farm, fish,
-  repair.
+  craft arrows/tools/meals/ale, repair.
 - **Dusk:** you're told how many monsters are coming **and from which lair**.
   Every 5th night is a **blood moon** (+50% horde, double essence from kills).
 - **Night (~1.5 min):** the horde crawls out of its **Dark Monoliths** (pink
@@ -190,6 +227,16 @@ This game was designed from a review-driven audit of its inspirations.
   1 herb per 5 hp mended.
 - **Growth:** wanderer at dawn if food ≥ 14 and beds free (65% chance);
   refugees ×2 every 3rd day; pop cap 44.
+- **Supply lines (v1.2):** arrows 2 per wood (~2.4s); tower shot 1 arrow,
+  ballista 2, raid 5; dry guards ×0.75 and towers hold fire. Tools 2 wood +
+  1 stone, ~125s of work each, bare hands ×0.65. Meals: 3 food + 1 wood →
+  2 meals × 85 hunger (vs 3 food → 54 raw). Ale: 2 food + 1 herb → +10%
+  next-day work. Caps: wood/stone 120, food 80, herbs 20, arrows 60, tools
+  10, meals/ale 12; granary +80 pantry, storehouse +100, warehouse +60;
+  overflow spoils at dawn. Comfort: tent 1/bed, cottage 2, manor 3 →
+  ×1.05 snug / ×0.95 content / ×0.88 crowded / ×0.85 miserable (possible
+  dawn departures from day 4). Upgrades: tower II 30w+20s → III 60w+45s,
+  farm2 10w+14s, stoneface 3s.
 
 Every knob is one edit in `CONFIG` — tune freely.
 

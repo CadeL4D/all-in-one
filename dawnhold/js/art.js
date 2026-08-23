@@ -369,6 +369,175 @@ const Art = {
       R(x, 4, 26, 7, 6, PAL.wood); R(x, 5, 27, 5, 1, PAL.woodD); R(x, 21, 26, 7, 6, PAL.wood); R(x, 22, 27, 5, 1, PAL.woodD);
       S.warehouse = c;
     }
+    // --- granary 2x2 (v1.2 supply lines) ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 4, 14, 24, 14, PAL.plank);
+      for (let i = 0; i < 4; i++) R(x, 4, 16 + i * 3, 24, 1, PAL.plankD);
+      for (let i = 0; i < 7; i++) R(x, 2 + i, 5 + i, 28 - i * 2, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 3, 26, 2, 5, PAL.woodD); R(x, 27, 26, 2, 5, PAL.woodD);   // stilts
+      R(x, 13, 19, 6, 9, PAL.door);
+      R(x, 5, 17, 5, 5, '#d8b46a'); R(x, 6, 18, 3, 1, '#b8944e');    // grain sacks
+      R(x, 22, 17, 5, 5, '#d8b46a'); R(x, 23, 18, 3, 1, '#b8944e');
+      R(x, 7, 24, 3, 4, '#c9a75e'); R(x, 24, 24, 2, 3, '#c9a75e');
+      S.granary = c;
+    }
+    // --- storehouse 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 2, 12, 28, 17, PAL.stoneB);
+      for (let r = 0; r < 4; r++) R(x, 2, 13 + r * 4, 28, 1, PAL.stoneD);
+      R(x, 1, 8, 30, 5, PAL.wood);
+      for (let i = 0; i < 8; i++) R(x, 1 + i * 4, 8, 1, 5, PAL.woodD);
+      R(x, 13, 19, 6, 10, PAL.door);
+      R(x, 4, 24, 7, 2, PAL.wood); R(x, 5, 22, 5, 2, PAL.woodD); R(x, 5, 26, 5, 2, PAL.wood); // log piles
+      R(x, 21, 24, 7, 2, PAL.wood); R(x, 22, 22, 5, 2, PAL.woodD); R(x, 22, 26, 5, 2, PAL.wood);
+      R(x, 23, 16, 5, 5, '#d8b46a'); R(x, 24, 17, 3, 1, '#b8944e');
+      S.storehouse = c;
+    }
+    // --- smithy 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 3, 14, 26, 15, PAL.stoneB);
+      for (let r = 0; r < 4; r++) R(x, 3, 15 + r * 4, 26, 1, PAL.stoneD);
+      R(x, 22, 4, 6, 12, PAL.stoneB); R(x, 22, 4, 6, 1, PAL.stoneL);  // chimney
+      R(x, 23, 3, 4, 2, PAL.stoneD); R(x, 24, 8, 2, 3, '#3a3a42');
+      for (let i = 0; i < 6; i++) R(x, 4 + i, 8 + i, 18 - i * 2, 1, i % 2 ? PAL.plankD : PAL.plank); // shed roof
+      R(x, 4, 14, 18, 1, PAL.plankD);
+      R(x, 8, 20, 7, 6, '#3a3a42'); R(x, 9, 21, 5, 4, '#ff7a2e'); R(x, 10, 22, 3, 2, '#ffce56'); // forge mouth
+      R(x, 20, 21, 6, 2, PAL.metalD); R(x, 21, 19, 4, 2, PAL.metal); // anvil
+      R(x, 17, 26, 3, 6, '#6b4a26'); R(x, 16, 25, 5, 2, PAL.wood);   // hammer haft
+      S.smithy = c;
+    }
+    // --- kitchen 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 4, 16, 24, 12, PAL.plank);
+      for (let i = 0; i < 4; i++) R(x, 4, 17 + i * 3, 24, 1, PAL.plankD);
+      for (let i = 0; i < 8; i++) R(x, 2 + i, 4 + i, 28 - i * 2, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 2, 12, 28, 2, PAL.thatchD);
+      R(x, 13, 22, 6, 6, PAL.door);
+      R(x, 6, 20, 4, 4, '#2c2c34');
+      R(x, 21, 21, 7, 5, PAL.metalD); R(x, 22, 22, 5, 3, PAL.metal); // cauldron
+      R(x, 23, 18, 1, 3, '#cfd8e0'); R(x, 25, 17, 1, 4, '#cfd8e0'); R(x, 27, 19, 1, 2, '#cfd8e0'); // steam
+      S.kitchen = c;
+    }
+    // --- fletcher hut 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 5, 15, 22, 13, PAL.plank);
+      for (let i = 0; i < 4; i++) R(x, 5, 16 + i * 3, 22, 1, PAL.plankD);
+      for (let i = 0; i < 7; i++) R(x, 3 + i, 6 + i, 26 - i * 2, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 12, 20, 6, 8, PAL.door);
+      R(x, 21, 20, 1, 9, '#c9b47a'); R(x, 23, 20, 1, 9, '#c9b47a'); R(x, 25, 20, 1, 9, '#c9b47a'); // arrow bundle
+      R(x, 20, 24, 7, 1, '#b8452e');
+      R(x, 21, 17, 1, 2, '#e8e0d0'); R(x, 23, 17, 1, 2, '#e8e0d0'); R(x, 25, 17, 1, 2, '#e8e0d0');  // fletchings
+      R(x, 27, 18, 1, 10, '#c9b47a'); R(x, 26, 22, 3, 1, '#b8452e');
+      R(x, 7, 18, 3, 3, '#2c2c34');
+      S.fletch = c;
+    }
+    // --- tavern 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 3, 14, 26, 15, PAL.plank);
+      for (let i = 0; i < 5; i++) R(x, 3, 15 + i * 3, 26, 1, PAL.plankD);
+      R(x, 3, 14, 26, 1, PAL.woodL);
+      R(x, 5, 14, 2, 15, PAL.woodD); R(x, 25, 14, 2, 15, PAL.woodD); R(x, 5, 20, 22, 2, PAL.woodD); // half-timber
+      for (let i = 0; i < 8; i++) R(x, 1 + i, 4 + i, 30 - i * 2, 1, i % 2 ? '#8a4a3a' : '#a05a48'); // red roof
+      R(x, 1, 11, 30, 3, '#7a4234');
+      R(x, 13, 21, 6, 8, PAL.door);
+      R(x, 6, 19, 4, 4, '#ffdf9a'); R(x, 22, 19, 4, 4, '#ffdf9a');   // warm windows
+      R(x, 12, 2, 8, 6, PAL.wood); R(x, 13, 3, 6, 4, '#e8b84a');     // hanging sign
+      R(x, 14, 4, 4, 2, '#8a5a2b'); R(x, 15, 8, 2, 2, PAL.woodD);    // mug + bracket
+      S.tavern = c;
+    }
+    // --- manor 3x2 ---
+    {
+      const { c, x } = mkc(48, 32);
+      R(x, 4, 14, 40, 14, PAL.stoneB);
+      for (let r = 0; r < 4; r++) R(x, 4, 15 + r * 4, 40, 1, PAL.stoneD);
+      R(x, 18, 14, 1, 14, PAL.stoneD); R(x, 30, 14, 1, 14, PAL.stoneD);
+      for (let i = 0; i < 9; i++) {                                   // twin slate slopes
+        R(x, 2 + i, 5 + i, 26 - i * 2, 1, i % 2 ? '#5a6274' : '#6a7284');
+        R(x, 26 + i, 5 + i, 26 - i * 2, 1, i % 2 ? '#5a6274' : '#6a7284');
+      }
+      R(x, 2, 13, 44, 2, '#4a5262');
+      R(x, 8, 3, 4, 8, PAL.stoneB); R(x, 8, 3, 4, 1, PAL.stoneL);
+      R(x, 36, 3, 4, 8, PAL.stoneB); R(x, 36, 3, 4, 1, PAL.stoneL);   // chimneys
+      R(x, 21, 20, 6, 8, PAL.door); R(x, 23, 20, 1, 8, '#4a3018');
+      R(x, 9, 18, 4, 5, '#ffdf9a'); R(x, 35, 18, 4, 5, '#ffdf9a');
+      R(x, 14, 19, 3, 4, '#2c2c34'); R(x, 31, 19, 3, 4, '#2c2c34');
+      S.manor = c;
+    }
+    // --- watchtower II (upgrade tier) ---
+    {
+      const { c, x } = mkc(16, 36);
+      R(x, 4, 14, 8, 20, PAL.plank);
+      for (let i = 0; i < 6; i++) R(x, 4, 16 + i * 3, 8, 1, PAL.plankD);
+      R(x, 2, 12, 12, 3, PAL.wood); R(x, 2, 12, 12, 1, PAL.woodL);
+      R(x, 2, 9, 1, 3, PAL.woodD); R(x, 13, 9, 1, 3, PAL.woodD); R(x, 2, 9, 12, 1, PAL.wood);
+      for (let i = 0; i < 5; i++) R(x, 2 + i * 3, 3 + (i % 2), 3, 2, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 7, 5, 2, 2, '#ff9a2e');
+      R(x, 13, 2, 1, 7, '#6b4a26'); R(x, 14, 2, 2, 2, '#c03030');    // banner
+      S.tower2 = c;
+    }
+    // --- watchtower III (stone keep) ---
+    {
+      const { c, x } = mkc(16, 40);
+      R(x, 4, 14, 8, 24, PAL.stoneB);
+      for (let r = 0; r < 7; r++) R(x, 4, 16 + r * 3, 8, 1, PAL.stoneD);
+      R(x, 4, 14, 1, 24, PAL.stoneL); R(x, 11, 14, 1, 24, PAL.stoneD);
+      R(x, 3, 10, 2, 4, PAL.stoneB); R(x, 7, 10, 2, 4, PAL.stoneB); R(x, 11, 10, 2, 4, PAL.stoneB); // crenellations
+      R(x, 3, 10, 2, 1, PAL.stoneL); R(x, 7, 10, 2, 1, PAL.stoneL); R(x, 11, 10, 2, 1, PAL.stoneL);
+      R(x, 3, 14, 10, 1, PAL.stoneD);
+      R(x, 6, 18, 4, 5, '#2c2c34');                                  // arrow slit
+      R(x, 7, 7, 2, 3, '#ff9a2e');                                   // brazier
+      R(x, 12, 1, 1, 9, '#6b4a26'); R(x, 13, 1, 2, 3, '#c9a94b');    // pennant
+      S.tower3 = c;
+    }
+    // --- stone-faced palisade (upgrade tier) ---
+    {
+      const { c, x } = mkc(16, 16);
+      for (let r = 0; r < 2; r++) {                                  // stone base
+        R(x, 0, 8 + r * 4, 16, 3, r % 2 ? PAL.stoneB : '#93939d');
+        R(x, 0, 11 + r * 4, 16, 1, PAL.stoneD);
+      }
+      R(x, 0, 8, 16, 1, PAL.stoneL);
+      [3, 8, 13].forEach(ox => {                                     // timber top
+        R(x, ox, 1, 3, 7, PAL.wood);
+        R(x, ox, 1, 3, 1, PAL.woodL); R(x, ox + 2, 1, 1, 7, PAL.woodD);
+        R(x, ox + 1, 0, 1, 1, '#8a6a38');
+      });
+      R(x, 0, 4, 16, 1, PAL.woodD);
+      S.wallSF = c;
+    }
+    // --- irrigated plot 2x2, 4 stages ---
+    {
+      const stages2 = [
+        { spr: 0, col: null },
+        { spr: 1, col: PAL.sprout },
+        { spr: 2, col: '#8fbf48' },
+        { spr: 3, col: PAL.wheat },
+      ];
+      stages2.forEach((st, si) => {
+        const { c, x } = mkc(32, 32);
+        for (let r = 0; r < 5; r++) {
+          R(x, 2, 3 + r * 6, 28, 3, r % 2 ? PAL.soil : PAL.soilD);
+          R(x, 2, 6 + r * 6, 28, 1, '#4a7ea8');                      // irrigation rills
+        }
+        R(x, 0, 0, 32, 2, '#5a8a4a'); R(x, 0, 30, 32, 2, '#4e7a40');
+        R(x, 0, 15, 32, 1, '#5a8ec0'); R(x, 0, 27, 32, 1, '#5a8ec0');
+        if (st.spr > 0) {
+          for (let r = 0; r < 5; r++) for (let i = 0; i < 7; i++) {
+            const px = 4 + i * 4, py = 4 + r * 6;
+            if (st.spr === 1) R(x, px, py - 1, 1, 2, st.col);
+            else if (st.spr === 2) { R(x, px, py - 3, 1, 4, st.col); R(x, px - 1, py - 2, 1, 2, '#6ea83c'); }
+            else { R(x, px, py - 5, 1, 6, st.col); R(x, px - 1, py - 6, 3, 2, PAL.wheatD); R(x, px, py - 4, 1, 1, '#e8cc70'); }
+          }
+        }
+        S['farm2_' + si] = c;
+      });
+    }
     // --- cottage 2x2 ---
     {
       const { c, x } = mkc(32, 32);
@@ -864,6 +1033,10 @@ const Art = {
     ic('sun', x => { R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 7, 1, 2, 3, '#ffd94a'); R(x, 7, 12, 2, 3, '#ffd94a'); R(x, 1, 7, 3, 2, '#ffd94a'); R(x, 12, 7, 3, 2, '#ffd94a'); R(x, 6, 6, 2, 2, '#fff2b0'); });
     ic('moon', x => { R(x, 4, 2, 7, 12, '#c9d4f0'); R(x, 8, 2, 6, 12, '#1e222b'); R(x, 3, 5, 2, 2, '#c9d4f0'); R(x, 2, 9, 2, 2, '#c9d4f0'); });
     ic('dusk', x => { R(x, 1, 7, 14, 2, '#e8894a'); R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 11, 5, 5, 6, '#1e222b'); });
+    ic('arrow', x => { R(x, 12, 2, 2, 2, '#e8e0d0'); R(x, 10, 4, 2, 2, '#e8e0d0'); R(x, 3, 11, 8, 2, '#c9b47a'); R(x, 2, 12, 2, 2, '#b8b8c0'); R(x, 4, 10, 2, 2, '#cfd8e0'); R(x, 11, 1, 2, 2, '#e05555'); });
+    ic('tool', x => { R(x, 6, 2, 4, 8, '#8a6a4a'); R(x, 4, 9, 8, 4, PAL.metal); R(x, 4, 9, 8, 1, PAL.metalD); R(x, 7, 3, 1, 6, '#6b4a32'); });
+    ic('meal', x => { R(x, 3, 7, 10, 6, '#d8d8e0'); R(x, 4, 6, 8, 2, '#efeff5'); R(x, 5, 8, 2, 2, '#e8a94b'); R(x, 9, 9, 2, 2, '#7dc95e'); R(x, 7, 4, 2, 2, '#cfd8e0'); });
+    ic('ale', x => { R(x, 5, 4, 6, 10, '#d8b46a'); R(x, 4, 5, 1, 6, '#b8944e'); R(x, 11, 6, 3, 4, '#d8b46a'); R(x, 5, 4, 6, 2, '#f0e0b0'); R(x, 6, 3, 4, 1, '#f0f0e0'); });
   },
 
   /* -------- villager sprites (per unique look) -------- */

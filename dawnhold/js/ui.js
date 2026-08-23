@@ -110,7 +110,11 @@ const UI = {
     const e = mk('essence', 'essence', 'Essence — fuels your Powers');
     const bar = document.createElement('div'); bar.id = 'essBar'; bar.innerHTML = '<div id="essFill"></div>';
     e.appendChild(bar); e.id = 'essChip';
-    mk('herbs', 'herb', 'Herbs — consumed by the Herbalist Hut to heal the wounded');
+    mk('herbs', 'herb', 'Herbs — stock the Hospital and brew ale');
+    mk('arrows', 'arrow', 'Arrows — burned by towers and raiding guards; Fletchers make them from wood');
+    mk('tools', 'tool', 'Tools — worn down by every worker; forged at the Smithy');
+    mk('meals', 'meal', 'Meals — cooked food satisfies far better than raw berries');
+    mk('ale', 'ale', 'Ale — a dusk drink at the Tavern speeds tomorrow\u2019s work');
     mk('pop', 'pop', 'Villagers / housing capacity');
   },
 
@@ -122,6 +126,19 @@ const UI = {
     set('food', Math.floor(G.res.food));
     set('essence', Math.floor(G.res.essence));
     set('herbs', Math.floor(G.res.herbs || 0));
+    set('arrows', Math.floor(G.res.arrows || 0));
+    set('tools', Math.floor(G.res.tools || 0));
+    set('meals', Math.floor(G.res.meals || 0));
+    set('ale', Math.floor(G.res.ale || 0));
+    const show = (k, cond) => { const c = document.getElementById('chip_' + k); if (c) c.style.display = cond ? '' : 'none'; };
+    show('arrows', G.res.arrows >= 1 || Buildings.built('fletch'));
+    show('tools', G.res.tools >= 1 || Buildings.built('smithy'));
+    show('meals', G.res.meals >= 1 || Buildings.built('kitchen'));
+    show('ale', G.res.ale >= 1 || Buildings.built('tavern'));
+    for (const k of ['wood', 'stone', 'food']) {
+      const cap = Buildings.capOf(k), chip = document.getElementById('chip_' + k);
+      if (chip) chip.title = `${k[0].toUpperCase() + k.slice(1)} — ${Math.floor(G.res[k])} / ${cap} (Granaries & Storehouses raise caps)`;
+    }
     const cap = Buildings.housingCap();
     set('pop', G.villagers.length + '/' + cap);
     document.getElementById('chip_food').classList.toggle('low', G.res.food < 15 && G.villagers.length > 0);
@@ -277,7 +294,12 @@ const UI = {
             const route = Path.find(World.center.x | 0, World.center.y | 0, b.x, b.y, { adjacent: true });
             if (!route) { this.toast('No route to that lair — the wilds are too thick.', 'bad'); return; }
             G.raidTarget = b;
-            this.toast('Guards: RAID THE MONOLITH!', 'good');
+            if (G.res.arrows >= CONFIG.AMMO.raidCost) {
+              G.res.arrows -= CONFIG.AMMO.raidCost;
+              this.toast(`Quivers loaded (${CONFIG.AMMO.raidCost} arrows) — RAID THE MONOLITH!`, 'good');
+            } else {
+              this.toast('RAID THE MONOLITH! But the quivers are dry — guards hit softer without arrows.', 'bad');
+            }
           }
           this.selRender();
         };
@@ -291,12 +313,25 @@ const UI = {
       else if (b.def.housing) extra = `<div class="sub">Shelters ${b.def.housing}</div>`;
       else if (b.key === 'beacon') extra = `<div class="sub" style="color:var(--amber2)">${b.lit ? 'THE FLAME BURNS. Survive the Long Night!' : 'Unlit. Complete it to call the final dawn.'}</div>`;
       const dem = b.key === 'camp' ? '' : `<button class="warn" id="selDem">Demolish</button>`;
+      const nd = b.built && !b.demo && b.def.next && BUILD[b.def.next] ? BUILD[b.def.next] : null;
+      const up = nd ? `<button id="selUp">\u2b06 ${U.esc(nd.name)}</button>` : '';
+      const upCost = nd ? `${nd.cost.wood || 0} wood${nd.cost.stone ? ' \u00b7 ' + nd.cost.stone + ' stone' : ''}` : '';
+      const oldName = b.def.name;
       el.innerHTML = `
         <h3>${U.esc(b.def.name)}</h3>
         <div class="sub">${U.esc(b.def.desc || '')}</div>
         <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(b.hp / b.maxHp * 100, 0, 100)}%"></div></div></div>
         ${extra}
-        <div class="selActs">${dem}<button id="selClose">Close</button></div>`;
+        ${nd ? `<div class="sub" style="color:var(--amber2)">Upgrade in place: ${U.esc(nd.name)} — ${upCost}</div>` : ''}
+        <div class="selActs">${up}${dem}<button id="selClose">Close</button></div>`;
+      if (up) document.getElementById('selUp').onclick = () => {
+        if (Buildings.upgrade(b)) {
+          this.toast(`${nd.name} raised in place of the old ${oldName}.`, 'good');
+          Sim.log(`${nd.name} raised in place of an older structure.`, 'good');
+        } else this.toast(`Upgrade needs ${upCost} in store.`, 'bad');
+        this.selRender();
+        this.updateHUD();
+      };
       if (dem) document.getElementById('selDem').onclick = () => {
         Buildings.demolish(b);
         this.toast(`Demolished ${b.def.name} — half the cost reclaimed.`, '');
@@ -309,10 +344,11 @@ const UI = {
   cycleJob(v, dir) {
     const i = JOBS.indexOf(v.job);
     let ni = i + dir;
-    // the Medic duty needs a built Hospital — skip over it in the cycle
-    while (JOBS[ni] === 'medic' && !Buildings.hospitals().length) ni += dir;
+    // workplace-gated duties (Medic, Fletcher, Smith, Cook, Brewer) skip in the cycle
+    while (JOB_NEEDS[JOBS[ni]] && !Buildings.built(JOB_NEEDS[JOBS[ni]])) ni += dir;
     if (ni < 0 || ni >= JOBS.length) {
-      if (!Buildings.hospitals().length) this.toast('The Medic duty needs a built Hospital.', '');
+      const blocked = JOBS.filter(j => JOB_NEEDS[j] && !Buildings.built(JOB_NEEDS[j]));
+      if (blocked.length) this.toast(`Some duties need their workplace built first (${blocked.map(j => JOB_INFO[j].name).join(', ')}).`, '');
       return;
     }
     if (ni === i) return;
@@ -457,12 +493,13 @@ const UI = {
     const sum = JOBS.filter(j => j !== 'idle').reduce((s, j) => s + (G.jobs[j] || 0), 0);
     const note = document.createElement('div');
     note.className = 'jnote';
-    note.innerHTML = `Villagers: <b>${pop}</b> \u00b7 Assigned: <b>${Math.min(sum, pop)}</b> \u00b7 Resting: <b>${Math.max(0, pop - sum)}</b><br>Tap <b>+</b>/<b>&minus;</b> to move people between duties. They start at once.`;
+    const cm = Sim.contentment();
+    note.innerHTML = `Villagers: <b>${pop}</b> \u00b7 Assigned: <b>${Math.min(sum, pop)}</b> \u00b7 Resting: <b>${Math.max(0, pop - sum)}</b><br>Housing: <b>${cm.label}</b> \u00d7${cm.mult.toFixed(2)} work — beds and comfort pay off.<br>Tap <b>+</b>/<b>&minus;</b> to move people between duties. They start at once.`;
     wrap.appendChild(note);
     for (const j of JOBS) {
       if (j === 'idle') continue;
       const info = JOB_INFO[j];
-      const medLocked = j === 'medic' && !Buildings.hospitals().length;
+      const locked = JOB_NEEDS[j] && !Buildings.built(JOB_NEEDS[j]);
       const row = document.createElement('div');
       row.className = 'jrow';
       const icon = document.createElement('canvas');
@@ -473,7 +510,7 @@ const UI = {
       row.appendChild(icon);
       const txt = document.createElement('div');
       txt.style.flex = '1';
-      txt.innerHTML = `<div class="jn">${medLocked ? info.name + ' 🔒' : info.name}</div><div class="jd">${medLocked ? 'Requires a built Hospital (buildable after night one).' : info.desc}</div>`;
+      txt.innerHTML = `<div class="jn">${locked ? info.name + ' \u{1F512}' : info.name}</div><div class="jd">${locked ? `Requires a built ${U.esc(BUILD[JOB_NEEDS[j]].name)}.` : info.desc}</div>`;
       row.appendChild(txt);
       const cnt = document.createElement('div');
       cnt.className = 'cnt';
@@ -487,7 +524,7 @@ const UI = {
       const plus = document.createElement('button');
       plus.textContent = '+';
       plus.onclick = () => {
-        if (medLocked) { this.toast('Build a Hospital first — it unlocks after night one.', 'bad'); return; }
+        if (locked) { this.toast(`Build a ${BUILD[JOB_NEEDS[j]].name} first.`, 'bad'); return; }
         const s2 = JOBS.filter(jj => jj !== 'idle').reduce((s, jj) => s + (G.jobs[jj] || 0), 0);
         if (s2 >= pop) { this.toast('No one is resting — every soul has a duty.', ''); return; }
         G.jobs[j] = (G.jobs[j] || 0) + 1;
@@ -979,8 +1016,21 @@ const UI = {
         <li><b>Farmer</b> — tends wheat plots. A Windmill nearby grows them 35% faster.</li>
         <li><b>Fisher</b> — works a Fishing Dock on the shore. Steady food, no farmland.</li>
         <li><b>Medic</b> — gathers herbs to stock the Hospital, which mends the wounded nearby. Needs a built Hospital (day 2).</li>
+        <li><b>Fletcher</b> — fashions arrows from wood at a Fletcher Hut; towers and raiding guards burn them.</li>
+        <li><b>Smith</b> — forges tools at the Smithy; every worker wears them out, and bare hands are slow.</li>
+        <li><b>Cook</b> — simmers berries into proper meals at the Kitchen (3 food + 1 wood \u2192 2 meals).</li>
+        <li><b>Brewer</b> — brews ale at the Tavern (food + herbs); a dusk drink speeds the whole village tomorrow.</li>
         <li><b>Builder</b> — raises construction, repairs damage (costs materials), clears marked wild tiles and <b>fills shore water with stone</b> to make new land.</li>
         <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage.</li>
+      </ul>
+      <h2>Supply Lines</h2>
+      <ul>
+        <li><b>Arrows are ammunition</b> — every tower shot spends 1 (ballistae 2), and raids pack quivers (5). Dry quivers: towers hold fire, guards hit at 75%. Build a Fletcher Hut before your towers go up.</li>
+        <li><b>Tools wear out</b> — each worker burns through tools (a Smithy forges them from 2 wood + 1 stone). Bare-handed villagers work at 65% speed.</li>
+        <li><b>Cooked beats raw</b> — Kitchen meals satisfy 85 hunger vs 54 for 3 raw food.</li>
+        <li><b>Stores have caps</b> — wood/stone 120, food 80, herbs 20. Granaries & Storehouses raise them; overflow spoils to vermin at dawn.</li>
+        <li><b>Comfort matters</b> — bedrolls (Tent) \u2192 real beds (Cottage) \u2192 manor life: snug villagers work +5%, miserable crowds work slower and some may leave at dawn.</li>
+        <li><b>Upgrades</b> — select a built Watchtower, Wheat Plot or Palisade and press the \u2b06 button for a stronger tier in place.</li>
       </ul>
       <h2>Surviving the Night</h2>
       <ul>

@@ -167,9 +167,9 @@ const Render = {
     const px = b.x * 16, py = (b.y + b.h) * 16; // anchor bottom of footprint
     let spr;
     const animF = ((this._t * 5) | 0) % 2;
-    if (b.key === 'farm') {
+    if (b.key === 'farm' || b.key === 'farm2') {
       const st = b.growth >= 1 ? 3 : b.growth > .55 ? 2 : b.growth > .18 ? 1 : 0;
-      spr = Art.s['farm' + st];
+      spr = Art.s[(b.key === 'farm2' ? 'farm2_' : 'farm') + st];
     } else if (b.key === 'torch') spr = Art.s['torch' + animF];
     else if (b.key === 'lair') spr = Art.s['lair' + animF];
     else if (b.key === 'windmill') spr = Art.s['windmill' + animF];
@@ -398,7 +398,7 @@ const Render = {
         }
       if (ok && !def.terrain) {
         ctx.globalAlpha = .6;
-        const GHOST_SPR = { farm: 'farm0', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
+        const GHOST_SPR = { farm: 'farm0', farm2: 'farm2_0', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
         const spr = Art.s[GHOST_SPR[mode.key] || mode.key];
         if (spr) {
           const hgt = Math.max(spr.height, def.h * 16);

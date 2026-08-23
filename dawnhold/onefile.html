@@ -321,7 +321,7 @@ const CONFIG = {
   // --- day cycle (seconds at 1x speed) ---
   DAY_LEN: 210, NIGHT_LEN: 95, TRANS: 22,   // TRANS = dusk/dawn fade
 
-  START: { wood: 26, stone: 0, food: 48, essence: 40, herbs: 0 },
+  START: { wood: 26, stone: 0, food: 48, essence: 40, herbs: 0, arrows: 0, tools: 0, meals: 0, ale: 0 },
   VIL_START: 6,
 
   // --- hunger / food ---
@@ -333,6 +333,23 @@ const CONFIG = {
   CLEAR: { time: 1.3, waterTime: 4, waterCost: 2 }, // secs/tile (half yield salvaged); water fill is slower and costs stone
   FARM: { grow: 95, yield: 15, tendBoost: 1.2 },
   REPAIR: { rate: 22, cost: 24 }, // hp/s while repairing, hp per 1 resource
+
+  // --- supply lines (v1.2): crafting jobs, ammo, tools, meals, ale, storage ---
+  CRAFT: {
+    arrows: { time: 2.4, in: { wood: 1 }, out: 2 },           // fletcher
+    tools:  { time: 3.2, in: { wood: 2, stone: 1 }, out: 1 }, // smith
+    meals:  { time: 3.0, in: { food: 3, wood: 1 }, out: 2 },  // cook
+    ale:    { time: 3.4, in: { food: 2, herbs: 1 }, out: 1 }, // brewer
+  },
+  AMMO:  { perShot: 1, ballistaShots: 2, raidCost: 5, dryMult: 0.75 },
+  TOOL:  { cond: 100, wear: 0.8, dryMult: 0.65 }, // one tool ≈ two minutes of work
+  MEAL:  { restore: 85 },                          // a hot meal vs raw berries
+  ALE:   { buzz: 0.10 },                           // dusk drink → tomorrow's work
+  STORE: { // hoard caps; Granaries & Storehouses raise them, overflow spoils at dawn
+    wood: 120, stone: 120, food: 80, herbs: 20, arrows: 60, tools: 10, meals: 12, ale: 12,
+    perGranary: 80, perStorehouse: 100, perWarehouse: 60,
+  },
+  COMFORT: { snug: 1.05, snugAt: 1.3, crowd: 0.95, crowdAt: 1.0, packed: 0.88, packedAt: 0.7, leaveChance: 0.2 },
 
   // --- villagers / combat ---
   V: { hp: 60, spd: 2.3, dmg: 3, atkT: 0.85, dayHeal: 0.28 },
@@ -403,7 +420,7 @@ const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6,
 const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4 };
 
 // ---- jobs ----
-const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'medic', 'builder', 'guard'];
+const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'medic', 'builder', 'guard', 'fletcher', 'smith', 'cook', 'brewer'];
 const JOB_INFO = {
   idle:     { name: 'Resting',  cloth: '#e8e0d0', desc: 'No duty. They haul nothing and stay near camp. Idle folk will emergency-forage if food runs dry.' },
   forager:  { name: 'Forager',  cloth: '#4a8f3c', desc: 'Pick berries from bushes. Fast food early on; bushes regrow each day.' },
@@ -414,7 +431,14 @@ const JOB_INFO = {
   medic:   { name: 'Medic',    cloth: '#3f9d84', desc: 'Gathers healing herbs to stock the Hospital, which mends the wounded nearby. Requires a Hospital.' },
   builder:  { name: 'Builder',  cloth: '#e07030', desc: 'Raises new buildings and repairs damaged walls and towers.' },
   guard:    { name: 'Guard',    cloth: '#c03030', desc: 'Patrols the village and fights the shades. Keep at least one after night one.' },
+  fletcher: { name: 'Fletcher', cloth: '#6b8f4a', desc: 'Works the Fletcher Hut, turning wood into arrows. Towers and raiding guards burn them — dry quivers mean a silent defense. Requires a Fletcher Hut.' },
+  smith:    { name: 'Smith',    cloth: '#8a5a52', desc: 'Runs the Smithy, forging tools from wood and stone. Every worker wears a tool out — bare hands work slowly. Requires a Smithy.' },
+  cook:     { name: 'Cook',     cloth: '#c9803c', desc: 'Runs the Kitchen, turning 3 food + 1 wood into 2 hearty meals that feed far better than raw berries. Requires a Kitchen.' },
+  brewer:   { name: 'Brewer',   cloth: '#b8862e', desc: 'Runs the Tavern, brewing food + herbs into ale. A drink at dusk makes the whole village work faster tomorrow. Requires a Tavern.' },
 };
+
+// duties that need their workplace built before they can be staffed
+const JOB_NEEDS = { medic: 'hospital', fletcher: 'fletch', smith: 'smithy', cook: 'kitchen', brewer: 'tavern' };
 
 // ---- utilities ----
 const U = {
@@ -453,11 +477,11 @@ const G = {
   phase: 'day',            // day | dusk | night | dawn
   speed: 1, paused: false,
   diff: 'normal', diffM: CONFIG.DIFF.normal,
-  res: { wood: 0, stone: 0, food: 0, essence: 0, herbs: 0 },
+  res: { wood: 0, stone: 0, food: 0, essence: 0, herbs: 0, arrows: 0, tools: 0, meals: 0, ale: 0 },
   villagers: [], monsters: [], buildings: [],
   clearJobs: [],           // queued land-clearing tiles {x, y} for builders
   effects: [], floaters: [],
-  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0 },
+  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0 },
   regrow: new Map(),       // tileIdx -> {t, kind}
   unlocks: {},             // buildKey -> true (granted)
   stats: { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: 6 },
@@ -465,6 +489,7 @@ const G = {
   wave: null,              // pending spawn state for the night
   finalNight: false, beaconLit: false, boss: null, bloodMoon: false,
   raidTarget: null,        // lair building the guards are ordered to raid
+  dryWarned: false,        // one "towers are dry" notice per night
   tut: 0, tutOn: true,
   shake: 0,
   cam: { x: 0, y: 0, z: CONFIG.ZOOM.start },
@@ -866,6 +891,175 @@ const Art = {
       R(x, 5, 17, 4, 4, '#2c2c34'); R(x, 23, 17, 4, 4, '#2c2c34');
       R(x, 4, 26, 7, 6, PAL.wood); R(x, 5, 27, 5, 1, PAL.woodD); R(x, 21, 26, 7, 6, PAL.wood); R(x, 22, 27, 5, 1, PAL.woodD);
       S.warehouse = c;
+    }
+    // --- granary 2x2 (v1.2 supply lines) ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 4, 14, 24, 14, PAL.plank);
+      for (let i = 0; i < 4; i++) R(x, 4, 16 + i * 3, 24, 1, PAL.plankD);
+      for (let i = 0; i < 7; i++) R(x, 2 + i, 5 + i, 28 - i * 2, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 3, 26, 2, 5, PAL.woodD); R(x, 27, 26, 2, 5, PAL.woodD);   // stilts
+      R(x, 13, 19, 6, 9, PAL.door);
+      R(x, 5, 17, 5, 5, '#d8b46a'); R(x, 6, 18, 3, 1, '#b8944e');    // grain sacks
+      R(x, 22, 17, 5, 5, '#d8b46a'); R(x, 23, 18, 3, 1, '#b8944e');
+      R(x, 7, 24, 3, 4, '#c9a75e'); R(x, 24, 24, 2, 3, '#c9a75e');
+      S.granary = c;
+    }
+    // --- storehouse 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 2, 12, 28, 17, PAL.stoneB);
+      for (let r = 0; r < 4; r++) R(x, 2, 13 + r * 4, 28, 1, PAL.stoneD);
+      R(x, 1, 8, 30, 5, PAL.wood);
+      for (let i = 0; i < 8; i++) R(x, 1 + i * 4, 8, 1, 5, PAL.woodD);
+      R(x, 13, 19, 6, 10, PAL.door);
+      R(x, 4, 24, 7, 2, PAL.wood); R(x, 5, 22, 5, 2, PAL.woodD); R(x, 5, 26, 5, 2, PAL.wood); // log piles
+      R(x, 21, 24, 7, 2, PAL.wood); R(x, 22, 22, 5, 2, PAL.woodD); R(x, 22, 26, 5, 2, PAL.wood);
+      R(x, 23, 16, 5, 5, '#d8b46a'); R(x, 24, 17, 3, 1, '#b8944e');
+      S.storehouse = c;
+    }
+    // --- smithy 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 3, 14, 26, 15, PAL.stoneB);
+      for (let r = 0; r < 4; r++) R(x, 3, 15 + r * 4, 26, 1, PAL.stoneD);
+      R(x, 22, 4, 6, 12, PAL.stoneB); R(x, 22, 4, 6, 1, PAL.stoneL);  // chimney
+      R(x, 23, 3, 4, 2, PAL.stoneD); R(x, 24, 8, 2, 3, '#3a3a42');
+      for (let i = 0; i < 6; i++) R(x, 4 + i, 8 + i, 18 - i * 2, 1, i % 2 ? PAL.plankD : PAL.plank); // shed roof
+      R(x, 4, 14, 18, 1, PAL.plankD);
+      R(x, 8, 20, 7, 6, '#3a3a42'); R(x, 9, 21, 5, 4, '#ff7a2e'); R(x, 10, 22, 3, 2, '#ffce56'); // forge mouth
+      R(x, 20, 21, 6, 2, PAL.metalD); R(x, 21, 19, 4, 2, PAL.metal); // anvil
+      R(x, 17, 26, 3, 6, '#6b4a26'); R(x, 16, 25, 5, 2, PAL.wood);   // hammer haft
+      S.smithy = c;
+    }
+    // --- kitchen 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 4, 16, 24, 12, PAL.plank);
+      for (let i = 0; i < 4; i++) R(x, 4, 17 + i * 3, 24, 1, PAL.plankD);
+      for (let i = 0; i < 8; i++) R(x, 2 + i, 4 + i, 28 - i * 2, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 2, 12, 28, 2, PAL.thatchD);
+      R(x, 13, 22, 6, 6, PAL.door);
+      R(x, 6, 20, 4, 4, '#2c2c34');
+      R(x, 21, 21, 7, 5, PAL.metalD); R(x, 22, 22, 5, 3, PAL.metal); // cauldron
+      R(x, 23, 18, 1, 3, '#cfd8e0'); R(x, 25, 17, 1, 4, '#cfd8e0'); R(x, 27, 19, 1, 2, '#cfd8e0'); // steam
+      S.kitchen = c;
+    }
+    // --- fletcher hut 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 5, 15, 22, 13, PAL.plank);
+      for (let i = 0; i < 4; i++) R(x, 5, 16 + i * 3, 22, 1, PAL.plankD);
+      for (let i = 0; i < 7; i++) R(x, 3 + i, 6 + i, 26 - i * 2, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 12, 20, 6, 8, PAL.door);
+      R(x, 21, 20, 1, 9, '#c9b47a'); R(x, 23, 20, 1, 9, '#c9b47a'); R(x, 25, 20, 1, 9, '#c9b47a'); // arrow bundle
+      R(x, 20, 24, 7, 1, '#b8452e');
+      R(x, 21, 17, 1, 2, '#e8e0d0'); R(x, 23, 17, 1, 2, '#e8e0d0'); R(x, 25, 17, 1, 2, '#e8e0d0');  // fletchings
+      R(x, 27, 18, 1, 10, '#c9b47a'); R(x, 26, 22, 3, 1, '#b8452e');
+      R(x, 7, 18, 3, 3, '#2c2c34');
+      S.fletch = c;
+    }
+    // --- tavern 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 3, 14, 26, 15, PAL.plank);
+      for (let i = 0; i < 5; i++) R(x, 3, 15 + i * 3, 26, 1, PAL.plankD);
+      R(x, 3, 14, 26, 1, PAL.woodL);
+      R(x, 5, 14, 2, 15, PAL.woodD); R(x, 25, 14, 2, 15, PAL.woodD); R(x, 5, 20, 22, 2, PAL.woodD); // half-timber
+      for (let i = 0; i < 8; i++) R(x, 1 + i, 4 + i, 30 - i * 2, 1, i % 2 ? '#8a4a3a' : '#a05a48'); // red roof
+      R(x, 1, 11, 30, 3, '#7a4234');
+      R(x, 13, 21, 6, 8, PAL.door);
+      R(x, 6, 19, 4, 4, '#ffdf9a'); R(x, 22, 19, 4, 4, '#ffdf9a');   // warm windows
+      R(x, 12, 2, 8, 6, PAL.wood); R(x, 13, 3, 6, 4, '#e8b84a');     // hanging sign
+      R(x, 14, 4, 4, 2, '#8a5a2b'); R(x, 15, 8, 2, 2, PAL.woodD);    // mug + bracket
+      S.tavern = c;
+    }
+    // --- manor 3x2 ---
+    {
+      const { c, x } = mkc(48, 32);
+      R(x, 4, 14, 40, 14, PAL.stoneB);
+      for (let r = 0; r < 4; r++) R(x, 4, 15 + r * 4, 40, 1, PAL.stoneD);
+      R(x, 18, 14, 1, 14, PAL.stoneD); R(x, 30, 14, 1, 14, PAL.stoneD);
+      for (let i = 0; i < 9; i++) {                                   // twin slate slopes
+        R(x, 2 + i, 5 + i, 26 - i * 2, 1, i % 2 ? '#5a6274' : '#6a7284');
+        R(x, 26 + i, 5 + i, 26 - i * 2, 1, i % 2 ? '#5a6274' : '#6a7284');
+      }
+      R(x, 2, 13, 44, 2, '#4a5262');
+      R(x, 8, 3, 4, 8, PAL.stoneB); R(x, 8, 3, 4, 1, PAL.stoneL);
+      R(x, 36, 3, 4, 8, PAL.stoneB); R(x, 36, 3, 4, 1, PAL.stoneL);   // chimneys
+      R(x, 21, 20, 6, 8, PAL.door); R(x, 23, 20, 1, 8, '#4a3018');
+      R(x, 9, 18, 4, 5, '#ffdf9a'); R(x, 35, 18, 4, 5, '#ffdf9a');
+      R(x, 14, 19, 3, 4, '#2c2c34'); R(x, 31, 19, 3, 4, '#2c2c34');
+      S.manor = c;
+    }
+    // --- watchtower II (upgrade tier) ---
+    {
+      const { c, x } = mkc(16, 36);
+      R(x, 4, 14, 8, 20, PAL.plank);
+      for (let i = 0; i < 6; i++) R(x, 4, 16 + i * 3, 8, 1, PAL.plankD);
+      R(x, 2, 12, 12, 3, PAL.wood); R(x, 2, 12, 12, 1, PAL.woodL);
+      R(x, 2, 9, 1, 3, PAL.woodD); R(x, 13, 9, 1, 3, PAL.woodD); R(x, 2, 9, 12, 1, PAL.wood);
+      for (let i = 0; i < 5; i++) R(x, 2 + i * 3, 3 + (i % 2), 3, 2, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 7, 5, 2, 2, '#ff9a2e');
+      R(x, 13, 2, 1, 7, '#6b4a26'); R(x, 14, 2, 2, 2, '#c03030');    // banner
+      S.tower2 = c;
+    }
+    // --- watchtower III (stone keep) ---
+    {
+      const { c, x } = mkc(16, 40);
+      R(x, 4, 14, 8, 24, PAL.stoneB);
+      for (let r = 0; r < 7; r++) R(x, 4, 16 + r * 3, 8, 1, PAL.stoneD);
+      R(x, 4, 14, 1, 24, PAL.stoneL); R(x, 11, 14, 1, 24, PAL.stoneD);
+      R(x, 3, 10, 2, 4, PAL.stoneB); R(x, 7, 10, 2, 4, PAL.stoneB); R(x, 11, 10, 2, 4, PAL.stoneB); // crenellations
+      R(x, 3, 10, 2, 1, PAL.stoneL); R(x, 7, 10, 2, 1, PAL.stoneL); R(x, 11, 10, 2, 1, PAL.stoneL);
+      R(x, 3, 14, 10, 1, PAL.stoneD);
+      R(x, 6, 18, 4, 5, '#2c2c34');                                  // arrow slit
+      R(x, 7, 7, 2, 3, '#ff9a2e');                                   // brazier
+      R(x, 12, 1, 1, 9, '#6b4a26'); R(x, 13, 1, 2, 3, '#c9a94b');    // pennant
+      S.tower3 = c;
+    }
+    // --- stone-faced palisade (upgrade tier) ---
+    {
+      const { c, x } = mkc(16, 16);
+      for (let r = 0; r < 2; r++) {                                  // stone base
+        R(x, 0, 8 + r * 4, 16, 3, r % 2 ? PAL.stoneB : '#93939d');
+        R(x, 0, 11 + r * 4, 16, 1, PAL.stoneD);
+      }
+      R(x, 0, 8, 16, 1, PAL.stoneL);
+      [3, 8, 13].forEach(ox => {                                     // timber top
+        R(x, ox, 1, 3, 7, PAL.wood);
+        R(x, ox, 1, 3, 1, PAL.woodL); R(x, ox + 2, 1, 1, 7, PAL.woodD);
+        R(x, ox + 1, 0, 1, 1, '#8a6a38');
+      });
+      R(x, 0, 4, 16, 1, PAL.woodD);
+      S.wallSF = c;
+    }
+    // --- irrigated plot 2x2, 4 stages ---
+    {
+      const stages2 = [
+        { spr: 0, col: null },
+        { spr: 1, col: PAL.sprout },
+        { spr: 2, col: '#8fbf48' },
+        { spr: 3, col: PAL.wheat },
+      ];
+      stages2.forEach((st, si) => {
+        const { c, x } = mkc(32, 32);
+        for (let r = 0; r < 5; r++) {
+          R(x, 2, 3 + r * 6, 28, 3, r % 2 ? PAL.soil : PAL.soilD);
+          R(x, 2, 6 + r * 6, 28, 1, '#4a7ea8');                      // irrigation rills
+        }
+        R(x, 0, 0, 32, 2, '#5a8a4a'); R(x, 0, 30, 32, 2, '#4e7a40');
+        R(x, 0, 15, 32, 1, '#5a8ec0'); R(x, 0, 27, 32, 1, '#5a8ec0');
+        if (st.spr > 0) {
+          for (let r = 0; r < 5; r++) for (let i = 0; i < 7; i++) {
+            const px = 4 + i * 4, py = 4 + r * 6;
+            if (st.spr === 1) R(x, px, py - 1, 1, 2, st.col);
+            else if (st.spr === 2) { R(x, px, py - 3, 1, 4, st.col); R(x, px - 1, py - 2, 1, 2, '#6ea83c'); }
+            else { R(x, px, py - 5, 1, 6, st.col); R(x, px - 1, py - 6, 3, 2, PAL.wheatD); R(x, px, py - 4, 1, 1, '#e8cc70'); }
+          }
+        }
+        S['farm2_' + si] = c;
+      });
     }
     // --- cottage 2x2 ---
     {
@@ -1362,6 +1556,10 @@ const Art = {
     ic('sun', x => { R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 7, 1, 2, 3, '#ffd94a'); R(x, 7, 12, 2, 3, '#ffd94a'); R(x, 1, 7, 3, 2, '#ffd94a'); R(x, 12, 7, 3, 2, '#ffd94a'); R(x, 6, 6, 2, 2, '#fff2b0'); });
     ic('moon', x => { R(x, 4, 2, 7, 12, '#c9d4f0'); R(x, 8, 2, 6, 12, '#1e222b'); R(x, 3, 5, 2, 2, '#c9d4f0'); R(x, 2, 9, 2, 2, '#c9d4f0'); });
     ic('dusk', x => { R(x, 1, 7, 14, 2, '#e8894a'); R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 11, 5, 5, 6, '#1e222b'); });
+    ic('arrow', x => { R(x, 12, 2, 2, 2, '#e8e0d0'); R(x, 10, 4, 2, 2, '#e8e0d0'); R(x, 3, 11, 8, 2, '#c9b47a'); R(x, 2, 12, 2, 2, '#b8b8c0'); R(x, 4, 10, 2, 2, '#cfd8e0'); R(x, 11, 1, 2, 2, '#e05555'); });
+    ic('tool', x => { R(x, 6, 2, 4, 8, '#8a6a4a'); R(x, 4, 9, 8, 4, PAL.metal); R(x, 4, 9, 8, 1, PAL.metalD); R(x, 7, 3, 1, 6, '#6b4a32'); });
+    ic('meal', x => { R(x, 3, 7, 10, 6, '#d8d8e0'); R(x, 4, 6, 8, 2, '#efeff5'); R(x, 5, 8, 2, 2, '#e8a94b'); R(x, 9, 9, 2, 2, '#7dc95e'); R(x, 7, 4, 2, 2, '#cfd8e0'); });
+    ic('ale', x => { R(x, 5, 4, 6, 10, '#d8b46a'); R(x, 4, 5, 1, 6, '#b8944e'); R(x, 11, 6, 3, 4, '#d8b46a'); R(x, 5, 4, 6, 2, '#f0e0b0'); R(x, 6, 3, 4, 1, '#f0f0e0'); });
   },
 
   /* -------- villager sprites (per unique look) -------- */
@@ -2028,13 +2226,13 @@ class Heap {
 const BUILD = {
   tent: {
     name: 'Tent', cat: 'basics', w: 1, h: 1, hp: 130, cost: { wood: 8 }, time: 16,
-    housing: 2, light: 2.2, kind: 'house', unlock: 0,
-    desc: 'Shelter for two villagers. Cheap and quick — your first priority.',
+    housing: 2, comfort: 1, light: 2.2, kind: 'house', unlock: 0,
+    desc: 'Bedrolls for two villagers. Cheap and quick — your first priority.',
   },
   farm: {
     name: 'Wheat Plot', cat: 'basics', w: 2, h: 2, hp: 140, cost: { wood: 6 }, time: 18,
-    kind: 'farm', grassOnly: true, unlock: 0,
-    desc: 'Reliable food. Wheat ripens in the sun; a Farmer harvests ~15 food.',
+    kind: 'farm', grassOnly: true, unlock: 0, next: 'farm2',
+    desc: 'Reliable food. Wheat ripens in the sun; a Farmer harvests ~15 food. Can be upgraded to irrigated rows.',
   },
   road: {
     name: 'Road', cat: 'basics', w: 1, h: 1, hp: 1, cost: { stone: 1 }, time: 0,
@@ -2043,13 +2241,13 @@ const BUILD = {
   },
   cottage: {
     name: 'Cottage', cat: 'basics', w: 2, h: 2, hp: 380, cost: { wood: 14, stone: 12 }, time: 42,
-    housing: 4, light: 2.8, kind: 'house', unlock: 4,
-    desc: 'Sturdy stone home for four. Warm windows glow at night.',
+    housing: 4, comfort: 2, light: 2.8, kind: 'house', unlock: 4,
+    desc: 'Sturdy stone home for four — real beds, real rest. Warm windows glow at night.',
   },
   wallW: {
     name: 'Palisade', cat: 'defense', w: 1, h: 1, hp: 220, cost: { wood: 2 }, time: 5,
-    kind: 'wall', paint: true, unlock: 0,
-    desc: 'Wooden wall. Blocks the horde. Drag to draw long lines.',
+    kind: 'wall', paint: true, unlock: 0, next: 'wallSF',
+    desc: 'Wooden wall. Blocks the horde. Drag to draw long lines; can be stone-faced later.',
   },
   wallS: {
     name: 'Stone Wall', cat: 'defense', w: 1, h: 1, hp: 520, cost: { stone: 4 }, time: 9,
@@ -2068,8 +2266,8 @@ const BUILD = {
   },
   tower: {
     name: 'Watchtower', cat: 'defense', w: 1, h: 1, hp: 300, cost: { wood: 14, stone: 10 }, time: 32,
-    kind: 'tower', atk: CONFIG.TOWER, light: 2.7, tall: 16, unlock: 3,
-    desc: 'Rains arrows on the horde (8 dmg, range 5.5). Works alone, all night.',
+    kind: 'tower', atk: CONFIG.TOWER, light: 2.7, tall: 16, unlock: 3, next: 'tower2',
+    desc: 'Rains arrows on the horde (8 dmg, range 5.5) — 1 arrow a shot. Works alone, all night, while the quivers last.',
   },
   ballista: {
     name: 'Ballista', cat: 'defense', w: 1, h: 1, hp: 420, cost: { wood: 22, stone: 26 }, time: 50,
@@ -2084,7 +2282,7 @@ const BUILD = {
   warehouse: {
     name: 'Warehouse', cat: 'basics', w: 2, h: 2, hp: 420, cost: { wood: 18, stone: 8 }, time: 40,
     kind: 'store', light: 3.0, unlock: 5,
-    desc: 'A second stockpile — shorten hauling trips and guard outer farms.',
+    desc: 'A second stockpile — shortens hauling trips and raises wood & stone caps by 60.',
   },
   fisher: {
     name: 'Fishing Dock', cat: 'basics', w: 1, h: 1, hp: 160, cost: { wood: 10 }, time: 22,
@@ -2121,6 +2319,41 @@ const BUILD = {
     kind: 'barracks', capOne: true, light: 2.0, tall: 4, unlock: 8,
     desc: 'Drill yard and armory: all Guards deal +30% damage. Only one may stand.',
   },
+  granary: {
+    name: 'Granary', cat: 'basics', w: 2, h: 2, hp: 280, cost: { wood: 10, stone: 6 }, time: 24,
+    kind: 'store', light: 1.8, tall: 5, unlock: 1,
+    desc: 'Raises food, meal, ale & herb caps (+80 food, +10 herbs) and serves as a store. Build more to hoard more.',
+  },
+  storehouse: {
+    name: 'Storehouse', cat: 'basics', w: 2, h: 2, hp: 340, cost: { wood: 12, stone: 8 }, time: 30,
+    kind: 'store', light: 1.8, tall: 6, unlock: 1,
+    desc: 'Raises the wood & stone caps by 100 and serves as a store. Raw materials need room to pile.',
+  },
+  smithy: {
+    name: 'Smithy', cat: 'basics', w: 2, h: 2, hp: 340, cost: { wood: 12, stone: 12 }, time: 36,
+    kind: 'craft', craft: 'tools', light: 2.6, tall: 9, unlock: 2,
+    desc: 'A Smith forges tools (2 wood + 1 stone each); workers wear them out and bare hands are slow. Unlocks the Smith job.',
+  },
+  kitchen: {
+    name: 'Kitchen', cat: 'basics', w: 2, h: 2, hp: 300, cost: { wood: 12, stone: 6 }, time: 30,
+    kind: 'craft', craft: 'meals', light: 2.6, tall: 8, unlock: 2,
+    desc: 'A Cook simmers 3 food + 1 wood into 2 meals that satisfy far better than raw berries. Unlocks the Cook job.',
+  },
+  fletch: {
+    name: 'Fletcher Hut', cat: 'defense', w: 2, h: 2, hp: 280, cost: { wood: 12, stone: 4 }, time: 26,
+    kind: 'craft', craft: 'arrows', light: 2.0, tall: 7, unlock: 3,
+    desc: 'A Fletcher fashions arrows from wood. Towers burn 1 a shot (ballistae 2) and raids pack quivers. Unlocks the Fletcher job.',
+  },
+  tavern: {
+    name: 'Tavern', cat: 'basics', w: 2, h: 2, hp: 360, cost: { wood: 16, stone: 8 }, time: 44,
+    kind: 'craft', craft: 'ale', light: 3.2, tall: 8, unlock: 4,
+    desc: 'A Brewer mashes food + herbs into ale; a drink at dusk puts +10% into tomorrow\u2019s work. Unlocks the Brewer job.',
+  },
+  manor: {
+    name: 'Manor', cat: 'basics', w: 3, h: 2, hp: 520, cost: { wood: 24, stone: 16 }, time: 70,
+    housing: 6, comfort: 3, light: 3.0, tall: 10, kind: 'house', unlock: 6,
+    desc: 'Grand lodgings for six — the plushest beds in the valley. Snug villagers work better.',
+  },
   shrine: {
     name: 'Shrine', cat: 'mystic', w: 1, h: 1, hp: 200, cost: { stone: 16 }, time: 28,
     kind: 'shrine', light: 3.1, tall: 8, essence: true, unlock: 8,
@@ -2131,12 +2364,33 @@ const BUILD = {
     kind: 'beacon', light: 0, tall: 40, unlock: 10,
     desc: 'The Great Beacon of legend. Lighting it calls the final horde — survive that night and dawn returns forever.',
   },
+  // ---- upgrade tiers: reached by upgrading in place, never built directly ----
+  tower2: {
+    name: 'Watchtower II', cat: null, w: 1, h: 1, hp: 520, cost: { wood: 30, stone: 20 }, time: 40,
+    kind: 'tower', atk: { dmg: 12, rate: 1.0, range: 6.0 }, light: 2.8, tall: 18, unlock: 99, next: 'tower3',
+    desc: 'Taller, stronger, meaner (12 dmg, range 6.0). Can be raised further.',
+  },
+  tower3: {
+    name: 'Watchtower III', cat: null, w: 1, h: 1, hp: 800, cost: { wood: 60, stone: 45 }, time: 55,
+    kind: 'tower', atk: { dmg: 17, rate: 0.95, range: 6.4 }, light: 2.9, tall: 20, unlock: 99,
+    desc: 'The valley\u2019s best vantage (17 dmg, range 6.4).',
+  },
+  farm2: {
+    name: 'Irrigated Plot', cat: null, w: 2, h: 2, hp: 180, cost: { wood: 10, stone: 14 }, time: 30,
+    kind: 'farm', grassOnly: true, unlock: 99, yield: 22, growT: 70,
+    desc: 'Channel-fed rows: grows ~25% faster and harvests 22 food.',
+  },
+  wallSF: {
+    name: 'Stone-Faced Palisade', cat: null, w: 1, h: 1, hp: 400, cost: { stone: 3 }, time: 8,
+    kind: 'wall', unlock: 99,
+    desc: 'A palisade backed with stone — nearly a stone wall for half the stone.',
+  },
 };
 
 // starting camp (not buildable)
 const CAMP_DEF = {
   name: 'Settlers\u2019 Camp', cat: null, w: 2, h: 2, hp: 850, cost: {}, time: 0,
-  kind: 'store', light: 3.2, housing: 2, tall: 0, desc: 'Where it all began. Stores goods and shelters two.',
+  kind: 'store', light: 3.2, housing: 2, comfort: 1, tall: 0, desc: 'Where it all began. Stores goods and shelters two.',
 };
 
 // monster lair (not buildable — placed by the map, destroyed by raids)
@@ -2276,8 +2530,8 @@ const Buildings = {
       }
     if (b.built && !silent) {
       const def = b.def;
-      G.res.wood += Math.floor((def.cost.wood || 0) * 0.5);
-      G.res.stone += Math.floor((def.cost.stone || 0) * 0.5);
+      Sim.gain('wood', Math.floor((def.cost.wood || 0) * 0.5));
+      Sim.gain('stone', Math.floor((def.cost.stone || 0) * 0.5));
     }
     if (b.key === 'beacon' && G.beaconLit) { G.beaconLit = false; }
     if (G.sel && G.sel.ref === b) { G.sel = null; UI.selHide(); }
@@ -2308,6 +2562,38 @@ const Buildings = {
 
   count(key) { let n = 0; for (const b of G.buildings) if (b.key === key) n++; return n; },
 
+  built(key) { return G.buildings.some(b => b.built && b.key === key); },
+
+  // storage cap for a resource (null = uncapped). Granaries raise the larder,
+  // Storehouses/Warehouse raise the materials yard.
+  capOf(type) {
+    const S = CONFIG.STORE;
+    if (!(type in S)) return null;
+    let cap = S[type];
+    if (type === 'food' || type === 'meals' || type === 'ale' || type === 'herbs') {
+      const gran = G.buildings.filter(b => b.built && b.key === 'granary').length;
+      cap += gran * (type === 'herbs' ? 10 : S.perGranary);
+    }
+    if (type === 'wood' || type === 'stone') {
+      const sto = G.buildings.filter(b => b.built && b.key === 'storehouse').length;
+      const wh = G.buildings.filter(b => b.built && b.key === 'warehouse').length;
+      cap += sto * S.perStorehouse + wh * S.perWarehouse;
+    }
+    return cap;
+  },
+
+  // pay the next tier's price and transform a built building in place
+  upgrade(b) {
+    const nd = b.def.next && BUILD[b.def.next];
+    if (!nd || !b.built || b.demo) return false;
+    if ((nd.cost.wood || 0) > G.res.wood || (nd.cost.stone || 0) > G.res.stone) return false;
+    G.res.wood -= nd.cost.wood || 0;
+    G.res.stone -= nd.cost.stone || 0;
+    b.key = b.def.next; b.def = nd; b.w = nd.w; b.h = nd.h;
+    b.maxHp = nd.hp; b.hp = nd.hp;
+    return true;
+  },
+
   damaged() {
     return G.buildings.filter(b => b.built && !b.demo && b.hp < b.maxHp - 0.5)
       .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
@@ -2331,7 +2617,7 @@ const Buildings = {
         for (const wm of windmills) {
           if (U.dst(b.x + 1, b.y + 1, wm.x + 1, wm.y + 1) <= 6) { breeze = 1.35; break; }
         }
-        b.growth = Math.min(1, b.growth + dt * boost * breeze / CONFIG.FARM.grow);
+        b.growth = Math.min(1, b.growth + dt * boost * breeze / (b.def.growT || CONFIG.FARM.grow));
       }
       // hospital mends wounded villagers nearby, consuming stored herbs
       if (b.def.kind === 'healer' && b.built && G.res.herbs >= 1) {
@@ -2359,8 +2645,20 @@ const Buildings = {
           if (d < bd) { bd = d; tgt = m; }
         }
         if (tgt) {
-          b.cd = b.def.atk.rate;
-          Sim.shootTower(b, tgt);
+          // every shot spends arrows from the store — dry quivers hold fire
+          const shots = b.key === 'ballista' ? CONFIG.AMMO.ballistaShots : CONFIG.AMMO.perShot;
+          if (G.res.arrows >= shots) {
+            G.res.arrows -= shots;
+            b.cd = b.def.atk.rate;
+            Sim.shootTower(b, tgt);
+          } else {
+            b.cd = 1.0;
+            if (!G.dryWarned) {
+              G.dryWarned = true;
+              UI.toast('Quivers dry — the towers hold fire! Fletchers turn wood into arrows.', 'bad');
+              Sim.log('The towers stood silent for want of arrows.', 'bad');
+            }
+          }
         }
       }
     }
@@ -2376,6 +2674,8 @@ const Buildings = {
       if (k === 'cottage') out.push([b.x * 16 + 8, b.y * 16 + 24], [b.x * 16 + 25, b.y * 16 + 24]);
       else if (k === 'warehouse') out.push([b.x * 16 + 8, b.y * 16 + 21], [b.x * 16 + 26, b.y * 16 + 21]);
       else if (k === 'camp') out.push([b.x * 16 + 8, b.y * 16 + 21], [b.x * 16 + 26, b.y * 16 + 21]);
+      else if (k === 'manor') out.push([b.x * 16 + 10, b.y * 16 + 26], [b.x * 16 + 34, b.y * 16 + 26]);
+      else if (k === 'tavern') out.push([b.x * 16 + 8, b.y * 16 + 22], [b.x * 16 + 24, b.y * 16 + 22]);
       else if (k === 'cottage2') out.push([0, 0]);
     }
     return out;
@@ -2420,6 +2720,7 @@ const Entities = {
       carry: { type: null, amt: 0 },
       atkCd: 0, fearT: 0, stuckT: 0, lastD: 1e9, aiT: Math.random() * 0.5,
       ate: false, starveWarned: false,
+      toolCond: CONFIG.TOOL.cond, buzzed: false,
     };
     if (v.trait && v.trait.key === 'hardy') { v.maxHp += 20; v.hp = v.maxHp; }
     return v;
@@ -2454,6 +2755,9 @@ const Entities = {
   workSpeed(v) {
     let s = 1;
     if (v.trait && v.trait.key === 'diligent') s *= 1.12;
+    if (v.buzzed) s *= 1 + CONFIG.ALE.buzz;        // last night's ale
+    if (v.toolCond <= 0) s *= CONFIG.TOOL.dryMult; // working bare-handed
+    s *= Sim.contentment().mult;                   // beds & breathing room
     return s;
   },
 
@@ -2487,10 +2791,10 @@ const Sim = {
     G.speed = 1; G.paused = false;
     G.diff = diff in C.DIFF ? diff : 'normal';
     G.diffM = C.DIFF[G.diff];
-    G.res = { wood: C.START.wood, stone: C.START.stone, food: C.START.food, essence: C.START.essence };
+    G.res = { ...C.START };
     G.villagers = []; G.monsters = []; G.buildings = []; G.clearJobs = [];
     G.effects = []; G.floaters = [];
-    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0 };
+    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0 };
     G.regrow = new Map();
     G.stats = { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: C.VIL_START };
     G.chronicle = [];
@@ -2508,6 +2812,7 @@ const Sim = {
     for (const spot of World.lairSpots) Buildings.create('lair', spot.x, spot.y, true);
     G.bloodMoon = false;
     G.raidTarget = null;
+    G.dryWarned = false;
     const starters = ['forager', 'forager', 'lumber', 'lumber', 'miner', 'builder'];
     for (let i = 0; i < C.VIL_START; i++) {
       const a = (i / C.VIL_START) * Math.PI * 2;
@@ -2640,6 +2945,20 @@ const Sim = {
       if (v.job === 'guard') continue;
       v.state = 'shelter'; v.path = null; v.tgt = null; v.workB = null;
     }
+    // the tavern pours at dusk — tomorrow's work goes quicker
+    for (const v of G.villagers) v.buzzed = false;
+    if (G.res.ale >= 1 && G.villagers.length) {
+      let served = 0;
+      for (const v of G.villagers) {
+        if (G.res.ale < 1) break;
+        G.res.ale -= 1; v.buzzed = true; served++;
+      }
+      if (served) {
+        UI.toast(served === G.villagers.length ? 'The tavern pours for the whole village — tomorrow\u2019s work will fly (+10%).' : `The tavern pours ${served} round${served > 1 ? 's' : ''} of ale — +10% tomorrow.`, 'good');
+        this.log('Ale at dusk — the village wakes quick tomorrow.', 'good');
+      }
+    }
+    G.dryWarned = false; // fresh night, fresh quiver warnings
     if (G.tut === 3) UI.tutAdvance(4);
   },
 
@@ -2726,8 +3045,36 @@ const Sim = {
 
   dayStart() {
     G.phase = 'day';
+    G._capNote = false;
+    // vermin and rot claim whatever outlasted the caps overnight
+    for (const k of ['food', 'wood', 'stone']) {
+      const cap = Buildings.capOf(k);
+      if (cap != null && G.res[k] > cap) {
+        G.res[k] = cap;
+        UI.toast('Vermin and rot claimed the overnight overflow — raise a Granary or Storehouse.', 'bad');
+        this.log('Stores past their caps spoiled in the night.', 'bad');
+        break;
+      }
+    }
+    // miserable, overcrowded villages thin out at dawn
+    if (this.contentment().label === 'Miserable' && G.day >= 4 && G.villagers.length >= 8 && Math.random() < CONFIG.COMFORT.leaveChance && G.villagers.length > 1) {
+      const v = U.choice(G.villagers.filter(o => o.state !== 'arrive'));
+      if (v) this.depart(v);
+    }
     // a little daytime texture: variety beats repetition (audit: Final Outpost)
     if (G.day >= 2 && Math.random() < 0.30) this.dayEvent();
+  },
+
+  // a discontent villager packs up and leaves for softer beds
+  depart(v) {
+    const i = G.villagers.indexOf(v);
+    if (i < 0) return;
+    G.villagers.splice(i, 1);
+    if (G.follow === v) G.follow = null;
+    if (G.sel && G.sel.ref === v) { G.sel = null; UI.selHide(); }
+    UI.toast(`${v.name} packed up and left for softer beds.`, 'bad');
+    this.log(`${v.name} left the village — the beds were too thin on the ground.`, 'bad');
+    this.reassign();
   },
 
   dayEvent() {
@@ -2743,7 +3090,7 @@ const Sim = {
       }
     } else if (roll < 0.68 && G.day >= 3) {
       const w = 10 + G.day * 2;
-      G.res.wood += w;
+      this.gain('wood', w);
       UI.toast(`Foragers drag home a storm-felled oak: +${w} wood.`, 'good');
       this.log('A storm-felled oak yielded seasoned timber.', 'good');
     } else if (roll < 0.86 && G.day >= 5 && G.monsters.length === 0) {
@@ -2898,10 +3245,17 @@ const Sim = {
     const C = CONFIG;
     // hunger always ticks
     v.hunger = Math.min(100, v.hunger + C.HUNGER.rate * dt);
-    if (v.hunger > C.HUNGER.mealAt && G.res.food >= C.HUNGER.mealCost) {
-      G.res.food -= C.HUNGER.mealCost;
-      v.hunger = Math.max(0, v.hunger - C.HUNGER.mealRestore);
-      this.float(v.x, v.y - .6, 'meal', '#e8a94b');
+    if (v.hunger > C.HUNGER.mealAt) {
+      // hot meals first — cooked food satisfies far better than raw berries
+      if (G.res.meals >= 1) {
+        G.res.meals -= 1;
+        v.hunger = Math.max(0, v.hunger - C.MEAL.restore);
+        this.float(v.x, v.y - .6, 'hot meal', '#e8a94b');
+      } else if (G.res.food >= C.HUNGER.mealCost) {
+        G.res.food -= C.HUNGER.mealCost;
+        v.hunger = Math.max(0, v.hunger - C.HUNGER.mealRestore);
+        this.float(v.x, v.y - .6, 'berries', '#7dc95e');
+      }
     }
     v.starving = v.hunger >= 99.5;
     if (v.starving) {
@@ -2986,7 +3340,7 @@ const Sim = {
         if (v.path && v.pi < v.path.length) return;
         // deposit
         if (v.carry.amt > 0) {
-          G.res[v.carry.type] += v.carry.amt;
+          this.gain(v.carry.type, v.carry.amt);
           G.stats.gathered += v.carry.amt;
           this.float(v.x, v.y - .7, '+' + v.carry.amt + ' ' + v.carry.type, v.carry.type === 'food' ? '#7dc95e' : v.carry.type === 'wood' ? '#c9964b' : '#a5a5ae');
           v.carry.amt = 0; v.carry.type = null;
@@ -3150,6 +3504,22 @@ const Sim = {
       return;
     }
 
+    // crafters: fletcher / smith / cook / brewer run their workplace
+    if (job === 'fletcher' || job === 'smith' || job === 'cook' || job === 'brewer') {
+      const hutKey = { fletcher: 'fletch', smith: 'smithy', cook: 'kitchen', brewer: 'tavern' }[job];
+      let best = null, bd = 1e9;
+      for (const h of G.buildings) {
+        if (!h.built || h.key !== hutKey) continue;
+        const crew = G.villagers.filter(o => o !== v && o.workB === h && (o.state === 'work' || o.state === 'toWork')).length;
+        if (crew >= 1) continue;
+        const d = U.dst2(v.x, v.y, h.x + h.w / 2, h.y + h.h / 2);
+        if (d < bd) { bd = d; best = h; }
+      }
+      if (best && this.sendToBuilding(v, best, 'craft')) return;
+      if (v.carry.amt > 0) this.sendToStore(v);
+      return;
+    }
+
     // gatherers: forager / lumber / miner / medic
     if (job === 'forager' || job === 'lumber' || job === 'miner' || job === 'medic') {
       const types = job === 'forager' ? [OBJ.BUSH]
@@ -3230,7 +3600,7 @@ const Sim = {
       if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
       if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
       if (v.workMode === 'tend' && b.built && b.growth < 1) { v.state = 'work'; v.workT = 0; return; }
-      if ((v.workMode === 'fish' || v.workMode === 'mine') && b.built) { v.state = 'work'; v.workT = 0; return; }
+      if ((v.workMode === 'fish' || v.workMode === 'mine' || v.workMode === 'craft') && b.built) { v.state = 'work'; v.workT = 0; return; }
       v.workB = null; v.state = 'idle';
       return;
     }
@@ -3239,6 +3609,9 @@ const Sim = {
 
   vWork(v, dt) {
     const ws = Entities.workSpeed(v);
+    // hands-on work wears tools out; a spare from the smithy slots right in
+    if (v.toolCond > 0) v.toolCond = Math.max(0, v.toolCond - CONFIG.TOOL.wear * dt);
+    else if (G.res.tools >= 1) { G.res.tools -= 1; v.toolCond = CONFIG.TOOL.cond; this.float(v.x, v.y - .6, 'fresh tool', '#a5a5ae'); }
     if (v.workKind && v.tgtTile) {
       const { x, y } = v.tgtTile;
       // land clearing: one burst of labor, salvage half the yield, tile goes bare.
@@ -3293,6 +3666,23 @@ const Sim = {
     }
     const b = v.workB;
     if (!b || !G.buildings.includes(b)) { v.workB = null; v.state = 'idle'; return; }
+    if (v.workMode === 'craft' && b.built) {
+      const spec = CONFIG.CRAFT[b.def.craft];
+      v.workT += dt * ws;
+      if (v.workT >= spec.time) {
+        v.workT = 0;
+        // inputs on hand, shelf room for the output — else stand down
+        let ok = G.res[b.def.craft] < Buildings.capOf(b.def.craft);
+        for (const k in spec.in) if (G.res[k] < spec.in[k]) ok = false;
+        if (!ok) { v.workB = null; v.state = 'idle'; if (v.carry.amt > 0) this.sendToStore(v); return; }
+        for (const k in spec.in) G.res[k] -= spec.in[k];
+        v.carry.type = b.def.craft;
+        v.carry.amt += spec.out;
+        this.fx('spark', v.x, v.y - .4, .2);
+        if (v.carry.amt >= Entities.carryMax(v)) { v.workB = null; v.state = 'idle'; this.sendToStore(v); }
+      }
+      return;
+    }
     if (v.workMode === 'fish' && b.built) {
       v.workT += dt * ws;
       if (v.workT >= CONFIG.FISHER.rate) {
@@ -3372,7 +3762,7 @@ const Sim = {
         b.growth = CONFIG.FARM.replant;
         b.tendedT = 99;
         v.carry.type = 'food';
-        v.carry.amt += CONFIG.FARM.yield;
+        v.carry.amt += b.def.yield || CONFIG.FARM.yield;
         this.fx('spark', b.x + 1, b.y + 1, .3);
         v.workB = null; v.state = 'idle';
         this.sendToStore(v);
@@ -3399,16 +3789,16 @@ const Sim = {
     const amt = World.amtAt(x, y) || 0;
     const gain = amt > 0 ? Math.ceil(amt / 2) : 0;
     if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.DEADTREE) {
-      G.res.wood += gain; G.stats.gathered += gain;
+      this.gain('wood', gain); G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' wood', '#c9964b');
     } else if (o === OBJ.BUSH) {
-      G.res.food += gain; G.stats.gathered += gain;
+      this.gain('food', gain); G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' food', '#7dc95e');
     } else if (o === OBJ.ROCK || o === OBJ.RUIN) {
-      G.res.stone += gain; G.stats.gathered += gain;
+      this.gain('stone', gain); G.stats.gathered += gain;
       this.float(x + .5, y + .3, '+' + gain + ' stone', '#a5a5ae');
     } else if (o === OBJ.CRYSTAL) {
-      G.res.stone += gain; G.stats.gathered += gain;
+      this.gain('stone', gain); G.stats.gathered += gain;
       G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.CRYSTAL.essence);
       this.float(x + .5, y + .3, '+' + gain + ' stone, +' + CONFIG.CRYSTAL.essence + ' essence', '#b48ae0');
     }
@@ -3470,7 +3860,7 @@ const Sim = {
     v.path = p; v.pi = 0;
     v.state = 'toWork';
     v.workB = b; v.workMode = mode; v.workKind = null; v.tgtTile = null;
-    if (mode === 'harvest' || mode === 'tend' || mode === 'build' || mode === 'repair') v.workT = 0;
+    if (mode === 'harvest' || mode === 'tend' || mode === 'build' || mode === 'repair' || mode === 'craft') v.workT = 0;
     return true;
   },
 
@@ -3727,7 +4117,32 @@ const Sim = {
   guardDmg() {
     let d = CONFIG.GUARD.dmg;
     if (G.buildings.some(b => b.built && b.key === 'barracks')) d *= CONFIG.BARRACKS.dmgMult;
+    if (G.res.arrows <= 0) d *= CONFIG.AMMO.dryMult; // no resupply for the quivers
     return d;
+  },
+
+  // add to a store, respecting caps (overflow never materializes)
+  gain(type, amt) {
+    const cap = Buildings.capOf(type);
+    if (cap == null) { G.res[type] += amt; return; }
+    const before = G.res[type];
+    G.res[type] = Math.min(cap, G.res[type] + amt);
+    if (G.res[type] >= cap && before < cap && !G._capNote && (type === 'wood' || type === 'stone' || type === 'food')) {
+      G._capNote = true; // one gentle nudge a day; cleared at dawn
+      UI.toast(`The ${type} store is full — build a ${type === 'food' ? 'Granary' : 'Storehouse'} to hoard more.`, '');
+    }
+  },
+
+  // village-wide housing contentment: beds × their comfort vs population
+  contentment() {
+    let pts = 0;
+    for (const b of G.buildings) if (b.built && b.def.housing) pts += (b.def.comfort || 1) * b.def.housing;
+    const r = pts / Math.max(1, G.villagers.length);
+    const C = CONFIG.COMFORT;
+    if (r >= C.snugAt) return { mult: C.snug, label: 'Snug' };
+    if (r >= C.crowdAt) return { mult: C.crowd, label: 'Content' };
+    if (r >= C.packedAt) return { mult: C.packed, label: 'Crowded' };
+    return { mult: C.packed - 0.03, label: 'Miserable' };
   },
 
   shootTower(b, m) {
@@ -3902,9 +4317,9 @@ const Sim = {
     const order = JOBS.filter(j => j !== 'idle');
     for (const job of order) {
       let have = G.villagers.filter(v => v.job === job);
-      // medics need a built Hospital — without one the duty cannot be staffed
+      // workplace-gated duties (Medic, Fletcher, Smith, Cook, Brewer) need their building
       let want = G.jobs[job] || 0;
-      if (job === 'medic' && !Buildings.hospitals().length) want = 0;
+      if (JOB_NEEDS[job] && !Buildings.built(JOB_NEEDS[job])) want = 0;
       if (have.length > want) {
         for (let i = have.length - 1; i >= want; i--) this.setJob(have[i], 'idle');
       } else if (have.length < want) {
@@ -4097,6 +4512,7 @@ const SaveSys = {
         name: v.name, trait: v.trait ? v.trait.key : null, look: { ...v.look },
         job: v.job, x: v.x, y: v.y, hp: v.hp, maxHp: v.maxHp, hunger: v.hunger, state: v.state === 'arrive' ? 'arrive' : 'idle',
         carry: { type: v.carry.type, amt: v.carry.amt },
+        toolCond: v.toolCond == null ? CONFIG.TOOL.cond : v.toolCond, buzzed: !!v.buzzed,
       })),
       monsters: G.monsters.map(m => ({
         type: m.type, x: m.x, y: m.y, hp: m.hp, burning: m.burning > 0,
@@ -4141,8 +4557,8 @@ const SaveSys = {
     G.seed = d.seed; G.day = d.day; G.time = d.time; G.phase = d.phase;
     G.diff = d.diff in CONFIG.DIFF ? d.diff : 'normal';
     G.diffM = CONFIG.DIFF[G.diff];
-    G.res = { wood: d.res.wood || 0, stone: d.res.stone || 0, food: d.res.food || 0, essence: d.res.essence || 0, herbs: d.res.herbs || 0 };
-    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, medic: 0, builder: 0, guard: 0 };
+    G.res = { wood: d.res.wood || 0, stone: d.res.stone || 0, food: d.res.food || 0, essence: d.res.essence || 0, herbs: d.res.herbs || 0, arrows: d.res.arrows || 0, tools: d.res.tools || 0, meals: d.res.meals || 0, ale: d.res.ale || 0 };
+    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, medic: 0, builder: 0, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0 };
     for (const k of JOBS) if (k !== 'idle') G.jobs[k] = d.jobs[k] || 0;
     if (d.jobs.herbalist) G.jobs.medic = (G.jobs.medic || 0) + d.jobs.herbalist; // v1.1: herbalist → medic
     G.unlocks = d.unlocks || {};
@@ -4178,6 +4594,7 @@ const SaveSys = {
         hunger: vs.hunger, state: vs.state, path: null, pi: 0, anim: 0,
         tgt: null, tgtTile: null, workT: 0, workB: null,
         carry: { type: vs.carry ? vs.carry.type : null, amt: vs.carry ? vs.carry.amt : 0 },
+        toolCond: vs.toolCond == null ? CONFIG.TOOL.cond : vs.toolCond, buzzed: !!vs.buzzed,
         atkCd: 0, fearT: 0, stuckT: 0, lastD: 1e9, aiT: Math.random() * .5,
         ate: false, starveWarned: false,
       };
@@ -4373,9 +4790,9 @@ const Render = {
     const px = b.x * 16, py = (b.y + b.h) * 16; // anchor bottom of footprint
     let spr;
     const animF = ((this._t * 5) | 0) % 2;
-    if (b.key === 'farm') {
+    if (b.key === 'farm' || b.key === 'farm2') {
       const st = b.growth >= 1 ? 3 : b.growth > .55 ? 2 : b.growth > .18 ? 1 : 0;
-      spr = Art.s['farm' + st];
+      spr = Art.s[(b.key === 'farm2' ? 'farm2_' : 'farm') + st];
     } else if (b.key === 'torch') spr = Art.s['torch' + animF];
     else if (b.key === 'lair') spr = Art.s['lair' + animF];
     else if (b.key === 'windmill') spr = Art.s['windmill' + animF];
@@ -4604,7 +5021,7 @@ const Render = {
         }
       if (ok && !def.terrain) {
         ctx.globalAlpha = .6;
-        const GHOST_SPR = { farm: 'farm0', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
+        const GHOST_SPR = { farm: 'farm0', farm2: 'farm2_0', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
         const spr = Art.s[GHOST_SPR[mode.key] || mode.key];
         if (spr) {
           const hgt = Math.max(spr.height, def.h * 16);
@@ -4939,7 +5356,11 @@ const UI = {
     const e = mk('essence', 'essence', 'Essence — fuels your Powers');
     const bar = document.createElement('div'); bar.id = 'essBar'; bar.innerHTML = '<div id="essFill"></div>';
     e.appendChild(bar); e.id = 'essChip';
-    mk('herbs', 'herb', 'Herbs — consumed by the Herbalist Hut to heal the wounded');
+    mk('herbs', 'herb', 'Herbs — stock the Hospital and brew ale');
+    mk('arrows', 'arrow', 'Arrows — burned by towers and raiding guards; Fletchers make them from wood');
+    mk('tools', 'tool', 'Tools — worn down by every worker; forged at the Smithy');
+    mk('meals', 'meal', 'Meals — cooked food satisfies far better than raw berries');
+    mk('ale', 'ale', 'Ale — a dusk drink at the Tavern speeds tomorrow\u2019s work');
     mk('pop', 'pop', 'Villagers / housing capacity');
   },
 
@@ -4951,6 +5372,19 @@ const UI = {
     set('food', Math.floor(G.res.food));
     set('essence', Math.floor(G.res.essence));
     set('herbs', Math.floor(G.res.herbs || 0));
+    set('arrows', Math.floor(G.res.arrows || 0));
+    set('tools', Math.floor(G.res.tools || 0));
+    set('meals', Math.floor(G.res.meals || 0));
+    set('ale', Math.floor(G.res.ale || 0));
+    const show = (k, cond) => { const c = document.getElementById('chip_' + k); if (c) c.style.display = cond ? '' : 'none'; };
+    show('arrows', G.res.arrows >= 1 || Buildings.built('fletch'));
+    show('tools', G.res.tools >= 1 || Buildings.built('smithy'));
+    show('meals', G.res.meals >= 1 || Buildings.built('kitchen'));
+    show('ale', G.res.ale >= 1 || Buildings.built('tavern'));
+    for (const k of ['wood', 'stone', 'food']) {
+      const cap = Buildings.capOf(k), chip = document.getElementById('chip_' + k);
+      if (chip) chip.title = `${k[0].toUpperCase() + k.slice(1)} — ${Math.floor(G.res[k])} / ${cap} (Granaries & Storehouses raise caps)`;
+    }
     const cap = Buildings.housingCap();
     set('pop', G.villagers.length + '/' + cap);
     document.getElementById('chip_food').classList.toggle('low', G.res.food < 15 && G.villagers.length > 0);
@@ -5106,7 +5540,12 @@ const UI = {
             const route = Path.find(World.center.x | 0, World.center.y | 0, b.x, b.y, { adjacent: true });
             if (!route) { this.toast('No route to that lair — the wilds are too thick.', 'bad'); return; }
             G.raidTarget = b;
-            this.toast('Guards: RAID THE MONOLITH!', 'good');
+            if (G.res.arrows >= CONFIG.AMMO.raidCost) {
+              G.res.arrows -= CONFIG.AMMO.raidCost;
+              this.toast(`Quivers loaded (${CONFIG.AMMO.raidCost} arrows) — RAID THE MONOLITH!`, 'good');
+            } else {
+              this.toast('RAID THE MONOLITH! But the quivers are dry — guards hit softer without arrows.', 'bad');
+            }
           }
           this.selRender();
         };
@@ -5120,12 +5559,25 @@ const UI = {
       else if (b.def.housing) extra = `<div class="sub">Shelters ${b.def.housing}</div>`;
       else if (b.key === 'beacon') extra = `<div class="sub" style="color:var(--amber2)">${b.lit ? 'THE FLAME BURNS. Survive the Long Night!' : 'Unlit. Complete it to call the final dawn.'}</div>`;
       const dem = b.key === 'camp' ? '' : `<button class="warn" id="selDem">Demolish</button>`;
+      const nd = b.built && !b.demo && b.def.next && BUILD[b.def.next] ? BUILD[b.def.next] : null;
+      const up = nd ? `<button id="selUp">\u2b06 ${U.esc(nd.name)}</button>` : '';
+      const upCost = nd ? `${nd.cost.wood || 0} wood${nd.cost.stone ? ' \u00b7 ' + nd.cost.stone + ' stone' : ''}` : '';
+      const oldName = b.def.name;
       el.innerHTML = `
         <h3>${U.esc(b.def.name)}</h3>
         <div class="sub">${U.esc(b.def.desc || '')}</div>
         <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(b.hp / b.maxHp * 100, 0, 100)}%"></div></div></div>
         ${extra}
-        <div class="selActs">${dem}<button id="selClose">Close</button></div>`;
+        ${nd ? `<div class="sub" style="color:var(--amber2)">Upgrade in place: ${U.esc(nd.name)} — ${upCost}</div>` : ''}
+        <div class="selActs">${up}${dem}<button id="selClose">Close</button></div>`;
+      if (up) document.getElementById('selUp').onclick = () => {
+        if (Buildings.upgrade(b)) {
+          this.toast(`${nd.name} raised in place of the old ${oldName}.`, 'good');
+          Sim.log(`${nd.name} raised in place of an older structure.`, 'good');
+        } else this.toast(`Upgrade needs ${upCost} in store.`, 'bad');
+        this.selRender();
+        this.updateHUD();
+      };
       if (dem) document.getElementById('selDem').onclick = () => {
         Buildings.demolish(b);
         this.toast(`Demolished ${b.def.name} — half the cost reclaimed.`, '');
@@ -5138,10 +5590,11 @@ const UI = {
   cycleJob(v, dir) {
     const i = JOBS.indexOf(v.job);
     let ni = i + dir;
-    // the Medic duty needs a built Hospital — skip over it in the cycle
-    while (JOBS[ni] === 'medic' && !Buildings.hospitals().length) ni += dir;
+    // workplace-gated duties (Medic, Fletcher, Smith, Cook, Brewer) skip in the cycle
+    while (JOB_NEEDS[JOBS[ni]] && !Buildings.built(JOB_NEEDS[JOBS[ni]])) ni += dir;
     if (ni < 0 || ni >= JOBS.length) {
-      if (!Buildings.hospitals().length) this.toast('The Medic duty needs a built Hospital.', '');
+      const blocked = JOBS.filter(j => JOB_NEEDS[j] && !Buildings.built(JOB_NEEDS[j]));
+      if (blocked.length) this.toast(`Some duties need their workplace built first (${blocked.map(j => JOB_INFO[j].name).join(', ')}).`, '');
       return;
     }
     if (ni === i) return;
@@ -5286,12 +5739,13 @@ const UI = {
     const sum = JOBS.filter(j => j !== 'idle').reduce((s, j) => s + (G.jobs[j] || 0), 0);
     const note = document.createElement('div');
     note.className = 'jnote';
-    note.innerHTML = `Villagers: <b>${pop}</b> \u00b7 Assigned: <b>${Math.min(sum, pop)}</b> \u00b7 Resting: <b>${Math.max(0, pop - sum)}</b><br>Tap <b>+</b>/<b>&minus;</b> to move people between duties. They start at once.`;
+    const cm = Sim.contentment();
+    note.innerHTML = `Villagers: <b>${pop}</b> \u00b7 Assigned: <b>${Math.min(sum, pop)}</b> \u00b7 Resting: <b>${Math.max(0, pop - sum)}</b><br>Housing: <b>${cm.label}</b> \u00d7${cm.mult.toFixed(2)} work — beds and comfort pay off.<br>Tap <b>+</b>/<b>&minus;</b> to move people between duties. They start at once.`;
     wrap.appendChild(note);
     for (const j of JOBS) {
       if (j === 'idle') continue;
       const info = JOB_INFO[j];
-      const medLocked = j === 'medic' && !Buildings.hospitals().length;
+      const locked = JOB_NEEDS[j] && !Buildings.built(JOB_NEEDS[j]);
       const row = document.createElement('div');
       row.className = 'jrow';
       const icon = document.createElement('canvas');
@@ -5302,7 +5756,7 @@ const UI = {
       row.appendChild(icon);
       const txt = document.createElement('div');
       txt.style.flex = '1';
-      txt.innerHTML = `<div class="jn">${medLocked ? info.name + ' 🔒' : info.name}</div><div class="jd">${medLocked ? 'Requires a built Hospital (buildable after night one).' : info.desc}</div>`;
+      txt.innerHTML = `<div class="jn">${locked ? info.name + ' \u{1F512}' : info.name}</div><div class="jd">${locked ? `Requires a built ${U.esc(BUILD[JOB_NEEDS[j]].name)}.` : info.desc}</div>`;
       row.appendChild(txt);
       const cnt = document.createElement('div');
       cnt.className = 'cnt';
@@ -5316,7 +5770,7 @@ const UI = {
       const plus = document.createElement('button');
       plus.textContent = '+';
       plus.onclick = () => {
-        if (medLocked) { this.toast('Build a Hospital first — it unlocks after night one.', 'bad'); return; }
+        if (locked) { this.toast(`Build a ${BUILD[JOB_NEEDS[j]].name} first.`, 'bad'); return; }
         const s2 = JOBS.filter(jj => jj !== 'idle').reduce((s, jj) => s + (G.jobs[jj] || 0), 0);
         if (s2 >= pop) { this.toast('No one is resting — every soul has a duty.', ''); return; }
         G.jobs[j] = (G.jobs[j] || 0) + 1;
@@ -5808,8 +6262,21 @@ const UI = {
         <li><b>Farmer</b> — tends wheat plots. A Windmill nearby grows them 35% faster.</li>
         <li><b>Fisher</b> — works a Fishing Dock on the shore. Steady food, no farmland.</li>
         <li><b>Medic</b> — gathers herbs to stock the Hospital, which mends the wounded nearby. Needs a built Hospital (day 2).</li>
+        <li><b>Fletcher</b> — fashions arrows from wood at a Fletcher Hut; towers and raiding guards burn them.</li>
+        <li><b>Smith</b> — forges tools at the Smithy; every worker wears them out, and bare hands are slow.</li>
+        <li><b>Cook</b> — simmers berries into proper meals at the Kitchen (3 food + 1 wood \u2192 2 meals).</li>
+        <li><b>Brewer</b> — brews ale at the Tavern (food + herbs); a dusk drink speeds the whole village tomorrow.</li>
         <li><b>Builder</b> — raises construction, repairs damage (costs materials), clears marked wild tiles and <b>fills shore water with stone</b> to make new land.</li>
         <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage.</li>
+      </ul>
+      <h2>Supply Lines</h2>
+      <ul>
+        <li><b>Arrows are ammunition</b> — every tower shot spends 1 (ballistae 2), and raids pack quivers (5). Dry quivers: towers hold fire, guards hit at 75%. Build a Fletcher Hut before your towers go up.</li>
+        <li><b>Tools wear out</b> — each worker burns through tools (a Smithy forges them from 2 wood + 1 stone). Bare-handed villagers work at 65% speed.</li>
+        <li><b>Cooked beats raw</b> — Kitchen meals satisfy 85 hunger vs 54 for 3 raw food.</li>
+        <li><b>Stores have caps</b> — wood/stone 120, food 80, herbs 20. Granaries & Storehouses raise them; overflow spoils to vermin at dawn.</li>
+        <li><b>Comfort matters</b> — bedrolls (Tent) \u2192 real beds (Cottage) \u2192 manor life: snug villagers work +5%, miserable crowds work slower and some may leave at dawn.</li>
+        <li><b>Upgrades</b> — select a built Watchtower, Wheat Plot or Palisade and press the \u2b06 button for a stronger tier in place.</li>
       </ul>
       <h2>Surviving the Night</h2>
       <ul>

@@ -33,6 +33,7 @@ const Entities = {
       carry: { type: null, amt: 0 },
       atkCd: 0, fearT: 0, stuckT: 0, lastD: 1e9, aiT: Math.random() * 0.5,
       ate: false, starveWarned: false,
+      toolCond: CONFIG.TOOL.cond, buzzed: false,
     };
     if (v.trait && v.trait.key === 'hardy') { v.maxHp += 20; v.hp = v.maxHp; }
     return v;
@@ -67,6 +68,9 @@ const Entities = {
   workSpeed(v) {
     let s = 1;
     if (v.trait && v.trait.key === 'diligent') s *= 1.12;
+    if (v.buzzed) s *= 1 + CONFIG.ALE.buzz;        // last night's ale
+    if (v.toolCond <= 0) s *= CONFIG.TOOL.dryMult; // working bare-handed
+    s *= Sim.contentment().mult;                   // beds & breathing room
     return s;
   },
 

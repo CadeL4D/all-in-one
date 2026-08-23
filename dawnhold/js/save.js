@@ -40,6 +40,7 @@ const SaveSys = {
         name: v.name, trait: v.trait ? v.trait.key : null, look: { ...v.look },
         job: v.job, x: v.x, y: v.y, hp: v.hp, maxHp: v.maxHp, hunger: v.hunger, state: v.state === 'arrive' ? 'arrive' : 'idle',
         carry: { type: v.carry.type, amt: v.carry.amt },
+        toolCond: v.toolCond == null ? CONFIG.TOOL.cond : v.toolCond, buzzed: !!v.buzzed,
       })),
       monsters: G.monsters.map(m => ({
         type: m.type, x: m.x, y: m.y, hp: m.hp, burning: m.burning > 0,
@@ -84,8 +85,8 @@ const SaveSys = {
     G.seed = d.seed; G.day = d.day; G.time = d.time; G.phase = d.phase;
     G.diff = d.diff in CONFIG.DIFF ? d.diff : 'normal';
     G.diffM = CONFIG.DIFF[G.diff];
-    G.res = { wood: d.res.wood || 0, stone: d.res.stone || 0, food: d.res.food || 0, essence: d.res.essence || 0, herbs: d.res.herbs || 0 };
-    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, medic: 0, builder: 0, guard: 0 };
+    G.res = { wood: d.res.wood || 0, stone: d.res.stone || 0, food: d.res.food || 0, essence: d.res.essence || 0, herbs: d.res.herbs || 0, arrows: d.res.arrows || 0, tools: d.res.tools || 0, meals: d.res.meals || 0, ale: d.res.ale || 0 };
+    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, medic: 0, builder: 0, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0 };
     for (const k of JOBS) if (k !== 'idle') G.jobs[k] = d.jobs[k] || 0;
     if (d.jobs.herbalist) G.jobs.medic = (G.jobs.medic || 0) + d.jobs.herbalist; // v1.1: herbalist → medic
     G.unlocks = d.unlocks || {};
@@ -121,6 +122,7 @@ const SaveSys = {
         hunger: vs.hunger, state: vs.state, path: null, pi: 0, anim: 0,
         tgt: null, tgtTile: null, workT: 0, workB: null,
         carry: { type: vs.carry ? vs.carry.type : null, amt: vs.carry ? vs.carry.amt : 0 },
+        toolCond: vs.toolCond == null ? CONFIG.TOOL.cond : vs.toolCond, buzzed: !!vs.buzzed,
         atkCd: 0, fearT: 0, stuckT: 0, lastD: 1e9, aiT: Math.random() * .5,
         ate: false, starveWarned: false,
       };
