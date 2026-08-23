@@ -19,7 +19,7 @@ const Sim = {
     G.res = { ...C.START };
     G.villagers = []; G.monsters = []; G.buildings = []; G.clearJobs = [];
     G.effects = []; G.floaters = [];
-    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0 };
+    G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0, bottler: 0, baker: 0, scribe: 0 };
     G.regrow = new Map();
     G.stats = { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: C.VIL_START };
     G.chronicle = [];
@@ -33,6 +33,10 @@ const Sim = {
     const cx = World.W / 2 | 0, cy = World.H / 2 | 0;
     // starting camp slightly left of center, tents around it
     Buildings.create('camp', cx - 1, cy - 1, true);
+    // a well by the camp — the first bucket of the village
+    for (const [ox, oy] of [[3, 0], [0, 3], [3, 3], [-1, 3], [3, -1]]) {
+      if (World.walkable(cx + ox, cy + oy) && !World.bldAt(cx + ox, cy + oy)) { Buildings.create('well', cx + ox, cy + oy, true); break; }
+    }
     // monster lairs from the generator
     for (const spot of World.lairSpots) Buildings.create('lair', spot.x, spot.y, true);
     G.bloodMoon = false;
@@ -87,12 +91,26 @@ const Sim = {
     for (const b of G.buildings) if (b.built && b.def.essence) regen += 0.06;
     G.res.essence = Math.min(C.ESSENCE.max, G.res.essence + regen * dt);
 
+    // ----- lamp oil: torches sip it through the night, then gutter -----
+    if (isNightLike() && G.res.oil > 0) {
+      let torches = 0;
+      for (const b of G.buildings) if (b.built && b.key === 'torch') torches++;
+      if (torches > 0) {
+        G.res.oil = Math.max(0, G.res.oil - torches * C.OIL.sip * dt);
+        if (G.res.oil <= 0 && !G._oilDryWarned) {
+          G._oilDryWarned = true;
+          UI.toast('The torches gutter — the Oil Press needs charcoal and herbs.', 'bad');
+          this.log('The lamp oil ran dry; the torches burned low.', 'bad');
+        }
+      }
+    } else if (G.res.oil > 0) G._oilDryWarned = false;
+
     // ----- entities -----
     Buildings.update(dt);
     for (let i = G.villagers.length - 1; i >= 0; i--) {
       const v = G.villagers[i];
       this.updateVillager(v, dt);
-      if (v.hp <= 0) this.villagerDeath(v, v.starving ? 'starvation' : 'the horde');
+      if (v.hp <= 0) this.villagerDeath(v, v.starving ? 'starvation' : v.thirst >= 99.5 ? 'thirst' : 'the horde');
     }
     for (let i = G.monsters.length - 1; i >= 0; i--) {
       const m = G.monsters[i];
@@ -177,6 +195,7 @@ const Sim = {
       for (const v of G.villagers) {
         if (G.res.ale < 1) break;
         G.res.ale -= 1; v.buzzed = true; served++;
+        v.thirst = Math.max(0, v.thirst - CONFIG.ALE.quench); // ale is a drink too
       }
       if (served) {
         UI.toast(served === G.villagers.length ? 'The tavern pours for the whole village — tomorrow\u2019s work will fly (+10%).' : `The tavern pours ${served} round${served > 1 ? 's' : ''} of ale — +10% tomorrow.`, 'good');
@@ -471,8 +490,12 @@ const Sim = {
     // hunger always ticks
     v.hunger = Math.min(100, v.hunger + C.HUNGER.rate * dt);
     if (v.hunger > C.HUNGER.mealAt) {
-      // hot meals first — cooked food satisfies far better than raw berries
-      if (G.res.meals >= 1) {
+      // bread from the bakehouse first, then hot meals, then raw berries
+      if (G.res.bread >= 1) {
+        G.res.bread -= 1;
+        v.hunger = Math.max(0, v.hunger - C.BREAD.restore);
+        this.float(v.x, v.y - .6, 'bread', '#d9b06c');
+      } else if (G.res.meals >= 1) {
         G.res.meals -= 1;
         v.hunger = Math.max(0, v.hunger - C.MEAL.restore);
         this.float(v.x, v.y - .6, 'hot meal', '#e8a94b');
@@ -487,6 +510,22 @@ const Sim = {
       v.hp -= C.HUNGER.starveDps * dt;
       if (!v.starveWarned) { v.starveWarned = true; UI.toast(`${v.name} is starving!`, 'bad'); this.log(`${v.name} starves — the store is empty.`, 'bad'); }
     } else if (v.hunger < 80) v.starveWarned = false;
+
+    // thirst ticks beside hunger — bottles drink on the spot, the well needs the walk
+    v.thirst = Math.min(100, v.thirst + C.THIRST.rate * dt);
+    if (v.thirst > C.THIRST.drinkAt && v.state !== 'drink' && v.state !== 'flee' && v.state !== 'fight' && v.state !== 'arrive' && !v.schooling) {
+      if (G.res.bottles >= 1) {
+        G.res.bottles -= 1;
+        v.thirst = Math.max(0, v.thirst - C.THIRST.restore);
+        this.float(v.x, v.y - .6, 'bottled water', '#6fb7d9');
+      } else {
+        this.sendToDrink(v); // no well or no route → they keep at it, growing parched
+      }
+    }
+    if (v.thirst >= 99.5) {
+      v.hp -= C.THIRST.parchDps * dt;
+      if (!v.parchWarned) { v.parchWarned = true; UI.toast(`${v.name} is parched!`, 'bad'); this.log(`${v.name} has nothing to drink.`, 'bad'); }
+    } else if (v.thirst < 80) v.parchWarned = false;
 
     if (v.atkCd > 0) v.atkCd -= dt;
     if (v.fearT > 0) v.fearT -= dt;
@@ -525,6 +564,23 @@ const Sim = {
         if (!m.dead && U.dst2(v.x, v.y, m.x, m.y) < (isNightLike() ? 30 : 12)) {
           v.fearT = 4.5; v.state = 'flee'; v.path = null;
           break;
+        }
+      }
+    }
+
+    // a lesson in progress calls the student to the schoolhouse (fear and a
+    // dry throat come first — class resumes after)
+    if (v.schooling && v.state !== 'flee' && v.state !== 'drink') {
+      const teacher = G.villagers.some(o => o !== v && o.workB === v.schooling && (o.state === 'work' || o.state === 'toWork'));
+      if (!G.buildings.includes(v.schooling) || !teacher) {
+        v.schooling = null;
+        if (v.state === 'school') { v.state = 'idle'; v.path = null; }
+      } else if (v.state !== 'school') {
+        const p = Path.find(v.x | 0, v.y | 0, (v.schooling.x + v.schooling.w / 2) | 0, (v.schooling.y + v.schooling.h / 2) | 0, { adjacent: true });
+        if (p) {
+          v.path = p; v.pi = 0;
+          v.state = 'school';
+          v.tgtTile = null; v.workB = null;
         }
       }
     }
@@ -571,6 +627,20 @@ const Sim = {
           v.carry.amt = 0; v.carry.type = null;
         }
         v.state = 'idle';
+        return;
+      }
+      case 'drink': {
+        // reached the well — a long, cold drink
+        if (v.path && v.pi < v.path.length) return;
+        v.thirst = Math.max(0, v.thirst - CONFIG.THIRST.restore);
+        if (G.res.water >= 1) G.res.water -= 1;
+        this.float(v.x, v.y - .6, 'water', '#6fb7d9');
+        v.state = 'idle';
+        return;
+      }
+      case 'school': {
+        // the scribe's lesson drives progress; the student just attends
+        if (!v.schooling || !G.buildings.includes(v.schooling)) { v.schooling = null; v.path = null; v.state = 'idle'; return; }
         return;
       }
       case 'fight': {
@@ -740,9 +810,9 @@ const Sim = {
       return;
     }
 
-    // crafters: fletcher / smith / cook / brewer run their workplace
-    if (job === 'fletcher' || job === 'smith' || job === 'cook' || job === 'brewer') {
-      const hutKey = { fletcher: 'fletch', smith: 'smithy', cook: 'kitchen', brewer: 'tavern' }[job];
+    // crafters: fletcher / smith / cook / brewer / bottler / baker run their workplace
+    if (job === 'fletcher' || job === 'smith' || job === 'cook' || job === 'brewer' || job === 'bottler' || job === 'baker') {
+      const hutKey = { fletcher: 'fletch', smith: 'smithy', cook: 'kitchen', brewer: 'tavern', bottler: 'bottlery', baker: 'bakery' }[job];
       let best = null, bd = 1e9;
       for (const h of G.buildings) {
         if (!h.built || h.key !== hutKey) continue;
@@ -753,6 +823,20 @@ const Sim = {
       }
       if (best && this.sendToBuilding(v, best, 'craft')) return;
       if (v.carry.amt > 0) this.sendToStore(v);
+      return;
+    }
+
+    // the scribe teaches at the schoolhouse — one villager at a time
+    if (job === 'scribe') {
+      let best = null, bd = 1e9;
+      for (const h of G.buildings) {
+        if (!h.built || h.key !== 'school') continue;
+        const crew = G.villagers.filter(o => o !== v && o.workB === h && (o.state === 'work' || o.state === 'toWork')).length;
+        if (crew >= 1) continue;
+        const d = U.dst2(v.x, v.y, h.x + h.w / 2, h.y + h.h / 2);
+        if (d < bd) { bd = d; best = h; }
+      }
+      if (best && this.sendToBuilding(v, best, 'teach')) return;
       return;
     }
 
@@ -836,7 +920,7 @@ const Sim = {
       if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
       if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
       if (v.workMode === 'tend' && b.built && b.growth < 1) { v.state = 'work'; v.workT = 0; return; }
-      if ((v.workMode === 'fish' || v.workMode === 'mine' || v.workMode === 'craft') && b.built) { v.state = 'work'; v.workT = 0; return; }
+      if ((v.workMode === 'fish' || v.workMode === 'mine' || v.workMode === 'craft' || v.workMode === 'teach') && b.built) { v.state = 'work'; v.workT = 0; return; }
       v.workB = null; v.state = 'idle';
       return;
     }
@@ -902,6 +986,31 @@ const Sim = {
     }
     const b = v.workB;
     if (!b || !G.buildings.includes(b)) { v.workB = null; v.state = 'idle'; return; }
+    // the scribe teaches — one enrolled student, lessons move while they sit
+    if (v.workMode === 'teach' && b.built) {
+      let st = b.student;
+      if (st && (!G.villagers.includes(st) || st.schooled)) { st.schooling = null; b.student = null; st = null; }
+      if (!st) {
+        let cand = null, cd2 = 1e9;
+        for (const o of G.villagers) {
+          if (o === v || o.schooled || o.job === 'guard' || o.state === 'arrive' || o.schooling) continue;
+          const d = U.dst2(v.x, v.y, o.x, o.y);
+          if (d < cd2) { cd2 = d; cand = o; }
+        }
+        if (cand) { b.student = cand; cand.schooling = b; b.eduT = 0; st = cand; }
+      }
+      if (st && U.dst2(st.x, st.y, b.x + b.w / 2, b.y + b.h / 2) < 9) {
+        b.eduT = (b.eduT || 0) + dt * ws;
+        if (Math.random() < dt) this.fx('spark', st.x, st.y - .6, .3);
+        if (b.eduT >= CONFIG.SCHOOL.time) {
+          st.schooled = true; st.schooling = null;
+          b.student = null; b.eduT = 0;
+          this.float(st.x, st.y - .7, 'schooled! +12% work', '#b9a6e8');
+          this.log(`${st.name} finished their letters — schooled hands work +12% forever.`, 'good');
+        }
+      }
+      return;
+    }
     if (v.workMode === 'craft' && b.built) {
       const spec = CONFIG.CRAFT[b.def.craft];
       v.workT += dt * ws;
@@ -1096,7 +1205,7 @@ const Sim = {
     v.path = p; v.pi = 0;
     v.state = 'toWork';
     v.workB = b; v.workMode = mode; v.workKind = null; v.tgtTile = null;
-    if (mode === 'harvest' || mode === 'tend' || mode === 'build' || mode === 'repair' || mode === 'craft') v.workT = 0;
+    if (mode === 'harvest' || mode === 'tend' || mode === 'build' || mode === 'repair' || mode === 'craft' || mode === 'teach') v.workT = 0;
     return true;
   },
 
@@ -1108,6 +1217,23 @@ const Sim = {
     v.path = p; v.pi = 0;
     v.state = 'toStore';
     v.tgtTile = null; v.workB = null;
+  },
+
+  // a thirsty villager without a bottle walks to the nearest well
+  sendToDrink(v) {
+    let best = null, bd = 1e9;
+    for (const b of G.buildings) {
+      if (!b.built || b.key !== 'well') continue;
+      const d = U.dst2(v.x, v.y, b.x + .5, b.y + .5);
+      if (d < bd) { bd = d; best = b; }
+    }
+    if (!best) return false;
+    const p = Path.find(v.x | 0, v.y | 0, best.x, best.y, { adjacent: true });
+    if (!p) return false;
+    v.path = p; v.pi = 0;
+    v.state = 'drink';
+    v.tgtTile = null; v.workB = null;
+    return true;
   },
 
   /* ---------------- monsters ---------------- */

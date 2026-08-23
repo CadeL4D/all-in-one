@@ -7,6 +7,13 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
+> **v1.3 — The Village Round:** the village needs **water** (wells, and a
+> **Bottler** who spares villagers the walk), **lamp oil** (kiln chars wood,
+> the press squeezes oil — torches gutter when it runs dry), **bread** (the
+> Windmill grinds flour for the one-and-only **Bakehouse**), and **schooling**
+> (a **Scribe** teaches villagers one at a time; the schooled work +12%
+> forever). Wood is now the deliberate crunch resource.
+
 > **v1.2.1 — Movement & Reach:** villagers now **walk straight through each
 > other** (walls are the only solid obstacle; settled villagers still drift
 > apart gently) — no more circling, orbiting or teleport-skipping around one
@@ -35,6 +42,39 @@ Great Beacon to bring back the dawn.
 ---
 
 ## Changelog
+
+### v1.3 — The Village Round
+- **Thirst, wells & the Bottler:** villagers now drink like they eat. A free
+  **Well** stands by the starting camp (+1 water per 10s; build more), and a
+  thirsty villager walks there for a drink — real time lost to the trip. A
+  **Bottler** at the Bottlery fills 2 water into 2 bottles; bottled drinks
+  happen on the spot, wherever the villager stands (Rise to Ruins' exact
+  "fewer trips = more work" loop). Ale at dusk counts as a drink. Parched
+  villagers (thirst 90+) work at 70% and drag their feet; a truly dry village
+  loses health slowly.
+- **Charcoal kiln & lamp oil:** the **Kiln** chars 2 wood → 1 charcoal (never
+  dipping below 10 wood); the **Oil Press** squeezes 1 charcoal + 1 herb →
+  3 lamp oil. Torches each sip 1 oil per minute of night and **gutter to
+  half-light** when the store runs dry — wood now feeds arrows, tools,
+  meals, oil and walls, all from the same tree.
+- **Bakehouse & the mill:** while a **Bakehouse** stands (one per village —
+  the lord's monopoly), the Windmill grinds 1 wheat → 1 flour (never below
+  12 food). A **Baker** turns 2 flour + 1 water → 2 bread: the third food
+  tier (berries < meals < bread, restores 110) and it never spoils. Bread is
+  eaten first.
+- **Scribe & the Schoolhouse:** a **Scribe** teaches one villager at a time
+  (the student attends class instead of working — a pair of hands now for
+  better hands later). The schooled work **+12% forever**. Guards drill
+  instead of studying.
+- **New jobs (3):** Bottler (Bottlery), Baker (Bakehouse), Scribe
+  (Schoolhouse) — each gated on its workplace like the v1.2 crafters. The
+  roster is now 15 duties.
+- **New buildings (5 buildable + the starting well):** Well, Charcoal Kiln,
+  Oil Press, Bottlery, Bakehouse, Schoolhouse — all with hand-painted
+  procedural sprites, night windows, and HUD chips (water always visible;
+  oil/bottles/bread appear when relevant).
+- Old saves keep working: the new resources default to their starting
+  values, and a villager's thirst/schooling state round-trips cleanly.
 
 ### v1.2.2 — First Day & Panel Polish
 - **"Day 1" means day one:** buildings labelled *Unlocks day 1* (Granary,
@@ -190,8 +230,9 @@ Great Beacon to bring back the dawn.
 
 You are the guardian spirit of six settlers. **You never directly control
 villagers** — you assign their **Jobs** (Forager, Lumberjack, Miner, Farmer,
-Fisher, Medic, Fletcher, Smith, Cook, Brewer, Builder, Guard) and they work
-autonomously.
+Fisher, Medic, Fletcher, Smith, Cook, Brewer, Bottler, Baker, Scribe, Builder,
+Guard) and they work autonomously. They also **drink** — a well and a Bottler
+keep them at their posts.
 
 - **Day (~3.5 min):** gather berries/wood/stone/herbs, build, farm, fish,
   craft arrows/tools/meals/ale, repair.
@@ -284,6 +325,16 @@ This game was designed from a review-driven audit of its inspirations.
   ×1.05 snug / ×0.95 content / ×0.88 crowded / ×0.85 miserable (possible
   dawn departures from day 4). Upgrades: tower II 30w+20s → III 60w+45s,
   farm2 10w+14s, stoneface 3s.
+- **The village round (v1.3):** thirst rises 0.4/s (drink ~once a cycle);
+  wells give +1 water/10s, a well-trip costs the walk, a bottle (~1.3s of
+  Bottler work per 2) erases it; parched (90+) ×0.7 work, ×0.85 walk,
+  0.45 hp/s at rock bottom. Kiln: 2 wood → 1 charcoal/12s (stops at 10
+  wood); press: 1 charcoal + 1 herb → 3 oil/20s; each torch burns 1 oil/min
+  of night (a 6-torch village ≈ 14 oil/cycle), dry torches at half light.
+  Windmill grinds 1 food → 1 flour/8s while a Bakehouse stands (stops at 12
+  food); Baker: 2 flour + 1 water → 2 bread (×110 hunger, eaten first).
+  School: 40 teaching-seconds per villager → +12% work forever. Caps: water
+  60, oil 40, bottles 30, charcoal 24, flour 30, bread 16.
 
 Every knob is one edit in `CONFIG` — tune freely.
 
@@ -322,7 +373,10 @@ redraws at ~3Hz.
 
 ---
 
-## Research backlog — v1.3 candidates: running a real village
+## Research backlog — v1.4 candidates: running a real village
+
+*(v1.3 shipped four of these — the charcoal kiln & lamp oil, thirst, wells &
+Bottler, the Bakehouse & mill, and the Scribe's schoolhouse. What remains:)*
 
 Researched from the inspirations' actual systems: Rise to Ruins' water chain
 (water master → purifier → wells → bottler) and trash slimes; Banished's
@@ -340,25 +394,14 @@ monopolies; commons grazing; wells; tithes).
   outdoors villagers take cold damage (0.5 hp/s) unless near a torch/hearth or
   wearing a cloak. Banished's numbers, scaled: a heated home beats a torch, a
   cloak beats the walk between them. Stockpile food like Kingdom, burn warmth
-  like Banished.
-- **Charcoal kiln & lamp oil (RtR firepit economy, Frostpunk fuel):** kiln
-  turns 2 wood → 1 charcoal; the press turns 1 charcoal + 1 herb → 3 lamp
-  oil. Torches sip 1 oil/minute and gutter to half-light when dry; frost
-  doubles the burn. Wood becomes the deliberate crunch resource — arrows,
-  tools, meals, oil and walls all hunger for the same tree (RtR's lesson:
-  every surplus is an input somewhere else).
+  like Banished. *(Shipped as the torch-oil half in v1.3 — the frost itself is
+  still open.)*
 - **Weaver & cloaks (Banished's tailor):** a flax plot (new crop — the only
   one that grows in frost) feeds the Weaver's loom; cloaks halve cold damage
   and add comfort, but wear out like tools. Banished's tier trick: hide
   cloaks (shepherd culls) for warmth, wool cloaks (shearing, no slaughter)
   for wear-life, and a warm cloak (wool + hide) that's twice as warm — the
   smith and weaver share the same "keep them equipped" rhythm.
-- **Thirst, wells & the Bottler (RtR's water chain):** villagers drink like
-  they eat — a well over clean ground (or a rain-cistern) stocks **water**,
-  and the **Bottler** fills bottles villagers carry so they don't walk to the
-  well each time (RtR's exact loop: fewer trips = more work). Ale counts as a
-  drink, so the Tavern covers droughts; frost freezes the well — melt snow at
-  the kiln or drink the Brewer's reserve.
 - **Dry spells (Timberborn droughts):** every ~8th day a 2-day dry spell:
   shore tiles recede (docks idle, water-fill is off), wells slow, and farms
   outside an irrigation trench grow at half speed. Builders dig trenches from
@@ -376,23 +419,12 @@ monopolies; commons grazing; wells; tithes).
   mini-wave that interrupts work, exactly RtR's trash slimes). A composted
   midden turns into muck the spreader carts to farms for +25% growth — waste
   becomes the fertilizer loop, and overproduction finally has a smell.
-- **Bakehouse & the mill monopoly (real manor banalités, RtR kitchens):** the
-  Windmill grinds wheat → **flour**; the **Baker** turns flour + water into
-  bread — the food third tier (berries < meals < bread) that never rots and
-  feeds two. One bakehouse per village (the lord's monopoly, like the real
-  manor) — the Windmill stops being a farm trinket and becomes the food
-  chain's hinge.
 - **The Moot Hall & edicts (Frostpunk's Book of Laws):** a civic building
   that holds one standing **edict**, swapped free at dawn: Rations (−25% food
   eaten, −10% work), Curfew (workers keep near walls after dusk, +safety,
   −night work), Feast Day (+work speed a day, costs ale + food), Water
   Rationing (drought relief, −comfort). Frostpunk's discontent/hope trade,
   expressed through Dawnhold's comfort instead of a second mood meter.
-- **Scribe & the schoolhouse (Banished's educated workers):** a **Scribe**
-  teaches one villager at a time; the schooled keep +12% work forever
-  (Banished's educated-worker bonus, capped so it's a choice, not a tax).
-  Trades a pair of hands now for better hands later — the slowest, most
-  civilization-flavored investment in the game.
 
 ### Harder difficulties (fair pressure, not stat inflation)
 

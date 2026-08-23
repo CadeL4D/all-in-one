@@ -27,6 +27,7 @@ const Entities = {
       job: job || 'idle',
       x, y, hp: CONFIG.V.hp, maxHp: CONFIG.V.hp,
       hunger: 30 + Math.random() * 30,
+      thirst: 30 + Math.random() * 30, schooled: false, schooling: null,
       state: arrive ? 'arrive' : 'idle',
       path: null, pi: 0, moveT: 0, anim: 0, facing: 1,
       tgt: null, tgtTile: null, workT: 0, workB: null,
@@ -62,14 +63,17 @@ const Entities = {
     if (v.job === 'guard' && isNightLike()) s *= 1.08;
     const t = World.tileT(v.x | 0, v.y | 0);
     if (t === T.ROAD) s *= 1.3;
+    if (v.thirst > CONFIG.THIRST.parchedAt) s *= CONFIG.THIRST.walkMult; // parched folk drag their feet
     return s;
   },
 
   workSpeed(v) {
     let s = 1;
     if (v.trait && v.trait.key === 'diligent') s *= 1.12;
+    if (v.schooled) s *= 1.12;                      // the schoolhouse pays off
     if (v.buzzed) s *= 1 + CONFIG.ALE.buzz;        // last night's ale
     if (v.toolCond <= 0) s *= CONFIG.TOOL.dryMult; // working bare-handed
+    if (v.thirst > CONFIG.THIRST.parchedAt) s *= CONFIG.THIRST.workMult; // a dry throat slows the hands
     s *= Sim.contentment().mult;                   // beds & breathing room
     return s;
   },

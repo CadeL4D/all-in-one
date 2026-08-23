@@ -21,6 +21,11 @@ const BUILD = {
     kind: 'road', terrain: true, unlock: 0, paint: true,
     desc: 'Stone path. Villagers walk 30% faster along roads. Drag to paint.',
   },
+  well: {
+    name: 'Well', cat: 'basics', w: 1, h: 1, hp: 160, cost: { wood: 6, stone: 2 }, time: 14,
+    kind: 'well', light: 1.4, unlock: 0,
+    desc: 'Sweet water, drawn a bucket at a time (+1 water per 10s). Thirsty villagers walk here to drink — the Bottlery spares them the trip.',
+  },
   cottage: {
     name: 'Cottage', cat: 'basics', w: 2, h: 2, hp: 380, cost: { wood: 14, stone: 12 }, time: 42,
     housing: 4, comfort: 2, light: 2.8, kind: 'house', unlock: 4,
@@ -74,7 +79,17 @@ const BUILD = {
   windmill: {
     name: 'Windmill', cat: 'basics', w: 2, h: 2, hp: 300, cost: { wood: 20, stone: 8 }, time: 55,
     kind: 'windmill', tall: 28, unlock: 4,
-    desc: 'Wheat plots within 6 tiles grow 35% faster in its breeze.',
+    desc: 'Wheat plots within 6 tiles grow 35% faster in its breeze. While a Bakehouse stands, its stones also grind wheat into flour.',
+  },
+  kiln: {
+    name: 'Charcoal Kiln', cat: 'basics', w: 1, h: 1, hp: 200, cost: { wood: 8, stone: 3 }, time: 20,
+    kind: 'kiln', light: 1.6, unlock: 2,
+    desc: 'Slowly chars 2 wood into 1 charcoal (never dips below 10 wood). The press\u2019s fuel — the same tree that feeds arrows, tools and meals.',
+  },
+  press: {
+    name: 'Oil Press', cat: 'basics', w: 1, h: 1, hp: 180, cost: { wood: 10, stone: 4 }, time: 24,
+    kind: 'press', unlock: 4,
+    desc: 'Squeezes 1 charcoal + 1 herb into 3 lamp oil. Torches sip 1 oil a minute through the night and gutter to half-light when dry.',
   },
   trap: {
     name: 'Spike Trap', cat: 'defense', w: 1, h: 1, hp: 120, cost: { wood: 2, stone: 1 }, time: 5,
@@ -130,6 +145,21 @@ const BUILD = {
     name: 'Tavern', cat: 'basics', w: 2, h: 2, hp: 360, cost: { wood: 16, stone: 8 }, time: 44,
     kind: 'craft', craft: 'ale', light: 3.2, tall: 8, unlock: 4,
     desc: 'A Brewer mashes food + herbs into ale; a drink at dusk puts +10% into tomorrow\u2019s work. Unlocks the Brewer job.',
+  },
+  bottlery: {
+    name: 'Bottlery', cat: 'basics', w: 2, h: 2, hp: 300, cost: { wood: 12, stone: 6 }, time: 30,
+    kind: 'craft', craft: 'bottles', light: 2.2, tall: 8, unlock: 3,
+    desc: 'A Bottler fills 2 water into 2 bottles. Bottled folk drink where they stand instead of walking to the well — fewer trips, more work. Unlocks the Bottler job.',
+  },
+  bakery: {
+    name: 'Bakehouse', cat: 'basics', w: 2, h: 2, hp: 340, cost: { wood: 18, stone: 10 }, time: 40,
+    kind: 'craft', craft: 'bread', light: 2.6, tall: 10, capOne: true, unlock: 5,
+    desc: 'The lord\u2019s monopoly — one per village. A Baker turns flour + water into bread, the heartiest food (Windmill grinds wheat into flour). Unlocks the Baker job.',
+  },
+  school: {
+    name: 'Schoolhouse', cat: 'basics', w: 2, h: 2, hp: 320, cost: { wood: 20, stone: 12 }, time: 50,
+    kind: 'school', light: 2.2, tall: 12, unlock: 6,
+    desc: 'A Scribe teaches one villager at a time; the schooled work +12% forever. A pair of hands now for better hands later. Unlocks the Scribe job.',
   },
   manor: {
     name: 'Manor', cat: 'basics', w: 3, h: 2, hp: 520, cost: { wood: 24, stone: 16 }, time: 70,
@@ -387,6 +417,7 @@ const Buildings = {
   update(dt) {
     const night = isNightLike();
     const hasBarracks = G.buildings.some(b => b.built && b.key === 'barracks');
+    const hasBakery = G.buildings.some(b => b.built && b.key === 'bakery');
     const windmills = [];
     for (const b of G.buildings) if (b.built && b.key === 'windmill') windmills.push(b);
     for (const b of G.buildings) {
@@ -415,6 +446,47 @@ const Buildings = {
             G.res.herbs -= 1;
           }
           if (Math.random() < dt * 2) Sim.fx('spark', patient.x, patient.y - .5, .3);
+        }
+      }
+      // wells draw a bucket at a time into the village store
+      if (b.def.kind === 'well' && b.built) {
+        b.genT = (b.genT || 0) + dt;
+        if (b.genT >= CONFIG.WELL.genT) {
+          b.genT = 0;
+          if (G.res.water < Buildings.capOf('water')) Sim.gain('water', 1);
+        }
+      }
+      // kiln chars wood into charcoal, never dipping below the wood floor
+      if (b.def.kind === 'kiln' && b.built) {
+        b.kilnT = (b.kilnT || 0) + dt;
+        if (b.kilnT >= CONFIG.KILN.time) {
+          b.kilnT = 0;
+          if (G.res.wood > CONFIG.KILN.woodKeep && G.res.charcoal < Buildings.capOf('charcoal')) {
+            G.res.wood -= 2;
+            Sim.gain('charcoal', 1);
+          }
+        }
+      }
+      // press squeezes charcoal + herbs into lamp oil
+      if (b.def.kind === 'press' && b.built) {
+        b.pressT = (b.pressT || 0) + dt;
+        if (b.pressT >= CONFIG.PRESS.time) {
+          b.pressT = 0;
+          if (G.res.charcoal >= 1 && G.res.herbs >= 1 && G.res.oil < Buildings.capOf('oil')) {
+            G.res.charcoal -= 1; G.res.herbs -= 1;
+            Sim.gain('oil', 3);
+          }
+        }
+      }
+      // while a Bakehouse stands, the windmill's stones grind wheat into flour
+      if (b.def.kind === 'windmill' && b.built && hasBakery) {
+        b.grindT = (b.grindT || 0) + dt;
+        if (b.grindT >= CONFIG.MILL.grindT) {
+          b.grindT = 0;
+          if (G.res.food > CONFIG.MILL.foodKeep && G.res.flour < Buildings.capOf('flour')) {
+            G.res.food -= 1;
+            Sim.gain('flour', 1);
+          }
         }
       }
       // towers shoot
@@ -458,6 +530,9 @@ const Buildings = {
       else if (k === 'camp') out.push([b.x * 16 + 8, b.y * 16 + 21], [b.x * 16 + 26, b.y * 16 + 21]);
       else if (k === 'manor') out.push([b.x * 16 + 10, b.y * 16 + 26], [b.x * 16 + 34, b.y * 16 + 26]);
       else if (k === 'tavern') out.push([b.x * 16 + 8, b.y * 16 + 22], [b.x * 16 + 24, b.y * 16 + 22]);
+      else if (k === 'bottlery') out.push([b.x * 16 + 8, b.y * 16 + 22], [b.x * 16 + 24, b.y * 16 + 22]);
+      else if (k === 'bakery') out.push([b.x * 16 + 8, b.y * 16 + 24], [b.x * 16 + 26, b.y * 16 + 24]);
+      else if (k === 'school') out.push([b.x * 16 + 10, b.y * 16 + 24], [b.x * 16 + 24, b.y * 16 + 24]);
       else if (k === 'cottage2') out.push([0, 0]);
     }
     return out;

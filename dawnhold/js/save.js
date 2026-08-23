@@ -38,7 +38,9 @@ const SaveSys = {
       clears: (G.clearJobs || []).map(t => t.water ? [t.x, t.y, 1] : [t.x, t.y]),
       villagers: G.villagers.map(v => ({
         name: v.name, trait: v.trait ? v.trait.key : null, look: { ...v.look },
-        job: v.job, x: v.x, y: v.y, hp: v.hp, maxHp: v.maxHp, hunger: v.hunger, state: v.state === 'arrive' ? 'arrive' : 'idle',
+        job: v.job, x: v.x, y: v.y, hp: v.hp, maxHp: v.maxHp, hunger: v.hunger,
+        thirst: v.thirst == null ? 30 : v.thirst, schooled: !!v.schooled,
+        state: v.state === 'arrive' ? 'arrive' : 'idle',
         carry: { type: v.carry.type, amt: v.carry.amt },
         toolCond: v.toolCond == null ? CONFIG.TOOL.cond : v.toolCond, buzzed: !!v.buzzed,
       })),
@@ -85,8 +87,9 @@ const SaveSys = {
     G.seed = d.seed; G.day = d.day; G.time = d.time; G.phase = d.phase;
     G.diff = d.diff in CONFIG.DIFF ? d.diff : 'normal';
     G.diffM = CONFIG.DIFF[G.diff];
-    G.res = { wood: d.res.wood || 0, stone: d.res.stone || 0, food: d.res.food || 0, essence: d.res.essence || 0, herbs: d.res.herbs || 0, arrows: d.res.arrows || 0, tools: d.res.tools || 0, meals: d.res.meals || 0, ale: d.res.ale || 0 };
-    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, medic: 0, builder: 0, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0 };
+    G.res = { wood: d.res.wood || 0, stone: d.res.stone || 0, food: d.res.food || 0, essence: d.res.essence || 0, herbs: d.res.herbs || 0, arrows: d.res.arrows || 0, tools: d.res.tools || 0, meals: d.res.meals || 0, ale: d.res.ale || 0,
+              water: d.res.water || 0, oil: d.res.oil || 0, bottles: d.res.bottles || 0, charcoal: d.res.charcoal || 0, flour: d.res.flour || 0, bread: d.res.bread || 0 };
+    G.jobs = { idle: 0, forager: 0, lumber: 0, miner: 0, farmer: 0, fisher: 0, medic: 0, builder: 0, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0, bottler: 0, baker: 0, scribe: 0 };
     for (const k of JOBS) if (k !== 'idle') G.jobs[k] = d.jobs[k] || 0;
     if (d.jobs.herbalist) G.jobs.medic = (G.jobs.medic || 0) + d.jobs.herbalist; // v1.1: herbalist → medic
     G.unlocks = d.unlocks || {};
@@ -119,12 +122,13 @@ const SaveSys = {
         kind: 'v', id: NID(), name: vs.name, trait: tr,
         look: vs.look, job: vs.job === 'herbalist' ? 'medic' : vs.job,
         x: vs.x, y: vs.y, hp: vs.hp, maxHp: vs.maxHp || CONFIG.V.hp,
-        hunger: vs.hunger, state: vs.state, path: null, pi: 0, anim: 0,
+        hunger: vs.hunger, thirst: vs.thirst == null ? 30 : vs.thirst, schooled: !!vs.schooled, schooling: null,
+        state: vs.state, path: null, pi: 0, anim: 0,
         tgt: null, tgtTile: null, workT: 0, workB: null,
         carry: { type: vs.carry ? vs.carry.type : null, amt: vs.carry ? vs.carry.amt : 0 },
         toolCond: vs.toolCond == null ? CONFIG.TOOL.cond : vs.toolCond, buzzed: !!vs.buzzed,
         atkCd: 0, fearT: 0, stuckT: 0, lastD: 1e9, aiT: Math.random() * .5,
-        ate: false, starveWarned: false,
+        ate: false, starveWarned: false, parchWarned: false,
       };
       return v;
     });

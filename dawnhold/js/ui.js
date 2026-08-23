@@ -110,11 +110,15 @@ const UI = {
     const e = mk('essence', 'essence', 'Essence — fuels your Powers');
     const bar = document.createElement('div'); bar.id = 'essBar'; bar.innerHTML = '<div id="essFill"></div>';
     e.appendChild(bar); e.id = 'essChip';
-    mk('herbs', 'herb', 'Herbs — stock the Hospital and brew ale');
+    mk('herbs', 'herb', 'Herbs — stock the Hospital, brew ale, press lamp oil');
+    mk('water', 'water', 'Water — drawn from wells; drinking, bread and bottles all pull it');
     mk('arrows', 'arrow', 'Arrows — burned by towers and raiding guards; Fletchers make them from wood');
     mk('tools', 'tool', 'Tools — worn down by every worker; forged at the Smithy');
     mk('meals', 'meal', 'Meals — cooked food satisfies far better than raw berries');
     mk('ale', 'ale', 'Ale — a dusk drink at the Tavern speeds tomorrow\u2019s work');
+    mk('oil', 'oil', 'Lamp oil — torches sip it through the night; pressed from charcoal + herbs');
+    mk('bottles', 'bottle', 'Bottles — a drink without the walk to the well; filled at the Bottlery');
+    mk('bread', 'bread', 'Bread — the heartiest food, from the Bakehouse');
     mk('pop', 'pop', 'Villagers / housing capacity');
   },
 
@@ -126,15 +130,23 @@ const UI = {
     set('food', Math.floor(G.res.food));
     set('essence', Math.floor(G.res.essence));
     set('herbs', Math.floor(G.res.herbs || 0));
+    set('water', Math.floor(G.res.water || 0));
     set('arrows', Math.floor(G.res.arrows || 0));
     set('tools', Math.floor(G.res.tools || 0));
     set('meals', Math.floor(G.res.meals || 0));
     set('ale', Math.floor(G.res.ale || 0));
+    set('oil', Math.floor(G.res.oil || 0));
+    set('bottles', Math.floor(G.res.bottles || 0));
+    set('bread', Math.floor(G.res.bread || 0));
     const show = (k, cond) => { const c = document.getElementById('chip_' + k); if (c) c.style.display = cond ? '' : 'none'; };
     show('arrows', G.res.arrows >= 1 || Buildings.built('fletch'));
     show('tools', G.res.tools >= 1 || Buildings.built('smithy'));
     show('meals', G.res.meals >= 1 || Buildings.built('kitchen'));
     show('ale', G.res.ale >= 1 || Buildings.built('tavern'));
+    show('water', G.res.water >= 1 || Buildings.built('well'));
+    show('oil', G.res.oil >= 1 || Buildings.built('press'));
+    show('bottles', G.res.bottles >= 1 || Buildings.built('bottlery'));
+    show('bread', G.res.bread >= 1 || Buildings.built('bakery'));
     for (const k of ['wood', 'stone', 'food']) {
       const cap = Buildings.capOf(k), chip = document.getElementById('chip_' + k);
       if (chip) chip.title = `${k[0].toUpperCase() + k.slice(1)} — ${Math.floor(G.res[k])} / ${cap} (Granaries & Storehouses raise caps)`;

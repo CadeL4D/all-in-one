@@ -11,11 +11,13 @@ const CONFIG = {
   // --- day cycle (seconds at 1x speed) ---
   DAY_LEN: 210, NIGHT_LEN: 95, TRANS: 22,   // TRANS = dusk/dawn fade
 
-  START: { wood: 26, stone: 0, food: 48, essence: 40, herbs: 0, arrows: 0, tools: 0, meals: 0, ale: 0 },
+  START: { wood: 26, stone: 0, food: 48, essence: 40, herbs: 0, arrows: 0, tools: 0, meals: 0, ale: 0,
+           water: 10, oil: 20, bottles: 0, charcoal: 0, flour: 0, bread: 0 },
   VIL_START: 6,
 
-  // --- hunger / food ---
+  // --- hunger / food / thirst ---
   HUNGER: { rate: 0.355, mealAt: 66, mealRestore: 54, mealCost: 3, starveDps: 0.9 },
+  THIRST: { rate: 0.4, drinkAt: 65, restore: 70, parchedAt: 90, workMult: 0.7, walkMult: 0.85, parchDps: 0.45 },
 
   // --- work ---
   CARRY: 8,                       // units hauled per trip
@@ -26,19 +28,31 @@ const CONFIG = {
 
   // --- supply lines (v1.2): crafting jobs, ammo, tools, meals, ale, storage ---
   CRAFT: {
-    arrows: { time: 2.4, in: { wood: 1 }, out: 2 },           // fletcher
-    tools:  { time: 3.2, in: { wood: 2, stone: 1 }, out: 1 }, // smith
-    meals:  { time: 3.0, in: { food: 3, wood: 1 }, out: 2 },  // cook
-    ale:    { time: 3.4, in: { food: 2, herbs: 1 }, out: 1 }, // brewer
+    arrows:  { time: 2.4, in: { wood: 1 }, out: 2 },             // fletcher
+    tools:   { time: 3.2, in: { wood: 2, stone: 1 }, out: 1 },   // smith
+    meals:   { time: 3.0, in: { food: 3, wood: 1 }, out: 2 },    // cook
+    ale:     { time: 3.4, in: { food: 2, herbs: 1 }, out: 1 },   // brewer
+    bottles: { time: 2.6, in: { water: 2 }, out: 2 },            // bottler — drinks without the walk
+    bread:   { time: 3.0, in: { flour: 2, water: 1 }, out: 2 },  // baker — feeds two
   },
   AMMO:  { perShot: 1, ballistaShots: 2, raidCost: 5, dryMult: 0.75 },
   TOOL:  { cond: 100, wear: 0.8, dryMult: 0.65 }, // one tool ≈ two minutes of work
   MEAL:  { restore: 85 },                          // a hot meal vs raw berries
-  ALE:   { buzz: 0.10 },                           // dusk drink → tomorrow's work
+  BREAD: { restore: 110 },                         // the bakehouse loaf outranks a meal
+  ALE:   { buzz: 0.10, quench: 60 },               // dusk drink → tomorrow's work (and a drink itself)
   STORE: { // hoard caps; Granaries & Storehouses raise them, overflow spoils at dawn
     wood: 120, stone: 120, food: 80, herbs: 20, arrows: 60, tools: 10, meals: 12, ale: 12,
+    water: 60, oil: 40, bottles: 30, charcoal: 24, flour: 30, bread: 16,
     perGranary: 80, perStorehouse: 100, perWarehouse: 60,
   },
+
+  // --- the village round (v1.3): wells, kiln, press, mill, school ---
+  WELL:  { genT: 10 },                              // seconds per +1 water
+  KILN:  { time: 12, woodKeep: 10 },                // 2 wood → 1 charcoal, never below the wood floor
+  PRESS: { time: 20 },                              // 1 charcoal + 1 herb → 3 lamp oil
+  OIL:   { sip: 1 / 60 },                           // each torch burns 1 oil/minute of night
+  MILL:  { grindT: 8, foodKeep: 12 },               // 1 wheat → 1 flour, only while a Bakehouse stands
+  SCHOOL:{ time: 40 },                              // teaching-seconds per villager
   COMFORT: { snug: 1.05, snugAt: 1.3, crowd: 0.95, crowdAt: 1.0, packed: 0.88, packedAt: 0.7, leaveChance: 0.2 },
 
   // --- villagers / combat ---
@@ -110,7 +124,7 @@ const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6,
 const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4 };
 
 // ---- jobs ----
-const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'medic', 'builder', 'guard', 'fletcher', 'smith', 'cook', 'brewer'];
+const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'medic', 'builder', 'guard', 'fletcher', 'smith', 'cook', 'brewer', 'bottler', 'baker', 'scribe'];
 const JOB_INFO = {
   idle:     { name: 'Resting',  cloth: '#e8e0d0', desc: 'No duty. They haul nothing and stay near camp. Idle folk will emergency-forage if food runs dry.' },
   forager:  { name: 'Forager',  cloth: '#4a8f3c', desc: 'Pick berries from bushes. Fast food early on; bushes regrow each day.' },
@@ -125,10 +139,13 @@ const JOB_INFO = {
   smith:    { name: 'Smith',    cloth: '#8a5a52', desc: 'Runs the Smithy, forging tools from wood and stone. Every worker wears a tool out — bare hands work slowly. Requires a Smithy.' },
   cook:     { name: 'Cook',     cloth: '#c9803c', desc: 'Runs the Kitchen, turning 3 food + 1 wood into 2 hearty meals that feed far better than raw berries. Requires a Kitchen.' },
   brewer:   { name: 'Brewer',   cloth: '#b8862e', desc: 'Runs the Tavern, brewing food + herbs into ale. A drink at dusk makes the whole village work faster tomorrow. Requires a Tavern.' },
+  bottler:  { name: 'Bottler',  cloth: '#4f8fa8', desc: 'Works the Bottlery, filling bottles from the water store. Bottled folk drink where they stand — everyone else walks to the well. Requires a Bottlery.' },
+  baker:    { name: 'Baker',    cloth: '#d9b06c', desc: 'Runs the Bakehouse, baking flour + water into bread — the heartiest food, and it keeps. One Bakehouse per village. Requires a Bakehouse.' },
+  scribe:   { name: 'Scribe',   cloth: '#7a6fb0', desc: 'Teaches at the Schoolhouse, one villager at a time. The schooled work +12% forever — a pair of hands now for better hands later. Requires a Schoolhouse.' },
 };
 
 // duties that need their workplace built before they can be staffed
-const JOB_NEEDS = { medic: 'hospital', fletcher: 'fletch', smith: 'smithy', cook: 'kitchen', brewer: 'tavern' };
+const JOB_NEEDS = { medic: 'hospital', fletcher: 'fletch', smith: 'smithy', cook: 'kitchen', brewer: 'tavern', bottler: 'bottlery', baker: 'bakery', scribe: 'school' };
 
 // ---- utilities ----
 const U = {
@@ -167,11 +184,12 @@ const G = {
   phase: 'day',            // day | dusk | night | dawn
   speed: 1, paused: false,
   diff: 'normal', diffM: CONFIG.DIFF.normal,
-  res: { wood: 0, stone: 0, food: 0, essence: 0, herbs: 0, arrows: 0, tools: 0, meals: 0, ale: 0 },
+  res: { wood: 0, stone: 0, food: 0, essence: 0, herbs: 0, arrows: 0, tools: 0, meals: 0, ale: 0,
+         water: 0, oil: 0, bottles: 0, charcoal: 0, flour: 0, bread: 0 },
   villagers: [], monsters: [], buildings: [],
   clearJobs: [],           // queued land-clearing tiles {x, y} for builders
   effects: [], floaters: [],
-  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0 },
+  jobs: { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0, bottler: 0, baker: 0, scribe: 0 },
   regrow: new Map(),       // tileIdx -> {t, kind}
   unlocks: {},             // buildKey -> true (granted)
   stats: { kills: 0, deaths: 0, built: 0, gathered: 0, wavePeak: 0, peakPop: 6 },

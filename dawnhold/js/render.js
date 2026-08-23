@@ -466,11 +466,12 @@ const Render = {
         lx.beginPath(); lx.arc(s.x, s.y, rr, 0, Math.PI * 2); lx.fill();
       };
       // building lights
+      const oilDry = G.res.oil <= 0; // dry torches gutter to half-light
       for (const b of G.buildings) {
         if (!b.built) continue;
         let r = b.def.light;
         if (!r) continue;
-        if (b.key === 'torch') r = 3.4 + Math.sin(this._t * 7 + b.id) * .12;
+        if (b.key === 'torch') r = (oilDry ? 1.7 : 3.4) + Math.sin(this._t * 7 + b.id) * (oilDry ? .04 : .12);
         hole(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, r, 0.92);
       }
       if (G.beaconLit) {
@@ -499,7 +500,8 @@ const Render = {
       };
       for (const b of G.buildings) {
         if (!b.built || !b.def.light) continue;
-        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, b.key === 'torch' ? 2.2 : b.def.light * 0.8);
+        const dim = b.key === 'torch' && oilDry;
+        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, b.key === 'torch' ? (dim ? 1.0 : 2.2) : b.def.light * 0.8);
       }
       if (G.beaconLit) {
         const b = G.buildings.find(bb => bb.key === 'beacon' && bb.built);

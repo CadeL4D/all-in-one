@@ -451,6 +451,84 @@ const Art = {
       R(x, 14, 4, 4, 2, '#8a5a2b'); R(x, 15, 8, 2, 2, PAL.woodD);    // mug + bracket
       S.tavern = c;
     }
+    // --- well 1x1 ---
+    {
+      const { c, x } = mkc(16, 16);
+      R(x, 2, 9, 12, 6, PAL.stoneB);                              // stone ring
+      R(x, 2, 9, 12, 1, PAL.stoneL); R(x, 2, 14, 12, 1, PAL.stoneD);
+      R(x, 4, 10, 8, 3, '#20304a'); R(x, 4, 10, 8, 1, '#3b6ea8');  // water below
+      R(x, 3, 2, 1, 8, PAL.woodD); R(x, 12, 2, 1, 8, PAL.woodD);   // A-frame legs
+      R(x, 3, 2, 10, 1, PAL.wood); R(x, 2, 1, 12, 1, PAL.woodL);   // crossbar + cap
+      R(x, 7, 3, 1, 4, '#c9b47a');                                // rope
+      R(x, 6, 7, 3, 2, PAL.wood); R(x, 6, 7, 3, 1, PAL.woodL);     // bucket
+      S.well = c;
+    }
+    // --- charcoal kiln 1x1 ---
+    {
+      const { c, x } = mkc(16, 16);
+      R(x, 2, 8, 12, 6, PAL.stoneD);
+      for (let i = 0; i < 5; i++) R(x, 3 + i, 7 - i, 10 - i * 2, 1, PAL.stoneB); // dome
+      R(x, 2, 14, 12, 1, PAL.stoneD);
+      R(x, 6, 10, 4, 4, '#181420'); R(x, 6, 10, 4, 1, '#241f30');  // mouth
+      R(x, 7, 2, 2, 2, '#3a3a40');                                // vent
+      R(x, 7, 11, 1, 1, '#ff9a2e'); R(x, 8, 12, 1, 1, '#ffce56');  // ember glow
+      S.kiln = c;
+    }
+    // --- oil press 1x1 ---
+    {
+      const { c, x } = mkc(16, 18);
+      R(x, 2, 9, 12, 7, PAL.plank); R(x, 2, 9, 12, 1, PAL.woodL);  // bench
+      R(x, 3, 10, 1, 6, PAL.plankD); R(x, 12, 10, 1, 6, PAL.plankD);
+      R(x, 3, 2, 10, 2, PAL.wood); R(x, 3, 2, 10, 1, PAL.woodL);   // top beam
+      R(x, 3, 4, 1, 6, PAL.woodD); R(x, 12, 4, 1, 6, PAL.woodD);   // posts
+      R(x, 7, 4, 2, 3, PAL.metalD); R(x, 7, 4, 2, 1, PAL.metal);   // screw
+      R(x, 5, 8, 6, 2, PAL.metal);                                 // press plate
+      R(x, 4, 12, 3, 3, '#e8c05a'); R(x, 9, 12, 3, 3, '#c9a050');  // seed sacks
+      R(x, 5, 15, 2, 3, '#6fb7d9'); R(x, 9, 15, 2, 3, '#4f8fa8');  // oil jars
+      S.press = c;
+    }
+    // --- bottlery 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 5, 15, 22, 13, PAL.plank);
+      for (let i = 0; i < 4; i++) R(x, 5, 16 + i * 3, 22, 1, PAL.plankD);
+      for (let i = 0; i < 7; i++) R(x, 3 + i, 7 + i, 26 - i * 2, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 3, 13, 26, 2, PAL.thatchD);
+      R(x, 13, 21, 6, 7, PAL.door);
+      R(x, 6, 18, 5, 2, PAL.woodD); R(x, 21, 18, 5, 2, PAL.woodD); // shelves
+      R(x, 7, 16, 2, 2, '#6fb7d9'); R(x, 10, 16, 2, 2, '#4f8fa8'); // bottles
+      R(x, 22, 16, 2, 2, '#6fb7d9'); R(x, 25, 16, 2, 2, '#a8cbe8');
+      R(x, 24, 21, 3, 5, '#3b6ea8'); R(x, 24, 21, 3, 1, '#a8cbe8'); // water barrel
+      S.bottlery = c;
+    }
+    // --- bakehouse 2x2 ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 3, 12, 26, 16, PAL.plank);
+      for (let i = 0; i < 5; i++) R(x, 3, 13 + i * 3, 26, 1, PAL.plankD);
+      for (let i = 0; i < 8; i++) R(x, 1 + i, 3 + i, 30 - i * 2, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      R(x, 1, 10, 30, 2, PAL.thatchD);
+      R(x, 22, 1, 4, 8, PAL.stoneB); R(x, 22, 1, 4, 1, PAL.stoneL); R(x, 22, 5, 4, 1, PAL.stoneD); // chimney
+      R(x, 6, 18, 8, 8, PAL.stoneD); R(x, 7, 20, 6, 6, '#181420'); // oven
+      R(x, 7, 20, 6, 1, '#ff9a2e'); R(x, 8, 21, 2, 1, '#ffce56');  // fire in the mouth
+      R(x, 19, 21, 6, 7, PAL.door);
+      R(x, 17, 16, 5, 2, PAL.wheat); R(x, 18, 15, 3, 1, PAL.wheatD); // loaf on the sill
+      R(x, 24, 17, 4, 4, '#ffdf9a');                              // warm window
+      S.bakery = c;
+    }
+    // --- schoolhouse 2x2 ---
+    {
+      const { c, x } = mkc(32, 36);
+      R(x, 3, 16, 26, 14, PAL.stoneB);
+      R(x, 3, 16, 26, 1, PAL.stoneL); R(x, 3, 29, 26, 1, PAL.stoneD);
+      for (let i = 0; i < 8; i++) R(x, 1 + i, 7 + i, 30 - i * 2, 1, i % 2 ? '#6a8ab4' : '#5278a4'); // slate roof
+      R(x, 1, 14, 30, 2, '#3f5d80');
+      R(x, 13, 3, 6, 5, '#5278a4'); R(x, 13, 3, 6, 1, '#3f5d80'); // bell gable
+      R(x, 15, 4, 2, 2, '#e8c05a');                               // bell
+      R(x, 13, 21, 6, 9, PAL.door); R(x, 13, 21, 6, 1, '#7a5a34');
+      R(x, 6, 20, 4, 4, '#ffdf9a'); R(x, 22, 20, 4, 4, '#ffdf9a'); // windows
+      S.school = c;
+    }
     // --- manor 3x2 ---
     {
       const { c, x } = mkc(48, 32);
@@ -1037,6 +1115,10 @@ const Art = {
     ic('tool', x => { R(x, 6, 2, 4, 8, '#8a6a4a'); R(x, 4, 9, 8, 4, PAL.metal); R(x, 4, 9, 8, 1, PAL.metalD); R(x, 7, 3, 1, 6, '#6b4a32'); });
     ic('meal', x => { R(x, 3, 7, 10, 6, '#d8d8e0'); R(x, 4, 6, 8, 2, '#efeff5'); R(x, 5, 8, 2, 2, '#e8a94b'); R(x, 9, 9, 2, 2, '#7dc95e'); R(x, 7, 4, 2, 2, '#cfd8e0'); });
     ic('ale', x => { R(x, 5, 4, 6, 10, '#d8b46a'); R(x, 4, 5, 1, 6, '#b8944e'); R(x, 11, 6, 3, 4, '#d8b46a'); R(x, 5, 4, 6, 2, '#f0e0b0'); R(x, 6, 3, 4, 1, '#f0f0e0'); });
+    ic('water', x => { R(x, 7, 1, 2, 3, '#8fc9e8'); R(x, 5, 4, 6, 8, '#6fb7d9'); R(x, 6, 12, 4, 2, '#4f8fa8'); R(x, 6, 5, 2, 3, '#a8d8ee'); });
+    ic('oil', x => { R(x, 6, 1, 4, 2, '#c9a050'); R(x, 5, 3, 6, 10, '#e8c05a'); R(x, 5, 8, 6, 5, '#c9862e'); R(x, 6, 4, 2, 3, '#f0dc9a'); });
+    ic('bottle', x => { R(x, 7, 1, 2, 3, '#8a6a4a'); R(x, 6, 4, 4, 10, '#6fb7d9'); R(x, 6, 7, 4, 7, '#3b6ea8'); R(x, 7, 5, 1, 4, '#a8d8ee'); });
+    ic('bread', x => { R(x, 3, 6, 10, 7, '#d9a04a'); R(x, 4, 5, 8, 2, '#e8bc6c'); R(x, 5, 7, 2, 1, '#b8862e'); R(x, 9, 9, 2, 1, '#b8862e'); R(x, 6, 10, 2, 1, '#b8862e'); });
   },
 
   /* -------- villager sprites (per unique look) -------- */
