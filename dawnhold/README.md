@@ -322,42 +322,77 @@ redraws at ~3Hz.
 
 ---
 
-## Research backlog — v1.3 candidates from Rise to Ruins & friends
+## Research backlog — v1.3 candidates: running a real village
 
-Researched from how the inspirations actually work: Rise to Ruins'
-corruption/threat bar, firepit-push economy, Nightmare mode and meteor nights;
-Banished's tools↔firewood↔food death spiral; Oddrealm's winters and spoilage;
-Kingdom Two Crowns' winter income drought and Cursed mode; Frostpunk's
-shortage crises; RimWorld's wealth-scaled, adaptive raid points.
+Researched from the inspirations' actual systems: Rise to Ruins' water chain
+(water master → purifier → wells → bottler) and trash slimes; Banished's
+firewood economy, educated workers and sheep/wool/warm-coat tiers; Frostpunk's
+coal/steam-hub heating and Book of Laws; Timberborn's droughts and the
+irrigation-vs-drinking-water split; Kingdom Two Crowns' winter income drought
+and coin-stealing Greed; Oddrealm's winters; RimWorld's wealth-scaled, adaptive
+raids — plus how a real medieval manor ran (mill, bakehouse and brewery as
+monopolies; commons grazing; wells; tithes).
 
-### More to manage (new chains & needs)
+### More to manage — needs, seasons & civic life
 
 - **First Frost (Oddrealm/ Kingdom winters):** a 2-day frost hits days 7–8
   (and each 10-day cycle in endless): farm growth pauses, bush regrow halves,
   outdoors villagers take cold damage (0.5 hp/s) unless near a torch/hearth or
-  wearing a cloak. Cold counterplay is the point — stockpile food like Kingdom,
-  burn warmth like Banished.
-- **Charcoal kiln & lamp oil (RtR firepit economy):** kiln turns 2 wood → 1
-  charcoal; the press turns 1 charcoal + 1 herb → 3 lamp oil. Torches sip
-  1 oil/minute and gutter to half-light when dry; frost doubles the burn.
-  Wood becomes the deliberate crunch resource — arrows, tools, meals, oil and
-  walls all hunger for the same tree (RtR's lesson: every surplus is an input
-  somewhere else).
+  wearing a cloak. Banished's numbers, scaled: a heated home beats a torch, a
+  cloak beats the walk between them. Stockpile food like Kingdom, burn warmth
+  like Banished.
+- **Charcoal kiln & lamp oil (RtR firepit economy, Frostpunk fuel):** kiln
+  turns 2 wood → 1 charcoal; the press turns 1 charcoal + 1 herb → 3 lamp
+  oil. Torches sip 1 oil/minute and gutter to half-light when dry; frost
+  doubles the burn. Wood becomes the deliberate crunch resource — arrows,
+  tools, meals, oil and walls all hunger for the same tree (RtR's lesson:
+  every surplus is an input somewhere else).
 - **Weaver & cloaks (Banished's tailor):** a flax plot (new crop — the only
   one that grows in frost) feeds the Weaver's loom; cloaks halve cold damage
-  and add comfort, but wear out like tools. Naked-winter villagers work at
-  65% — the smith and weaver share the same "keep them equipped" rhythm.
-- **Smokehouse (Oddrealm's cook-before-it-rots):** from day 6 raw berries rot
-  −10%/day at dawn; smoked food, meals and ale keep forever. The Granary stops
-  being a dump stat — kitchen throughput becomes the real food cap.
-- **New god powers — Recall & Summon Guardian (RtR's recall/defender):**
-  Recall (8 essence) yanks a fleeing villager home mid-terror; Summon Guardian
-  (30 essence) raises a spirit fighter that fades at dawn. Priced against
-  0.1/s day regen: Recall is cheap mercy, Guardian is a deliberate splurge.
-- **Meteor-shower nights & fire elementals (RtR events):** a rare night event
-  rains flame patches; elementals shrug off spike traps, refuse to cross
-  water, and set wooden walls alight (−8 hp/s until a builder douses them).
-  Water moats and stone faces become real tactics, not decoration.
+  and add comfort, but wear out like tools. Banished's tier trick: hide
+  cloaks (shepherd culls) for warmth, wool cloaks (shearing, no slaughter)
+  for wear-life, and a warm cloak (wool + hide) that's twice as warm — the
+  smith and weaver share the same "keep them equipped" rhythm.
+- **Thirst, wells & the Bottler (RtR's water chain):** villagers drink like
+  they eat — a well over clean ground (or a rain-cistern) stocks **water**,
+  and the **Bottler** fills bottles villagers carry so they don't walk to the
+  well each time (RtR's exact loop: fewer trips = more work). Ale counts as a
+  drink, so the Tavern covers droughts; frost freezes the well — melt snow at
+  the kiln or drink the Brewer's reserve.
+- **Dry spells (Timberborn droughts):** every ~8th day a 2-day dry spell:
+  shore tiles recede (docks idle, water-fill is off), wells slow, and farms
+  outside an irrigation trench grow at half speed. Builders dig trenches from
+  the shore (Timberborn's rule kept honest: cistern water is for drinking,
+  only channels irrigate). The water-fill tool finally has a nemesis.
+- **Shepherd & the commons (Banished pastures, real-manor commons):** a
+  pasture on grass tiles with a **Shepherd**: sheep give wool without
+  slaughter (the weaver's second input), mutton and hides on cull; herds need
+  hay — a second fodder stockpile cut from grass, and the only thing they eat
+  through frost. Grazing slowly depletes grass tiles, so paddocks rotate:
+  land itself becomes a managed resource.
+- **The Midden (RtR trash slimes, real cesspits):** a village generates
+  refuse — kiln ash, husks, spoiled food, broken tools. Idle villagers haul
+  it to the midden; three un-hauled piles in a 3×3 spawn a **rat swarm** (a
+  mini-wave that interrupts work, exactly RtR's trash slimes). A composted
+  midden turns into muck the spreader carts to farms for +25% growth — waste
+  becomes the fertilizer loop, and overproduction finally has a smell.
+- **Bakehouse & the mill monopoly (real manor banalités, RtR kitchens):** the
+  Windmill grinds wheat → **flour**; the **Baker** turns flour + water into
+  bread — the food third tier (berries < meals < bread) that never rots and
+  feeds two. One bakehouse per village (the lord's monopoly, like the real
+  manor) — the Windmill stops being a farm trinket and becomes the food
+  chain's hinge.
+- **The Moot Hall & edicts (Frostpunk's Book of Laws):** a civic building
+  that holds one standing **edict**, swapped free at dawn: Rations (−25% food
+  eaten, −10% work), Curfew (workers keep near walls after dusk, +safety,
+  −night work), Feast Day (+work speed a day, costs ale + food), Water
+  Rationing (drought relief, −comfort). Frostpunk's discontent/hope trade,
+  expressed through Dawnhold's comfort instead of a second mood meter.
+- **Scribe & the schoolhouse (Banished's educated workers):** a **Scribe**
+  teaches one villager at a time; the schooled keep +12% work forever
+  (Banished's educated-worker bonus, capped so it's a choice, not a tax).
+  Trades a pair of hands now for better hands later — the slowest, most
+  civilization-flavored investment in the game.
 
 ### Harder difficulties (fair pressure, not stat inflation)
 
@@ -372,21 +407,35 @@ shortage crises; RimWorld's wealth-scaled, adaptive raid points.
   a rough night (a building lost, or two villagers hurt) eases it −10%. The
   game leans in when you're bored and lets up when you're drowning.
 - **Hollow-larder crises (Frostpunk shortages):** on Hard+, an empty food
-  store for a full day means −20% village work speed until 20 food is laid in;
-  dry quivers for a full night do the same to guard damage (on top of the
-  existing ×0.75). Buffers stop being optional.
+  store for a full day means −20% village work until 20 food is laid in; dry
+  quivers do the same to guard damage (on top of the existing ×0.75), and an
+  empty cistern during a dry spell joins the list. Buffers stop being
+  optional.
 - **The dark festers (RtR's day-15 clock):** every living lair past day 8
   adds +4% monster HP (up to +12% with all three standing). Raids already
   shrink the nights — now they also slow the festering, so raid timing
   becomes a real decision instead of "whenever."
+- **Filchers in the night (Kingdom's coin-stealing Greed):** on Hard+, a few
+  filchers each night ignore the camp and slip for the stores — they steal
+  arrows, oil or food and flee home to their lair. Walls must enclose the
+  pantry, not just the campfire; guards learn interception beats standing
+  ground.
+- **Grief weighs (Frostpunk's death penalties):** on Hard+, a villager's
+  death leaves −15% village work for a day — halved if a grave stands within
+  six tiles of the mourners' homes. Burial rites stop being set dressing.
 
 ### Balance guardrails
 
-All five new chains pull wood — that's the design: one crunch resource with
-four competing mouths (arrows, tools, oil, meals), like RtR's everything-eats-
-wood endgame. Frost is tuned so a Normal player with one kiln and six cloaks
-by day 7 sails through; Hard needs double that plus oil reserves. Wave math
-keeps its cap of 30 and guard/tower DPS stays untouched, so existing defense
-math holds — pressure comes from larders, timing and the fester, not bullet-
-sponge monsters.
+Wood stays the crunch resource — arrows, tools, oil and cloak-frames fight
+over the same tree — while **water** becomes the second axis (drink, dough,
+irrigation, drought) and food gets its third tier. Frost is budgeted by
+difficulty: 1 day Easy / 2 Normal / 3 Hard, with blizzards only on Nightmare;
+a Normal player with one kiln, six cloaks and a full cistern sails through.
+Every new chain keeps a bare-hands fallback (unbottled villagers walk to the
+well, cloakless ones huddle by torches, unirrigated farms just grow slower)
+so nothing hard-locks a build. The job roster grows ~12 → 16 (Bottler,
+Shepherd, Baker, Scribe, plus the Moot Hall's keeper) — each new mouth also
+drinks, eats and gets cold, so growth keeps costing what it yields. Wave cap
+(30) and guard/tower DPS stay untouched; pressure comes from larders,
+seasons, thieves and the fester — never from bullet-sponge monsters.
 
