@@ -99,7 +99,7 @@ const Sim = {
       this.updateMonster(m, dt);
       if (m.dead || m.hp <= 0) { G.monsters.splice(i, 1); if (G.boss === m) { G.boss = null; UI.bossBar(null); } }
     }
-    this.separate();
+    this.separate(dt);
 
     // ----- regrowth -----
     if (G.regrow.size) {
@@ -575,13 +575,18 @@ const Sim = {
       }
       case 'fight': {
         const m = v.tgt;
-        // on a raid the leash lifts — guards fight freely out at the monolith
+        // on a raid the leash lifts — guards fight freely out at the monolith.
+        // otherwise pursuit reaches as far as the aggro scan acquires (30
+        // tiles) so outlying huts never sit in a band guards see but abandon
         const raiding = G.raidTarget && G.buildings.includes(G.raidTarget);
-        if (!m || m.dead || m.hp <= 0 || (!raiding && U.dst(v.x, v.y, World.center.x, World.center.y) > CONFIG.GUARD.leash + 6)) {
+        if (!m || m.dead || m.hp <= 0 || (!raiding && U.dst(v.x, v.y, World.center.x, World.center.y) > 30)) {
           v.tgt = null; v.state = 'idle'; v.path = null; return;
         }
         const d = U.dst(v.x, v.y, m.x, m.y);
-        if (d < 1.0) {
+        // quarry standing on spikes (or any villager-solid tile) can't share
+        // its footing with a guard — poke it from the neighbouring tile
+        const reach = Path.pass(m.x | 0, m.y | 0, false) ? 1.0 : 1.6;
+        if (d < reach) {
           v.path = null;
           if (v.atkCd <= 0) {
             v.atkCd = CONFIG.GUARD.atkT;
@@ -590,7 +595,12 @@ const Sim = {
           }
         } else if (!v.path || v.pi >= v.path.length) {
           const p = Path.find(v.x | 0, v.y | 0, m.x | 0, m.y | 0, { adjacent: true, monster: false });
-          if (p) { v.path = p; v.pi = 0; v.noPathT = 0; }
+          if (p) {
+            // finish on the quarry's own position — tile-centre routes end a
+            // swing-length short of a stationary biter parked on a hut
+            if (Path.pass(m.x | 0, m.y | 0, false)) p.push({ x: m.x, y: m.y });
+            v.path = p; v.pi = 0; v.noPathT = 0;
+          }
           else {
             // unreachable quarry — don't freeze on it; give up after ~2s of failed tries
             v.path = null;
@@ -641,8 +651,9 @@ const Sim = {
         }
         return;
       }
-      // idle patrol
-      if (Math.random() < .3) {
+      // idle patrol — pick a new wander only when the last one is done, so
+      // mid-stride rerolls don't make patrols twitch
+      if (Math.random() < .3 && (!v.path || v.pi >= v.path.length)) {
         const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 3;
         const tx = U.clamp((World.center.x + Math.cos(a) * r) | 0, 1, World.W - 2);
         const ty = U.clamp((World.center.y + Math.sin(a) * r) | 0, 1, World.H - 2);
@@ -1387,38 +1398,20 @@ const Sim = {
   },
 
   /* ---------------- helpers ---------------- */
-  // is another villager standing within personal space of (x, y)?
-  // (a villager phasing out of a hard jam walks through — returns false)
-  crowded(e, x, y) {
-    if (e._ghost > 0) return false;
-    for (const o of G.villagers) {
-      if (o === e) continue;
-      if (U.dst2(x, y, o.x, o.y) < 0.20) return true;   // ~0.45-tile radius
-    }
-    return false;
-  },
-
+  // villagers drift straight through one another — walls are their only hard
+  // obstacle, so no sidesteps, no waiting on neighbours (settled spacing is
+  // handled gently in separate())
   moveAlong(e, dt, spd) {
     if (!e.path || e.pi >= e.path.length) return;
     // fresh path object → reset stuck bookkeeping (paths get reassigned all over the brain)
-    if (e._lastPath !== e.path) { e._lastPath = e.path; e.stuckT = 0; e.lastD = 1e9; e.crowdT = 0; }
-    if (e._ghost > 0) e._ghost -= dt;
+    if (e._lastPath !== e.path) { e._lastPath = e.path; e.stuckT = 0; e.lastD = 1e9; }
     let step = spd * dt;
-    let blockedByVillager = false;
     while (step > 0 && e.pi < e.path.length) {
       const wp = e.path[e.pi];
       // villagers never enter a solid tile — walls may have risen since this path was made
       if (e.kind === 'v' && !Path.pass(wp.x | 0, wp.y | 0, false)) { e.path = null; e.pi = 0; return; }
       const d = U.dst(e.x, e.y, wp.x, wp.y);
-      // final waypoint occupied by a villager → finish the trip short so crowds
-      // don't orbit the spot forever
-      if (e.kind === 'v' && e.pi === e.path.length - 1 && d < 0.75 && this.crowded(e, wp.x, wp.y)) {
-        e.pi = e.path.length;
-        break;
-      }
       if (d <= step || d < 0.03) {
-        // never step onto another villager mid-route — wait this tick
-        if (e.kind === 'v' && this.crowded(e, wp.x, wp.y)) { blockedByVillager = true; break; }
         e.x = wp.x; e.y = wp.y; e.pi++; step -= d;
       } else {
         const ux = (wp.x - e.x) / d, uy = (wp.y - e.y) / d;
@@ -1426,33 +1419,18 @@ const Sim = {
         // a villager already inside a solid tile (wall built on them) may walk out
         const escaping = e.kind === 'v' && !Path.pass(e.x | 0, e.y | 0, false);
         if (!escaping && e.kind === 'v' && !Path.pass(nx | 0, ny | 0, false)) { e.path = null; e.pi = 0; return; }
-        if (e.kind === 'v' && this.crowded(e, nx, ny)) {
-          // sidestep around the neighbor; boxed in → wait this tick
-          const sx = -uy, sy = ux;
-          for (const s of [1, -1]) {
-            const ox = e.x + sx * s * 0.35, oy = e.y + sy * s * 0.35;
-            if (Path.pass(ox | 0, oy | 0, false) && !this.crowded(e, ox, oy)) { e.x = ox; e.y = oy; break; }
-          }
-          blockedByVillager = true;
-          break;
-        }
         e.x = nx; e.y = ny;
         e.facing = wp.x >= e.x ? 1 : -1;
         step = 0;
       }
     }
-    // stuck watch — waiting on a neighbor is not stuck-on-terrain, but a long
-    // jam (head-on in a corridor) earns a brief phase-through instead of deadlock
+    // stuck watch — no progress toward the waypoint means rethink the route
     const d2 = e.path && e.pi < e.path.length ? U.dst2(e.x, e.y, e.path[e.pi].x, e.path[e.pi].y) : 0;
     if (e.path && e.pi < e.path.length) {
-      if (blockedByVillager) {
-        e.stuckT = 0;
-        e.crowdT = (e.crowdT || 0) + dt;
-        if (e.crowdT > 2.5) { e._ghost = 1.2; e.crowdT = 0; }
-      } else if (d2 > e.lastD - 0.0004) {
+      if (d2 > e.lastD - 0.0004) {
         e.stuckT += dt;
         if (e.stuckT > 1.4) { e.stuckT = 0; e.path = null; e.pi = 0; } // force rethink
-      } else { e.stuckT = 0; e.crowdT = 0; }
+      } else e.stuckT = 0;
     }
     e.lastD = d2;
   },
@@ -1467,19 +1445,22 @@ const Sim = {
     if (out || Path.pass(e.x | 0, ny | 0, false)) e.y = ny;
   },
 
-  separate() {
+  separate(dt) {
     const all = G.villagers;
     const mons = G.monsters;
-    // push villagers apart so they don't stack
+    // walkers pass through each other; only villagers that have both settled
+    // ease apart, and gently (dt-scaled) so idle crowds fan out without shoving
     for (let i = 0; i < all.length; i++) {
       const a = all[i];
+      if (a.path && a.pi < a.path.length) continue;
       for (let j = i + 1; j < all.length; j++) {
         const b = all[j];
+        if (b.path && b.pi < b.path.length) continue;
         const dx = b.x - a.x, dy = b.y - a.y;
         if (Math.abs(dx) > .5 || Math.abs(dy) > .5) continue;
         const d2 = dx * dx + dy * dy;
         if (d2 < .16 && d2 > 0.0001) {
-          const d = Math.sqrt(d2), push = (0.4 - d) * .5;
+          const d = Math.sqrt(d2), push = (0.4 - d) * Math.min(1, dt * 6);
           const ux = dx / d, uy = dy / d;
           this.nudge(a, -ux * push, -uy * push);
           this.nudge(b, ux * push, uy * push);

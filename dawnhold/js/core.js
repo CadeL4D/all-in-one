@@ -43,7 +43,7 @@ const CONFIG = {
 
   // --- villagers / combat ---
   V: { hp: 60, spd: 2.3, dmg: 3, atkT: 0.85, dayHeal: 0.28 },
-  GUARD: { dmg: 7.5, atkT: 0.72, leash: 16, aggro: 13 },
+  GUARD: { dmg: 7.5, atkT: 0.72, aggro: 13 },
 
   // --- towers ---
   TOWER:    { dmg: 8,  rate: 1.1, range: 5.5 },

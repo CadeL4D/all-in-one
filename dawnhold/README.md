@@ -7,6 +7,13 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
+> **v1.2.1 — Movement & Reach:** villagers now **walk straight through each
+> other** (walls are the only solid obstacle; settled villagers still drift
+> apart gently) — no more circling, orbiting or teleport-skipping around one
+> another — and **guards always close to bite range**: a monster parked on a
+> hut (or stood on spike traps, or lured out past the old pursuit leash) can
+> no longer sit just outside swing range while guards repath forever.
+
 > **v1.2 — Supply Lines:** the economy becomes a balancing act — four new
 > jobs (**Fletcher, Smith, Cook, Brewer**) turn raw surplus into arrows,
 > tools, meals and ale; **towers burn arrows**, **workers wear out tools**,
@@ -28,6 +35,35 @@ Great Beacon to bring back the dawn.
 ---
 
 ## Changelog
+
+### v1.2.1 — Movement & Reach
+- **Villagers pass through each other** (reverses v1.1's personal-space
+  steering). That steering fought itself: perpendicular sidesteps rotate with
+  the heading, so two crossing villagers curved around each other endlessly,
+  and both the sidestep and the crowd-separation shove were instant
+  teleports (~9× walk speed — the "fast skipping"), while the phase-through
+  escape valve's timer reset on nearly every think. Walls are now the only
+  solid obstacle for a walking villager; no sidesteps, no waiting, no valve.
+- **Settled villagers still space out:** when two villagers with nowhere to
+  go stand within 0.4 tiles, they ease apart gently (a slow dt-scaled drift,
+  never a shove) — idle and working crowds fan out instead of stacking.
+- **Guards close the last step:** pursuit paths now finish on the monster's
+  own position instead of an adjacent tile centre. Until now a *stationary*
+  monster — e.g. one parked on a hut eating it — sat exactly a swing-length
+  away: the guard arrived at the neighbouring tile centre (distance ~1.0–1.4,
+  attack needs < 1.0), the path "succeeded" so the give-up timer never fired,
+  and the guard repathed to the same spot forever while the hut was eaten.
+- **Quarry on spikes is poked from beside them:** spike traps are solid
+  ground for monsters but not for villagers, so a biter stood on one had its
+  pursuers snap 1–2 tiles out and stand there. Guards now attack such quarry
+  from the neighbouring tile (reach 1.6).
+- **Pursuit reaches as far as acquisition:** guards used to spot monsters up
+  to 30 tiles from camp but abandon the chase at 22 — outlying huts (fishing
+  docks!) could sit in a band guards looked at but never defended. The leash
+  now matches the 30-tile acquisition radius (raids keep their unlimited
+  leash).
+- Patrol guards only pick a new wander once the current one finishes, so
+  strolls stop twitching mid-stride.
 
 ### v1.2 — Supply Lines
 - **New jobs (4):** Fletcher (wood → arrows), Smith (wood + stone → tools),
@@ -273,41 +309,3 @@ Terrain is baked once to an offscreen canvas; entities are capped
 a half-resolution destination-out pass with capped light count; the minimap
 redraws at ~3Hz.
 
-## Ideas if you want to extend it — production chains & the balancing act
-
-The Rise to Ruins lesson: one-off building costs never catch up to a growing
-economy. The fix is recurring consumption and intermediate goods — jobs get
-broken into raw → crafted → consumed chains (its Bottler, its smith-maintained
-tools), and defense itself becomes a supply line. Every surplus should be an
-input that something else hungers for.
-
-- **Fletcher** — turns wood into arrows & ballista bolts; towers and guards
-  burn them per shot and per raid. Nights stop being free: every wave fought
-  costs wood by design.
-- **Smith & tool wear** — a Smithy forges tools (wood + stone); every
-  gatherer, farmer and builder needs one and wears it out. Workforce size
-  sets your drain rate — hiring now has a materials cost.
-- **Cook & meals** — a Kitchen turns 3 food + 1 wood (firewood) into 2 meals
-  worth double hunger; raw berries become the inefficient fallback. Fixes
-  food stockpiling.
-- **Brewer & tavern nights** — surplus food + herbs brew into ale; a drink at
-  dusk grants +10% work speed the next day. A happy sink with a rhythm.
-- **Charcoal kiln & lamp oil** — kilns cook wood into charcoal (smith fuel),
-  a press renders lamp oil so torches and towers light the night. Two linked
-  drains on the same tree.
-- **Building upgrades** — tower II/III, stone-faced walls, irrigated farms:
-  same footprints, escalating 3–5× cost tiers (RtR's towers run ×10).
-- **Weathering & upkeep** — walls weather and torches gutter; builders
-  auto-maintain them for materials. A village becomes a machine with a fuel
-  bill.
-- **Storage caps** — granaries and storehouses hold a cap; food spoils past
-  it and vermin nibble the overflow. Hoarding costs buildings, not nothing.
-- **Comfort tiers** — bedroll → real bed → cottage; discontent villagers work
-  slower or wander off at dawn. Population growth becomes a materials
-  decision, not just a food one.
-- **Trade post** — sell surplus wood/stone for essence, or buy tools and
-  arrows when a chain backs up: the pressure valve (RtR's marketplace).
-
-Job roster grows from 9 to ~13 (Fletcher, Smith, Cook, Brewer) and the
-balancing act emerges on its own: more workers → more tools → more wood →
-more arrows → more nights survived.
