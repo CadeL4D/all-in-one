@@ -156,20 +156,22 @@ const World = {
         if (this.t[i] === T.WATER || this.t[i] === T.SAND) continue;
         this.t[i] = T.GRASS;
         this.obj[i] = OBJ.NONE;
-        // keep the lair's tile & neighbors clear so monsters can leave
+        // keep the lair's melee ring clear (8 neighbours) so raiding guards
+        // always have standable ground to swing from
         let ok = true;
-        for (const [ddx, ddy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        for (const [ddx, ddy] of [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, 1], [-1, 1], [1, -1]]) {
           const j = this.inB(x + ddx, y + ddy) ? this.idx(x + ddx, y + ddy) : -1;
           if (j >= 0 && this.t[j] === T.WATER) ok = false;
           if (j >= 0) { this.obj[j] = OBJ.NONE; }
         }
         if (!ok) continue;
         this.lairSpots.push({ x, y });
-        // dead trees & mushrooms ring the lair (visual tell)
+        // dead trees & mushrooms ring the lair (visual tell) — but never on
+        // the melee ring itself, or raids can't find a tile to swing from
         for (let d = 0; d < 8; d++) {
           const da = Math.random() * Math.PI * 2, dr = 1.5 + Math.random() * 2.5;
           const dx2 = Math.round(x + Math.cos(da) * dr), dy2 = Math.round(y + Math.sin(da) * dr);
-          if (this.inB(dx2, dy2)) {
+          if (this.inB(dx2, dy2) && Math.max(Math.abs(dx2 - x), Math.abs(dy2 - y)) > 1) {
             const j = this.idx(dx2, dy2);
             if (this.t[j] === T.GRASS && this.obj[j] === OBJ.NONE && U.dst(dx2, dy2, cx, cy) > 6)
               this.obj[j] = U.hash2(dx2, dy2) < .6 ? OBJ.DEADTREE : OBJ.MUSH;

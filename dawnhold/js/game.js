@@ -653,22 +653,25 @@ const Sim = {
           v.tgt = null; v.state = 'idle'; v.path = null; return;
         }
         const d = U.dst(v.x, v.y, m.x, m.y);
-        // quarry standing on spikes (or any villager-solid tile) can't share
-        // its footing with a guard — poke it from the neighbouring tile
-        const reach = Path.pass(m.x | 0, m.y | 0, false) ? 1.0 : 1.6;
+        // a quarry on footing only it can use (spikes, a grave pocket — or
+        // the monolith itself, where brood defenders stand) can't share
+        // ground with a guard: poke it from whatever ground the guard holds
+        const mPass = Path.pass(m.x | 0, m.y | 0, false);
+        const reach = mPass ? 1.0 : 2.2;
         if (d < reach) {
           v.path = null;
+          v.noPathT = 0;
           if (v.atkCd <= 0) {
             v.atkCd = CONFIG.GUARD.atkT;
             this.hitMonster(m, this.guardDmg(), v);
             this.fx('spark', m.x, m.y, .25);
           }
         } else if (!v.path || v.pi >= v.path.length) {
-          const p = Path.find(v.x | 0, v.y | 0, m.x | 0, m.y | 0, { adjacent: true, monster: false });
+          const p = Path.find(v.x | 0, v.y | 0, m.x | 0, m.y | 0, { adjacent: true, monster: false, snapR: 3 });
           if (p) {
             // finish on the quarry's own position — tile-centre routes end a
             // swing-length short of a stationary biter parked on a hut
-            if (Path.pass(m.x | 0, m.y | 0, false)) p.push({ x: m.x, y: m.y });
+            if (mPass) p.push({ x: m.x, y: m.y });
             v.path = p; v.pi = 0; v.noPathT = 0;
           }
           else {
@@ -701,15 +704,20 @@ const Sim = {
       if (G.raidTarget && G.buildings.includes(G.raidTarget)) {
         const rt = G.raidTarget;
         const d = U.dst(v.x, v.y, rt.x + .5, rt.y + .5);
-        if (d < 1.15) {
+        // the monolith tile itself is solid to villagers, so swing from any
+        // nearby standing spot — dead trees and graves can box in the ring
+        if (d < 2.2) {
           v.path = null;
           if (v.atkCd <= 0) {
             v.atkCd = CONFIG.GUARD.atkT;
             this.hitBuilding(rt, this.guardDmg());
             this.fx('spark', rt.x + .5, rt.y + .3, .3);
           }
+          v.noPathT = 0;
         } else if (!v.path || v.pi >= v.path.length) {
-          const p = Path.find(v.x | 0, v.y | 0, rt.x, rt.y, { adjacent: true });
+          // snapR 3: the ring within 2 of the monolith may be sealed shut —
+          // standable ground one tile further out still wins the raid
+          const p = Path.find(v.x | 0, v.y | 0, rt.x, rt.y, { adjacent: true, snapR: 3 });
           if (p) { v.path = p; v.pi = 0; }
           else {
             // lair unreachable — call off the raid instead of stranding the guards
@@ -718,6 +726,16 @@ const Sim = {
             this.log('The guards cannot reach that lair — the raid is called off.', 'bad');
             UI.toast('Raid called off: no route to the lair.', 'bad');
           }
+          // path keeps "succeeding" but the snap tile is still out of swing
+          // reach — the ring is truly walled (forest/graves); suggest clearing
+          if (d >= 2.2) {
+            v.noPathT = (v.noPathT || 0) + 0.5;
+            if (v.noPathT > 6) {
+              G.raidTarget = null;
+              v.path = null; v.state = 'idle'; v.noPathT = 0;
+              UI.toast('The ground around the monolith is choked — clear the dead trees and graves beside it, then raid again.', 'bad');
+            }
+          } else v.noPathT = 0;
         }
         return;
       }
@@ -1423,10 +1441,13 @@ const Sim = {
     this.fx('corpse', v.x, v.y, 2.2, { look: v.look });
     this.log(`${v.name}${v.trait ? ' the ' + v.trait.name : ''} (${v.job}) was lost to ${cause}.`, 'bad');
     UI.toast(`${v.name} has died — ${cause}.`, 'bad');
-    // leave a small grave so the dead are remembered
+    // leave a small grave so the dead are remembered — but never at a
+    // monolith: failed raids would pave their own melee ring with headstones
+    // (graves are solid) and wall the lair off from the next raid
     const gx = v.x | 0, gy = v.y | 0;
     const o = World.objAt(gx, gy);
-    if ((o === OBJ.NONE || o === OBJ.FLOWER || o === OBJ.TGRASS || o === OBJ.MUSH) && !World.bldAt(gx, gy)
+    const atLair = G.buildings.some(bb => bb.key === 'lair' && Math.max(Math.abs(gx - bb.x), Math.abs(gy - bb.y)) <= 2);
+    if (!atLair && (o === OBJ.NONE || o === OBJ.FLOWER || o === OBJ.TGRASS || o === OBJ.MUSH) && !World.bldAt(gx, gy)
       && World.tileT(gx, gy) !== T.WATER && World.inB(gx, gy)) {
       World.setObj(gx, gy, OBJ.GRAVE, 0);
     }

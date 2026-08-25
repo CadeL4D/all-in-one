@@ -15,9 +15,11 @@ const Path = {
     const W = World.W, H = World.H;
     if (!World.inB(tx, ty)) return null;
 
-    // If goal blocked and adjacent allowed, snap to a nearby walkable tile
+    // If goal blocked and adjacent allowed, snap to a nearby walkable tile.
+    // opts.snapR widens the ring for targets that sit in clutter (monoliths
+    // ringed by dead trees and graves still have standable ground at r=3+)
     if (adjacent && !this.pass(tx, ty, monster, phase)) {
-      const spot = this.nearbyFree(tx, ty, monster, 2, phase);
+      const spot = this.nearbyFree(tx, ty, monster, opts.snapR || 2, phase);
       if (!spot) return null;
       tx = spot.x; ty = spot.y;
     }

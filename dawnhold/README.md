@@ -7,6 +7,14 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
+> **v1.3.1 — Touch &amp; Raids:** **drag a building card straight out of the
+> menu** — the ghost rides your finger, release parks it, tap the outline to
+> build (one finger steers the ghost, **two fingers pan**). The build ✕ now
+> sits by the dock, and resource chips are bigger and brighter. Raids fixed:
+> the false **"no route"** is gone (grave rings around monoliths no longer
+> seal the raid check), guards no longer freeze against brood standing on the
+> monolith itself, and fresh maps keep every melee tile around a lair clear.
+
 > **v1.3 — The Village Round:** the village needs **water** (wells, and a
 > **Bottler** who spares villagers the walk), **lamp oil** (kiln chars wood,
 > the press squeezes oil — torches gutter when it runs dry), **bread** (the
@@ -42,6 +50,36 @@ Great Beacon to bring back the dawn.
 ---
 
 ## Changelog
+
+### v1.3.1 — Touch &amp; Raids
+- **Drag-to-place:** press a Build card and drag it onto the map — the ghost
+  rides your finger, release parks it, and a **tap on the outline builds**
+  (a tap elsewhere re-aims it). A plain card tap still arms placement; the
+  first map tap now aims, the tap on the outline commits. Walls, gates,
+  roads and traps keep their instant drag-paint.
+- **One finger steers, two fingers travel:** while placing a building, a
+  one-finger drag moves the ghost and **two fingers pan & pinch** the camera
+  (as they always did — placement just stopped hogging the drag).
+- **Build ✕ by your thumb:** the placing/cancel chip moved from the top of
+  the screen to just above the dock, and entering placement dismisses the
+  selection card so they never fight for space.
+- **Readable materials bar:** resource chips reworked — 20px icons, 15px
+  bold tabular numerals, darker chips with brighter borders.
+- **Raid "no route" fixed:** the Raid button only searched a 5×5 box around
+  the monolith for a standable tile — and failed raids bury guards where
+  they fall (graves are solid pathing blockers), so repeated raids could
+  pave that box shut while a route plainly existed. The search now reaches
+  one ring further out (`snapR 3`), **deaths beside a monolith leave no
+  grave**, world generation clears all 8 melee tiles around every lair (the
+  dead-tree ring stays a step beyond), and a truly walled-in monolith calls
+  the raid off with a *clear the ground around it* hint instead.
+- **Guards freeze-fixed at monoliths:** brood defenders spawn standing on
+  the monolith tile itself, where guards couldn't share footing — swing
+  reach against solid-footing quarry rose 1.6 → 2.2 (with a wider path
+  snap), so raiding guards cut defenders down from the second ring and get
+  back to the monolith instead of repathing forever while it mends.
+- Help/controls text updated for the new flow; title-screen version label
+  refreshed (it still said v1.1).
 
 ### v1.3 — The Village Round
 - **Thirst, wells & the Bottler:** villagers now drink like they eat. A free
@@ -254,8 +292,11 @@ keep them at their posts.
   (Colossi arrive from day 15).
 - **Lose:** only when every villager is dead.
 
-**Controls:** tap = select/place · drag = pan (or paint walls/roads/gates) ·
-pinch or +/- buttons = zoom · minimap tap = jump · pause/1×/2×/3× (or space/1/2/3).
+**Controls:** tap = select/place · drag a build card onto the map to aim it,
+tap the outline to build · one-finger drag = pan (or steer the ghost while
+placing; walls/roads/gates/traps paint as you drag) · two-finger drag/pinch =
+pan & zoom any time, including mid-placement · minimap tap = jump ·
+pause/1×/2×/3× (or space/1/2/3).
 
 ---
 
@@ -470,4 +511,69 @@ Shepherd, Baker, Scribe, plus the Moot Hall's keeper) — each new mouth also
 drinks, eats and gets cold, so growth keeps costing what it yields. Wave cap
 (30) and guard/tower DPS stay untouched; pressure comes from larders,
 seasons, thieves and the fester — never from bullet-sponge monsters.
+
+---
+
+## Difficulty differentiation menu — v1.4 candidate (pick any)
+
+Today the four presets differ by only four knobs: wave size (×0.68 Easy /
+×1.38 Hard), monster HP (×0.88 / ×1.22), night length (×0.88 / ×1.15) and
+essence regen (×1.1 / ×0.9) — Peaceful just turns waves off. Below is a menu
+of further axes with proposed values per preset, so each one plays like a
+*different game* rather than the same game tuned up or down. Say which
+letters/numbers to take and they ship as the v1.4 difficulty rework; the
+"Harder difficulties" list above stays separate (those are Hard+/Nightmare
+*mechanics*, these are preset *numbers*).
+
+### A. Resources & scarcity (the "resources feel plentiful" fix)
+
+| # | Lever | Peaceful | Easy | Normal | Hard |
+|---|---|---|---|---|---|
+| A1 | Starting store (wood/food/…) | ×1.25 | ×1.1 | ×1 (today) | ×0.7 |
+| A2 | Wild yields (bush/tree/rock/herb units) | ×1.15 | ×1 | **×0.85** | ×0.7 |
+| A3 | Regrow speed (bushes, stumps→saplings) | ×1.25 | ×1.1 | ×1 | ×0.8 |
+| A4 | Map density (trees/rocks/bushes sprinkled) | ×1.1 | ×1 | ×0.9 | ×0.8 |
+| A5 | Build costs | ×0.9 | ×1 | ×1 | ×1.15 |
+
+A2 alone at ×0.85 Normal is the scarcity fix: a bush drops 6 not 7, a tree
+8 not 9 — the kiln's 10-wood floor and the store caps start to bite by
+mid-game without touching combat.
+
+### B. Monsters
+
+| # | Lever | Peaceful | Easy | Normal | Hard |
+|---|---|---|---|---|---|
+| B1 | Monster speed | ×0.9 | ×0.95 | ×1 | ×1.08 |
+| B2 | Debut days (runners/brutes/stalkers/wraiths) | +3 | +1 | today | −1 |
+| B3 | Blood-moon horde multiplier | ×1.2 | ×1.35 | ×1.5 | ×1.75 |
+| B4 | Monolith mend rate while unraided | ×0.5 | ×0.75 | ×1 | ×1.5 |
+| B5 | Night-1 wave size | 0 | 2 | 3 | 5 |
+| B6 | Essence payout per kill | ×1.25 | ×1.1 | ×1 | ×0.9 |
+
+B2 on Hard means brutes at day 5 and wraiths at day 10 — the *composition*
+changes, not just the count, so Hard demands different defenses (ballistae
+and interior guards earlier), not just more of them.
+
+### C. Other axes
+
+| # | Lever | Peaceful | Easy | Normal | Hard |
+|---|---|---|---|---|---|
+| C1 | Day length (seconds of building time) | 240 | 225 | 210 | 185 |
+| C2 | Wanderer arrival chance at dawn | 0.8 | 0.7 | 0.65 | 0.5 |
+| C3 | Day-event hostility (daylight ambush weight) | 0 | ×0.5 | ×1 | ×1.5 |
+| C4 | Comfort spread (snug/crowded multipliers) | gentler | snug ×1.08 | today | crowd ×0.85 |
+| C5 | Well water output | ×1.25 | ×1.1 | ×1 | ×0.9 |
+| C6 | Tool wear rate | ×0.8 | ×0.9 | ×1 | ×1.15 |
+
+### Ready-made bundles
+
+- **Scarcity run** — A2 + A3: the wilds thin out by mid-game; combat
+  untouched. The direct answer to "resources are very plentiful".
+- **Pressure run** — B2 + B3 + C1: same monsters, but sooner, on blood
+  moons, with less daylight to prepare.
+- **Full spread** — A1–A3 + B1–B3 + C1–C3: every preset a different game;
+  Hard starts hungry, rushed and ambushed, Peaceful is a cozy build sandbox.
+- Any of these stack under the backlog's **Nightmare** fifth difficulty if
+  that ever ships.
+
 

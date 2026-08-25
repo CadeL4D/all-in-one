@@ -8,7 +8,10 @@
 
 const UI = {
   mode: null,        // {type:'build',key} | {type:'demolish'} | {type:'power',key}
-  ghost: null,       // {x,y} tile under finger/cursor
+  ghost: null,       // {x,y} tile under finger/cursor (top-left for buildings)
+  _ghostParked: false, // ghost placed by drag/tap and waiting for the confirm tap
+  _cardDrag: null,   // live drag-from-menu-card gesture {key,x,y,moved}
+  _cardDragged: false, // a card drag just ended — swallow the trailing click
   open: null,        // open panel name
   _pt: new Map(),    // active pointers
   _pinch: null,
@@ -302,9 +305,11 @@ const UI = {
         document.getElementById('selRaid').onclick = () => {
           if (raiding) { G.raidTarget = null; this.toast('The guards stand down.', ''); }
           else {
-            // refuse orders the guards physically can't reach
-            const route = Path.find(World.center.x | 0, World.center.y | 0, b.x, b.y, { adjacent: true });
-            if (!route) { this.toast('No route to that lair — the wilds are too thick.', 'bad'); return; }
+            // refuse orders the guards physically can't reach (snapR 3 — a
+            // monolith ringed by dead trees and graves still has ground to
+            // stand on a little further out)
+            const route = Path.find(World.center.x | 0, World.center.y | 0, b.x, b.y, { adjacent: true, snapR: 3 });
+            if (!route) { this.toast('No route to that lair — the wilds are too thick. Clear a path with Clear Land.', 'bad'); return; }
             G.raidTarget = b;
             if (G.res.arrows >= CONFIG.AMMO.raidCost) {
               G.res.arrows -= CONFIG.AMMO.raidCost;
@@ -476,11 +481,40 @@ const UI = {
         <div class="bd">${U.esc(def.desc)}${unlocked ? '' : `<br><b style="color:var(--amber)">Unlocks day ${def.unlock}</b>`}</div></div>`;
       this.drawCardIcon(card, k, !unlocked);
       card.onclick = () => {
+        if (this._cardDragged) { this._cardDragged = false; return; } // drag just ended — not a click
         if (!unlocked) { this.toast(`Unlocks on day ${def.unlock}.`, ''); return; }
         if (!afford) { this.toast(`Not enough resources for ${def.name}.`, 'bad'); return; }
         this.setMode({ type: 'build', key: k });
         this.closePanel();
       };
+      // drag the card straight out onto the map — the building ghost rides
+      // the finger; release parks it, then a tap on the outline builds
+      card.onpointerdown = e => {
+        if (!unlocked || !afford) return;
+        try { card.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+        this._cardDrag = { key: k, x: e.clientX, y: e.clientY, moved: false };
+      };
+      card.onpointermove = e => {
+        const dg = this._cardDrag;
+        if (!dg) return;
+        if (!dg.moved) {
+          if (Math.hypot(e.clientX - dg.x, e.clientY - dg.y) < 12) return;
+          dg.moved = true;
+          this.setMode({ type: 'build', key: dg.key });
+          this.closePanel();
+        }
+        const w = Render.screenToWorld(e.clientX, e.clientY);
+        const d = BUILD[dg.key];
+        this.ghost = { x: (w.x / 16 | 0) - ((d.w - 1) >> 1), y: (w.y / 16 | 0) - ((d.h - 1) >> 1) };
+      };
+      card.onpointerup = () => {
+        if (this._cardDrag && this._cardDrag.moved) {
+          this._ghostParked = true;   // ghost stays where it landed
+          this._cardDragged = true;   // swallow the trailing click
+        }
+        this._cardDrag = null;
+      };
+      card.onpointercancel = () => { this._cardDrag = null; };
       grid.appendChild(card);
     }
     wrap.appendChild(grid);
@@ -710,12 +744,17 @@ const UI = {
   setMode(m) {
     this.mode = m;
     this.ghost = null;
+    this._ghostParked = false;
     const chip = this.els.modeChip;
     if (!m) { chip.classList.add('hidden'); return; }
+    // placement owns the bottom of the screen — drop any open selection card
+    this.selHide();
     chip.classList.remove('hidden');
     if (m.type === 'build') {
       const def = BUILD[m.key];
-      this.els.modeChipText.textContent = `Placing: ${def.name}${def.paint ? ' — tap or drag' : ' — tap the map'}`;
+      this.els.modeChipText.textContent = def.paint
+        ? `Placing: ${def.name} — tap or drag to paint`
+        : `Placing: ${def.name} — drag to aim, tap the outline to build`;
     } else if (m.type === 'demolish') {
       this.els.modeChipText.textContent = 'Demolish — tap buildings';
     } else if (m.type === 'clear') {
@@ -799,10 +838,12 @@ const UI = {
     cv.addEventListener('pointermove', e => {
       const p = this._pt.get(e.pointerId);
       if (!p) {
-        // hover ghost (desktop)
-        if (G.state === 'playing' && this.mode) {
+        // hover ghost (desktop) — never dislodge a parked, waiting ghost
+        if (G.state === 'playing' && this.mode && !(this.mode.type === 'build' && this._ghostParked)) {
           const w = Render.screenToWorld(e.clientX, e.clientY);
-          this.ghost = { x: (w.x / 16) | 0, y: (w.y / 16) | 0 };
+          const ox = this.mode.type === 'build' ? ((BUILD[this.mode.key].w - 1) >> 1) : 0;
+          const oy = this.mode.type === 'build' ? ((BUILD[this.mode.key].h - 1) >> 1) : 0;
+          this.ghost = { x: (w.x / 16 | 0) - ox, y: (w.y / 16 | 0) - oy };
         }
         return;
       }
@@ -831,6 +872,7 @@ const UI = {
       if (p.moved) {
         const paint = this.mode && this.mode.type === 'build' && BUILD[this.mode.key] && BUILD[this.mode.key].paint;
         const demo = this.mode && this.mode.type === 'demolish';
+        const steer = this.mode && this.mode.type === 'build' && !BUILD[this.mode.key].paint;
         if ((paint || demo) && G.state === 'playing') {
           const w = Render.screenToWorld(e.clientX, e.clientY);
           const tx = (w.x / 16) | 0, ty = (w.y / 16) | 0;
@@ -839,16 +881,22 @@ const UI = {
             this.ghost = { x: tx, y: ty };
             this.tryPlace(tx, ty);
           }
+        } else if (steer && G.state === 'playing') {
+          // placing a building: one finger steers the ghost, release parks it,
+          // two fingers pan & pinch (handled above)
+          const w = Render.screenToWorld(e.clientX, e.clientY);
+          const d = BUILD[this.mode.key];
+          this.ghost = { x: (w.x / 16 | 0) - ((d.w - 1) >> 1), y: (w.y / 16 | 0) - ((d.h - 1) >> 1) };
+          this._ghostParked = true;
         } else {
           // pan (mouse and touch share the per-event delta)
           G.cam.x -= dxp / G.cam.z;
           G.cam.y -= dyp / G.cam.z;
           this._panning = true;
-        }
-        if (G.state === 'playing' && this.mode) {
-          const w = Render.screenToWorld(e.clientX, e.clientY);
-          const tx = (w.x / 16) | 0, ty = (w.y / 16) | 0;
-          this.ghost = { x: tx - (this.mode.type === 'build' ? ((BUILD[this.mode.key].w - 1) >> 1) : 0), y: ty - (this.mode.type === 'build' ? ((BUILD[this.mode.key].h - 1) >> 1) : 0) };
+          if (G.state === 'playing' && this.mode && this.mode.type !== 'build') {
+            const w = Render.screenToWorld(e.clientX, e.clientY);
+            this.ghost = { x: (w.x / 16) | 0, y: (w.y / 16) | 0 };
+          }
         }
       }
     }, { passive: false });
@@ -899,6 +947,21 @@ const UI = {
     const wx = w.x / 16, wy = w.y / 16;
     if (this.mode) {
       const tx = wx | 0, ty = wy | 0;
+      if (this.mode.type === 'build' && !BUILD[this.mode.key].paint) {
+        const def = BUILD[this.mode.key];
+        const g = this.ghost;
+        // a tap on (or right beside) the parked outline commits the build;
+        // any other tap re-aims the ghost and waits for its confirm tap
+        if (this._ghostParked && g
+          && wx >= g.x - 0.35 && wx < g.x + def.w + 0.35
+          && wy >= g.y - 0.35 && wy < g.y + def.h + 0.35) {
+          this.tryPlace(g.x + ((def.w - 1) >> 1), g.y + ((def.h - 1) >> 1));
+        } else {
+          this.ghost = { x: tx - ((def.w - 1) >> 1), y: ty - ((def.h - 1) >> 1) };
+          this._ghostParked = true;
+        }
+        return;
+      }
       this.ghost = { x: tx, y: ty };
       this.tryPlace(tx, ty);
       return;
@@ -1024,7 +1087,7 @@ const UI = {
       <ul>
         <li><b>Tap</b> a villager, monster, building or monolith to inspect it.</li>
         <li><b>Drag</b> to pan. <b>Pinch</b> or use <b>+/&minus;</b> buttons to zoom. Tap the <b>minimap</b> (top right) to jump — purple dots are lairs.</li>
-        <li><b>Build:</b> pick a building, then tap the map. Walls, gates, roads and traps <b>paint as you drag</b>.</li>
+        <li><b>Build:</b> drag a card straight out of the menu and the building rides your finger — release to park it, then <b>tap the outline to build</b> (tap elsewhere to re-aim; tapping the card alone works too). Walls, gates, roads and traps <b>paint as you drag</b>. While placing a building, <b>two fingers pan & zoom</b>.</li>
         <li>Speed: pause / 1\u00d7 / 2\u00d7 / 3\u00d7 (space bar pauses on desktop).</li>
       </ul>
       <h2>Jobs</h2>

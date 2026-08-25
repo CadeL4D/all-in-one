@@ -39,11 +39,12 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .hbtn{width:40px;height:40px;border:2px solid var(--line);border-radius:10px;background:rgba(30,34,43,.9);
   color:var(--ink);font-size:12px;font-weight:700;cursor:pointer}
 .hbtn.active{background:var(--amber);border-color:var(--amber2);color:#241a08}
-#resRow{display:flex;gap:5px;margin-top:5px;overflow-x:auto;pointer-events:auto;scrollbar-width:none;padding:2px 0}
+#resRow{display:flex;gap:6px;margin-top:6px;overflow-x:auto;pointer-events:auto;scrollbar-width:none;padding:3px 0}
 #resRow::-webkit-scrollbar{display:none}
-.chip{display:flex;align-items:center;gap:5px;background:rgba(20,22,28,.85);border:2px solid var(--line);
-  border-radius:9px;padding:3px 8px;font-size:13px;font-weight:700;white-space:nowrap}
-.chip canvas{width:16px;height:16px}
+.chip{display:flex;align-items:center;gap:6px;background:rgba(13,15,20,.92);border:2px solid #4a5468;
+  border-radius:9px;padding:4px 9px;font-size:15px;font-weight:800;white-space:nowrap;
+  font-variant-numeric:tabular-nums;color:#f2efe6}
+.chip canvas{width:20px;height:20px}
 .chip.low{border-color:var(--red);color:var(--red);animation:pulse 1.2s infinite}
 .chip.flash{animation:flashRed .5s}
 @keyframes pulse{50%{opacity:.55}}
@@ -95,10 +96,11 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .selActs button.warn{border-color:#7c3030;color:#ff9a9a}
 #selPortrait{width:48px;height:48px;background:#101218;border:2px solid var(--line);border-radius:8px;flex:none}
 
-/* ---------- mode chip ---------- */
-#modeChip{position:absolute;top:calc(var(--sat) + 66px);left:50%;transform:translateX(-50%);z-index:31;
-  display:flex;align-items:center;gap:8px;background:rgba(50,42,20,.95);border:2px solid var(--amber);border-radius:20px;padding:5px 7px 5px 14px;font-size:13px;font-weight:700}
-#modeChipX{width:30px;height:30px;border-radius:50%;border:2px solid var(--amber);background:transparent;color:var(--amber);font-size:13px}
+/* ---------- mode chip (parked by the dock — thumbs live at the bottom) ---------- */
+#modeChip{position:absolute;bottom:calc(var(--sab) + 78px);left:50%;transform:translateX(-50%);z-index:31;
+  display:flex;align-items:center;gap:8px;background:rgba(50,42,20,.95);border:2px solid var(--amber);border-radius:20px;padding:5px 7px 5px 14px;font-size:13px;font-weight:700;
+  box-shadow:0 4px 14px rgba(0,0,0,.5)}
+#modeChipX{width:34px;height:34px;border-radius:50%;border:2px solid var(--amber);background:transparent;color:var(--amber);font-size:15px;font-weight:800}
 
 /* ---------- bottom dock ---------- */
 #dock{position:absolute;left:0;right:0;bottom:0;z-index:26;display:flex;gap:5px;justify-content:center;
@@ -292,7 +294,7 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
         <button class="bigbtn diff" data-diff="normal"><b>Normal</b><span>The intended challenge.</span></button>
         <button class="bigbtn diff" data-diff="hard"><b>Hard</b><span>The dark hungers.</span></button>
       </div>
-      <div class="verText">v1.1 &middot; The Wilds Update &middot; saves in this browser</div>
+      <div class="verText">v1.3.1 &middot; Touch &amp; Raids &middot; saves in this browser</div>
     </div>
   </div>
 
@@ -1939,20 +1941,22 @@ const World = {
         if (this.t[i] === T.WATER || this.t[i] === T.SAND) continue;
         this.t[i] = T.GRASS;
         this.obj[i] = OBJ.NONE;
-        // keep the lair's tile & neighbors clear so monsters can leave
+        // keep the lair's melee ring clear (8 neighbours) so raiding guards
+        // always have standable ground to swing from
         let ok = true;
-        for (const [ddx, ddy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        for (const [ddx, ddy] of [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, 1], [-1, 1], [1, -1]]) {
           const j = this.inB(x + ddx, y + ddy) ? this.idx(x + ddx, y + ddy) : -1;
           if (j >= 0 && this.t[j] === T.WATER) ok = false;
           if (j >= 0) { this.obj[j] = OBJ.NONE; }
         }
         if (!ok) continue;
         this.lairSpots.push({ x, y });
-        // dead trees & mushrooms ring the lair (visual tell)
+        // dead trees & mushrooms ring the lair (visual tell) — but never on
+        // the melee ring itself, or raids can't find a tile to swing from
         for (let d = 0; d < 8; d++) {
           const da = Math.random() * Math.PI * 2, dr = 1.5 + Math.random() * 2.5;
           const dx2 = Math.round(x + Math.cos(da) * dr), dy2 = Math.round(y + Math.sin(da) * dr);
-          if (this.inB(dx2, dy2)) {
+          if (this.inB(dx2, dy2) && Math.max(Math.abs(dx2 - x), Math.abs(dy2 - y)) > 1) {
             const j = this.idx(dx2, dy2);
             if (this.t[j] === T.GRASS && this.obj[j] === OBJ.NONE && U.dst(dx2, dy2, cx, cy) > 6)
               this.obj[j] = U.hash2(dx2, dy2) < .6 ? OBJ.DEADTREE : OBJ.MUSH;
@@ -2188,9 +2192,11 @@ const Path = {
     const W = World.W, H = World.H;
     if (!World.inB(tx, ty)) return null;
 
-    // If goal blocked and adjacent allowed, snap to a nearby walkable tile
+    // If goal blocked and adjacent allowed, snap to a nearby walkable tile.
+    // opts.snapR widens the ring for targets that sit in clutter (monoliths
+    // ringed by dead trees and graves still have standable ground at r=3+)
     if (adjacent && !this.pass(tx, ty, monster, phase)) {
-      const spot = this.nearbyFree(tx, ty, monster, 2, phase);
+      const spot = this.nearbyFree(tx, ty, monster, opts.snapR || 2, phase);
       if (!spot) return null;
       tx = spot.x; ty = spot.y;
     }
@@ -3601,22 +3607,25 @@ const Sim = {
           v.tgt = null; v.state = 'idle'; v.path = null; return;
         }
         const d = U.dst(v.x, v.y, m.x, m.y);
-        // quarry standing on spikes (or any villager-solid tile) can't share
-        // its footing with a guard — poke it from the neighbouring tile
-        const reach = Path.pass(m.x | 0, m.y | 0, false) ? 1.0 : 1.6;
+        // a quarry on footing only it can use (spikes, a grave pocket — or
+        // the monolith itself, where brood defenders stand) can't share
+        // ground with a guard: poke it from whatever ground the guard holds
+        const mPass = Path.pass(m.x | 0, m.y | 0, false);
+        const reach = mPass ? 1.0 : 2.2;
         if (d < reach) {
           v.path = null;
+          v.noPathT = 0;
           if (v.atkCd <= 0) {
             v.atkCd = CONFIG.GUARD.atkT;
             this.hitMonster(m, this.guardDmg(), v);
             this.fx('spark', m.x, m.y, .25);
           }
         } else if (!v.path || v.pi >= v.path.length) {
-          const p = Path.find(v.x | 0, v.y | 0, m.x | 0, m.y | 0, { adjacent: true, monster: false });
+          const p = Path.find(v.x | 0, v.y | 0, m.x | 0, m.y | 0, { adjacent: true, monster: false, snapR: 3 });
           if (p) {
             // finish on the quarry's own position — tile-centre routes end a
             // swing-length short of a stationary biter parked on a hut
-            if (Path.pass(m.x | 0, m.y | 0, false)) p.push({ x: m.x, y: m.y });
+            if (mPass) p.push({ x: m.x, y: m.y });
             v.path = p; v.pi = 0; v.noPathT = 0;
           }
           else {
@@ -3649,15 +3658,20 @@ const Sim = {
       if (G.raidTarget && G.buildings.includes(G.raidTarget)) {
         const rt = G.raidTarget;
         const d = U.dst(v.x, v.y, rt.x + .5, rt.y + .5);
-        if (d < 1.15) {
+        // the monolith tile itself is solid to villagers, so swing from any
+        // nearby standing spot — dead trees and graves can box in the ring
+        if (d < 2.2) {
           v.path = null;
           if (v.atkCd <= 0) {
             v.atkCd = CONFIG.GUARD.atkT;
             this.hitBuilding(rt, this.guardDmg());
             this.fx('spark', rt.x + .5, rt.y + .3, .3);
           }
+          v.noPathT = 0;
         } else if (!v.path || v.pi >= v.path.length) {
-          const p = Path.find(v.x | 0, v.y | 0, rt.x, rt.y, { adjacent: true });
+          // snapR 3: the ring within 2 of the monolith may be sealed shut —
+          // standable ground one tile further out still wins the raid
+          const p = Path.find(v.x | 0, v.y | 0, rt.x, rt.y, { adjacent: true, snapR: 3 });
           if (p) { v.path = p; v.pi = 0; }
           else {
             // lair unreachable — call off the raid instead of stranding the guards
@@ -3666,6 +3680,16 @@ const Sim = {
             this.log('The guards cannot reach that lair — the raid is called off.', 'bad');
             UI.toast('Raid called off: no route to the lair.', 'bad');
           }
+          // path keeps "succeeding" but the snap tile is still out of swing
+          // reach — the ring is truly walled (forest/graves); suggest clearing
+          if (d >= 2.2) {
+            v.noPathT = (v.noPathT || 0) + 0.5;
+            if (v.noPathT > 6) {
+              G.raidTarget = null;
+              v.path = null; v.state = 'idle'; v.noPathT = 0;
+              UI.toast('The ground around the monolith is choked — clear the dead trees and graves beside it, then raid again.', 'bad');
+            }
+          } else v.noPathT = 0;
         }
         return;
       }
@@ -4371,10 +4395,13 @@ const Sim = {
     this.fx('corpse', v.x, v.y, 2.2, { look: v.look });
     this.log(`${v.name}${v.trait ? ' the ' + v.trait.name : ''} (${v.job}) was lost to ${cause}.`, 'bad');
     UI.toast(`${v.name} has died — ${cause}.`, 'bad');
-    // leave a small grave so the dead are remembered
+    // leave a small grave so the dead are remembered — but never at a
+    // monolith: failed raids would pave their own melee ring with headstones
+    // (graves are solid) and wall the lair off from the next raid
     const gx = v.x | 0, gy = v.y | 0;
     const o = World.objAt(gx, gy);
-    if ((o === OBJ.NONE || o === OBJ.FLOWER || o === OBJ.TGRASS || o === OBJ.MUSH) && !World.bldAt(gx, gy)
+    const atLair = G.buildings.some(bb => bb.key === 'lair' && Math.max(Math.abs(gx - bb.x), Math.abs(gy - bb.y)) <= 2);
+    if (!atLair && (o === OBJ.NONE || o === OBJ.FLOWER || o === OBJ.TGRASS || o === OBJ.MUSH) && !World.bldAt(gx, gy)
       && World.tileT(gx, gy) !== T.WATER && World.inB(gx, gy)) {
       World.setObj(gx, gy, OBJ.GRAVE, 0);
     }
@@ -5536,7 +5563,10 @@ const Render = {
 
 const UI = {
   mode: null,        // {type:'build',key} | {type:'demolish'} | {type:'power',key}
-  ghost: null,       // {x,y} tile under finger/cursor
+  ghost: null,       // {x,y} tile under finger/cursor (top-left for buildings)
+  _ghostParked: false, // ghost placed by drag/tap and waiting for the confirm tap
+  _cardDrag: null,   // live drag-from-menu-card gesture {key,x,y,moved}
+  _cardDragged: false, // a card drag just ended — swallow the trailing click
   open: null,        // open panel name
   _pt: new Map(),    // active pointers
   _pinch: null,
@@ -5830,9 +5860,11 @@ const UI = {
         document.getElementById('selRaid').onclick = () => {
           if (raiding) { G.raidTarget = null; this.toast('The guards stand down.', ''); }
           else {
-            // refuse orders the guards physically can't reach
-            const route = Path.find(World.center.x | 0, World.center.y | 0, b.x, b.y, { adjacent: true });
-            if (!route) { this.toast('No route to that lair — the wilds are too thick.', 'bad'); return; }
+            // refuse orders the guards physically can't reach (snapR 3 — a
+            // monolith ringed by dead trees and graves still has ground to
+            // stand on a little further out)
+            const route = Path.find(World.center.x | 0, World.center.y | 0, b.x, b.y, { adjacent: true, snapR: 3 });
+            if (!route) { this.toast('No route to that lair — the wilds are too thick. Clear a path with Clear Land.', 'bad'); return; }
             G.raidTarget = b;
             if (G.res.arrows >= CONFIG.AMMO.raidCost) {
               G.res.arrows -= CONFIG.AMMO.raidCost;
@@ -6004,11 +6036,40 @@ const UI = {
         <div class="bd">${U.esc(def.desc)}${unlocked ? '' : `<br><b style="color:var(--amber)">Unlocks day ${def.unlock}</b>`}</div></div>`;
       this.drawCardIcon(card, k, !unlocked);
       card.onclick = () => {
+        if (this._cardDragged) { this._cardDragged = false; return; } // drag just ended — not a click
         if (!unlocked) { this.toast(`Unlocks on day ${def.unlock}.`, ''); return; }
         if (!afford) { this.toast(`Not enough resources for ${def.name}.`, 'bad'); return; }
         this.setMode({ type: 'build', key: k });
         this.closePanel();
       };
+      // drag the card straight out onto the map — the building ghost rides
+      // the finger; release parks it, then a tap on the outline builds
+      card.onpointerdown = e => {
+        if (!unlocked || !afford) return;
+        try { card.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+        this._cardDrag = { key: k, x: e.clientX, y: e.clientY, moved: false };
+      };
+      card.onpointermove = e => {
+        const dg = this._cardDrag;
+        if (!dg) return;
+        if (!dg.moved) {
+          if (Math.hypot(e.clientX - dg.x, e.clientY - dg.y) < 12) return;
+          dg.moved = true;
+          this.setMode({ type: 'build', key: dg.key });
+          this.closePanel();
+        }
+        const w = Render.screenToWorld(e.clientX, e.clientY);
+        const d = BUILD[dg.key];
+        this.ghost = { x: (w.x / 16 | 0) - ((d.w - 1) >> 1), y: (w.y / 16 | 0) - ((d.h - 1) >> 1) };
+      };
+      card.onpointerup = () => {
+        if (this._cardDrag && this._cardDrag.moved) {
+          this._ghostParked = true;   // ghost stays where it landed
+          this._cardDragged = true;   // swallow the trailing click
+        }
+        this._cardDrag = null;
+      };
+      card.onpointercancel = () => { this._cardDrag = null; };
       grid.appendChild(card);
     }
     wrap.appendChild(grid);
@@ -6238,12 +6299,17 @@ const UI = {
   setMode(m) {
     this.mode = m;
     this.ghost = null;
+    this._ghostParked = false;
     const chip = this.els.modeChip;
     if (!m) { chip.classList.add('hidden'); return; }
+    // placement owns the bottom of the screen — drop any open selection card
+    this.selHide();
     chip.classList.remove('hidden');
     if (m.type === 'build') {
       const def = BUILD[m.key];
-      this.els.modeChipText.textContent = `Placing: ${def.name}${def.paint ? ' — tap or drag' : ' — tap the map'}`;
+      this.els.modeChipText.textContent = def.paint
+        ? `Placing: ${def.name} — tap or drag to paint`
+        : `Placing: ${def.name} — drag to aim, tap the outline to build`;
     } else if (m.type === 'demolish') {
       this.els.modeChipText.textContent = 'Demolish — tap buildings';
     } else if (m.type === 'clear') {
@@ -6327,10 +6393,12 @@ const UI = {
     cv.addEventListener('pointermove', e => {
       const p = this._pt.get(e.pointerId);
       if (!p) {
-        // hover ghost (desktop)
-        if (G.state === 'playing' && this.mode) {
+        // hover ghost (desktop) — never dislodge a parked, waiting ghost
+        if (G.state === 'playing' && this.mode && !(this.mode.type === 'build' && this._ghostParked)) {
           const w = Render.screenToWorld(e.clientX, e.clientY);
-          this.ghost = { x: (w.x / 16) | 0, y: (w.y / 16) | 0 };
+          const ox = this.mode.type === 'build' ? ((BUILD[this.mode.key].w - 1) >> 1) : 0;
+          const oy = this.mode.type === 'build' ? ((BUILD[this.mode.key].h - 1) >> 1) : 0;
+          this.ghost = { x: (w.x / 16 | 0) - ox, y: (w.y / 16 | 0) - oy };
         }
         return;
       }
@@ -6359,6 +6427,7 @@ const UI = {
       if (p.moved) {
         const paint = this.mode && this.mode.type === 'build' && BUILD[this.mode.key] && BUILD[this.mode.key].paint;
         const demo = this.mode && this.mode.type === 'demolish';
+        const steer = this.mode && this.mode.type === 'build' && !BUILD[this.mode.key].paint;
         if ((paint || demo) && G.state === 'playing') {
           const w = Render.screenToWorld(e.clientX, e.clientY);
           const tx = (w.x / 16) | 0, ty = (w.y / 16) | 0;
@@ -6367,16 +6436,22 @@ const UI = {
             this.ghost = { x: tx, y: ty };
             this.tryPlace(tx, ty);
           }
+        } else if (steer && G.state === 'playing') {
+          // placing a building: one finger steers the ghost, release parks it,
+          // two fingers pan & pinch (handled above)
+          const w = Render.screenToWorld(e.clientX, e.clientY);
+          const d = BUILD[this.mode.key];
+          this.ghost = { x: (w.x / 16 | 0) - ((d.w - 1) >> 1), y: (w.y / 16 | 0) - ((d.h - 1) >> 1) };
+          this._ghostParked = true;
         } else {
           // pan (mouse and touch share the per-event delta)
           G.cam.x -= dxp / G.cam.z;
           G.cam.y -= dyp / G.cam.z;
           this._panning = true;
-        }
-        if (G.state === 'playing' && this.mode) {
-          const w = Render.screenToWorld(e.clientX, e.clientY);
-          const tx = (w.x / 16) | 0, ty = (w.y / 16) | 0;
-          this.ghost = { x: tx - (this.mode.type === 'build' ? ((BUILD[this.mode.key].w - 1) >> 1) : 0), y: ty - (this.mode.type === 'build' ? ((BUILD[this.mode.key].h - 1) >> 1) : 0) };
+          if (G.state === 'playing' && this.mode && this.mode.type !== 'build') {
+            const w = Render.screenToWorld(e.clientX, e.clientY);
+            this.ghost = { x: (w.x / 16) | 0, y: (w.y / 16) | 0 };
+          }
         }
       }
     }, { passive: false });
@@ -6427,6 +6502,21 @@ const UI = {
     const wx = w.x / 16, wy = w.y / 16;
     if (this.mode) {
       const tx = wx | 0, ty = wy | 0;
+      if (this.mode.type === 'build' && !BUILD[this.mode.key].paint) {
+        const def = BUILD[this.mode.key];
+        const g = this.ghost;
+        // a tap on (or right beside) the parked outline commits the build;
+        // any other tap re-aims the ghost and waits for its confirm tap
+        if (this._ghostParked && g
+          && wx >= g.x - 0.35 && wx < g.x + def.w + 0.35
+          && wy >= g.y - 0.35 && wy < g.y + def.h + 0.35) {
+          this.tryPlace(g.x + ((def.w - 1) >> 1), g.y + ((def.h - 1) >> 1));
+        } else {
+          this.ghost = { x: tx - ((def.w - 1) >> 1), y: ty - ((def.h - 1) >> 1) };
+          this._ghostParked = true;
+        }
+        return;
+      }
       this.ghost = { x: tx, y: ty };
       this.tryPlace(tx, ty);
       return;
@@ -6552,7 +6642,7 @@ const UI = {
       <ul>
         <li><b>Tap</b> a villager, monster, building or monolith to inspect it.</li>
         <li><b>Drag</b> to pan. <b>Pinch</b> or use <b>+/&minus;</b> buttons to zoom. Tap the <b>minimap</b> (top right) to jump — purple dots are lairs.</li>
-        <li><b>Build:</b> pick a building, then tap the map. Walls, gates, roads and traps <b>paint as you drag</b>.</li>
+        <li><b>Build:</b> drag a card straight out of the menu and the building rides your finger — release to park it, then <b>tap the outline to build</b> (tap elsewhere to re-aim; tapping the card alone works too). Walls, gates, roads and traps <b>paint as you drag</b>. While placing a building, <b>two fingers pan & zoom</b>.</li>
         <li>Speed: pause / 1\u00d7 / 2\u00d7 / 3\u00d7 (space bar pauses on desktop).</li>
       </ul>
       <h2>Jobs</h2>
