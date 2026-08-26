@@ -282,17 +282,23 @@ const Buildings = {
     return { ok: true, reason: '', clearTiles };
   },
 
+  // A5: build costs scale with difficulty — every cost check, payment and
+  // refund goes through here so they can never disagree
+  costOf(def) {
+    const m = (G.diffM && G.diffM.costMul) || 1;
+    return { wood: Math.ceil((def.cost.wood || 0) * m), stone: Math.ceil((def.cost.stone || 0) * m) };
+  },
+
   afford(key) {
     const def = BUILD[key]; if (!def) return false;
-    if ((def.cost.wood || 0) > G.res.wood) return false;
-    if ((def.cost.stone || 0) > G.res.stone) return false;
-    return true;
+    const c = this.costOf(def);
+    return c.wood <= G.res.wood && c.stone <= G.res.stone;
   },
 
   pay(key) {
-    const def = BUILD[key];
-    G.res.wood -= def.cost.wood || 0;
-    G.res.stone -= def.cost.stone || 0;
+    const c = this.costOf(BUILD[key]);
+    G.res.wood -= c.wood;
+    G.res.stone -= c.stone;
   },
 
   place(key, tx, ty) {
@@ -341,9 +347,9 @@ const Buildings = {
         if (World.occ[idx] === b.id) World.occ[idx] = 0;
       }
     if (b.built && !silent) {
-      const def = b.def;
-      Sim.gain('wood', Math.floor((def.cost.wood || 0) * 0.5));
-      Sim.gain('stone', Math.floor((def.cost.stone || 0) * 0.5));
+      const c = this.costOf(b.def); // half the (difficulty-scaled) cost back
+      Sim.gain('wood', Math.floor(c.wood * 0.5));
+      Sim.gain('stone', Math.floor(c.stone * 0.5));
     }
     if (b.key === 'beacon' && G.beaconLit) { G.beaconLit = false; }
     if (G.sel && G.sel.ref === b) { G.sel = null; UI.selHide(); }
@@ -398,9 +404,10 @@ const Buildings = {
   upgrade(b) {
     const nd = b.def.next && BUILD[b.def.next];
     if (!nd || !b.built || b.demo) return false;
-    if ((nd.cost.wood || 0) > G.res.wood || (nd.cost.stone || 0) > G.res.stone) return false;
-    G.res.wood -= nd.cost.wood || 0;
-    G.res.stone -= nd.cost.stone || 0;
+    const c = this.costOf(nd);
+    if (c.wood > G.res.wood || c.stone > G.res.stone) return false;
+    G.res.wood -= c.wood;
+    G.res.stone -= c.stone;
     b.key = b.def.next; b.def = nd; b.w = nd.w; b.h = nd.h;
     b.maxHp = nd.hp; b.hp = nd.hp;
     return true;
@@ -448,10 +455,11 @@ const Buildings = {
           if (Math.random() < dt * 2) Sim.fx('spark', patient.x, patient.y - .5, .3);
         }
       }
-      // wells draw a bucket at a time into the village store
+      // wells draw a bucket at a time into the village store (C5: well
+      // output is a difficulty lever)
       if (b.def.kind === 'well' && b.built) {
         b.genT = (b.genT || 0) + dt;
-        if (b.genT >= CONFIG.WELL.genT) {
+        if (b.genT >= CONFIG.WELL.genT / ((G.diffM && G.diffM.wellMul) || 1)) {
           b.genT = 0;
           if (G.res.water < Buildings.capOf('water')) Sim.gain('water', 1);
         }

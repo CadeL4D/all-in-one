@@ -7,6 +7,15 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
+> **v1.4 — The Difficulty Spread:** every preset is a **different game**, not
+> a stat slider — 21 levers per difficulty: scarcity (starting stores, wild
+> yields, regrow, map density, build costs), the horde (speed, **debut days**,
+> blood moons, monolith mending, night-1 waves, essence) and village life
+> (**day length**, wanderer arrivals, daylight ambushes, comfort, wells, tool
+> wear). Hard starts hungry, rushed and ambushed; Peaceful is a cozy build
+> sandbox. The menu tables at the bottom of this README are the shipped
+> values.
+
 > **v1.3.1 — Touch &amp; Raids:** **drag a building card straight out of the
 > menu** — the ghost rides your finger, release parks it, tap the outline to
 > build (one finger steers the ghost, **two fingers pan**). The build ✕ now
@@ -50,6 +59,33 @@ Great Beacon to bring back the dawn.
 ---
 
 ## Changelog
+
+### v1.4 — The Difficulty Spread
+- **Every preset is a different game, not a stat slider.** The four
+  difficulties used to differ by four knobs (wave size, monster HP, night
+  length, essence regen). Each preset now sets **21 levers** across the
+  wilds, the horde and village life — the full A1–C6 menu from this README
+  shipped (tables below, now documentation rather than a wishlist).
+- **Scarcity (A1–A5):** starting stores ×1.25 Peaceful → ×0.7 Hard; wild
+  yields ×1.15 → ×0.7 (a bush drops 8 on Peaceful, 5 on Hard — the kiln's
+  10-wood floor and the store caps finally bite on Normal too, ×0.85);
+  regrow speed, map density (≈890 harvestable wilds on a fresh Peaceful
+  map vs ≈725 on Hard) and build costs (×0.9 → ×1.15) all scale. Every cost
+  check, payment, refund, upgrade and menu display now funnels through one
+  `Buildings.costOf()` so the charged price can never disagree with the
+  shown one.
+- **Monsters (B1–B6):** speed ×0.9–×1.08; debuts shift +3 days on Peaceful
+  → −1 on Hard (brutes at day 5, wraiths at day 10 on Hard — the
+  *composition* changes, not just the count); blood moons ×1.2 / ×1.35 /
+  ×1.5 / ×1.75; unraided monoliths mend ×0.5–×1.5; night-1 waves floor at
+  0/2/3/5; essence payouts ×1.25 → ×0.9.
+- **Village life (C1–C6):** day length 240/225/210/185s (the HUD clock
+  reads the preset); wanderer arrivals 80/70/65/50%; daylight ambushes
+  vanish on Peaceful (the hostile band sits exactly under the good-event
+  band) and widen ×1.5 on Hard; comfort spreads (crowded Hard villagers
+  work ×0.85); well output ×1.25 → ×0.9; tool wear ×0.8 → ×1.15.
+- **Title screen:** the four difficulty buttons now say what each preset
+  does ("Scant stores, hungry dark, short days").
 
 ### v1.3.1 — Touch &amp; Raids
 - **Drag-to-place:** press a Build card and drag it onto the map — the ghost
@@ -315,7 +351,7 @@ This game was designed from a review-driven audit of its inspirations.
 | **Player agency in defense** (RtR's one big criticism: *no way to intervene*) | Active god powers (Mend/Smite/Meteor), "To shelter" direct order, mid-night building, tower/wall/gate choices with clear counters (towers→swarms, ballistae→brutes, walls→everything, torches→slow) |
 | **Readable tactics** (single-player RTS design: controlled, legible situations) | Direction telegraphs, wave-count warnings, distinct monster silhouettes, minimap, health bars everywhere |
 | **Variety & pacing** (Final Outpost criticized as "a race to a strict repetitive finish line") | Rolling unlocks every dawn (days 2–10), changing wave compositions (runners d3, brutes d6, stalkers d9), daytime events (bounty harvests, pilgrims, daylight ambushes), a boss finale, then endless mode |
-| **Difficulty options** | Peaceful / Easy / Normal / Hard (wave size, monster HP, night length, essence regen) |
+| **Difficulty options** | Peaceful / Easy / Normal / Hard — a full 21-lever spread since v1.4: scarcity, monster debuts, day length, wells, tools, comfort (see the difficulty tables below) |
 | **Fair mobile F2P-free experience** (FO's ads/grind complaints) | One HTML folder you own; saves local; no monetization of any kind |
 
 ### The BAD, deliberately kept out
@@ -338,10 +374,12 @@ This game was designed from a review-driven audit of its inspirations.
   6 tiles +35%); fishing dock ~1 food / 3.4s per fisher. Starting food covers
   ~2 days.
 - **Waves (Normal):** `round(1.4 + 1.75 × day)` capped at 30, ×0.68 Easy,
-  ×1.38 Hard, 0 Peaceful; blood moons ×1.5 every 5th night; no lairs left →
-  ×0.75 from the wilds. Composition: shades always; runners 22% d3; brutes 15%
-  d6; bonecasters 14% d7 (range 4.5); stalkers 16% d9; wraiths 18% d11 (phase
-  through walls); colossi 10% d15 (endless). HP +5.5%/day past day 9.
+  ×1.38 Hard, 0 Peaceful; night-1 waves floor at 2/3/5 (Easy/Normal/Hard);
+  blood moons every 5th night at ×1.2/×1.35/×1.5/×1.75 by difficulty; no
+  lairs left → ×0.75 from the wilds. Composition: shades always; runners 22%
+  d3; brutes 15% d6; bonecasters 14% d7 (range 4.5); stalkers 16% d9;
+  wraiths 18% d11 (phase through walls); colossi 10% d15 (endless) — debut
+  days shift −1 on Hard, +1 Easy, +3 Peaceful. HP +5.5%/day past day 9.
 - **Defense math:** shade 28hp/4dmg vs guard 7.5dmg/0.72s (+30% with
   Barracks), tower 8dmg/1.1s (range 5.5), ballista 27dmg/2.3s (range 7.5 —
   out-ranges bonecasters). Palisade 220hp/2w, stone wall 520hp/4s. Spike traps
@@ -364,7 +402,8 @@ This game was designed from a review-driven audit of its inspirations.
   10, meals/ale 12; granary +80 pantry, storehouse +100, warehouse +60;
   overflow spoils at dawn. Comfort: tent 1/bed, cottage 2, manor 3 →
   ×1.05 snug / ×0.95 content / ×0.88 crowded / ×0.85 miserable (possible
-  dawn departures from day 4). Upgrades: tower II 30w+20s → III 60w+45s,
+  dawn departures from day 4; the snug/crowd multipliers are per-difficulty
+  since v1.4). Upgrades: tower II 30w+20s → III 60w+45s,
   farm2 10w+14s, stoneface 3s.
 - **The village round (v1.3):** thirst rises 0.4/s (drink ~once a cycle);
   wells give +1 water/10s, a well-trip costs the walk, a bottle (~1.3s of
@@ -414,10 +453,11 @@ redraws at ~3Hz.
 
 ---
 
-## Research backlog — v1.4 candidates: running a real village
+## Research backlog — running a real village (v1.4+ candidates)
 
 *(v1.3 shipped four of these — the charcoal kiln & lamp oil, thirst, wells &
-Bottler, the Bakehouse & mill, and the Scribe's schoolhouse. What remains:)*
+Bottler, the Bakehouse & mill, and the Scribe's schoolhouse. v1.4 shipped the
+difficulty rework instead. What remains:)*
 
 Researched from the inspirations' actual systems: Rise to Ruins' water chain
 (water master → purifier → wells → bottler) and trash slimes; Banished's
@@ -514,16 +554,17 @@ seasons, thieves and the fester — never from bullet-sponge monsters.
 
 ---
 
-## Difficulty differentiation menu — v1.4 candidate (pick any)
+## The difficulty spread — shipped in v1.4
 
-Today the four presets differ by only four knobs: wave size (×0.68 Easy /
-×1.38 Hard), monster HP (×0.88 / ×1.22), night length (×0.88 / ×1.15) and
-essence regen (×1.1 / ×0.9) — Peaceful just turns waves off. Below is a menu
-of further axes with proposed values per preset, so each one plays like a
-*different game* rather than the same game tuned up or down. Say which
-letters/numbers to take and they ship as the v1.4 difficulty rework; the
-"Harder difficulties" list above stays separate (those are Hard+/Nightmare
-*mechanics*, these are preset *numbers*).
+Each preset is a *different game* rather than the same game tuned up or
+down: on top of the original four knobs (wave size ×0.68 Easy / ×1.38 Hard,
+monster HP ×0.88 / ×1.22, night length ×0.88 / ×1.15, essence regen ×1.1 /
+×0.9), every preset now sets the seventeen levers below. These tables are
+the shipped values — they live in `CONFIG.DIFF` in `js/core.js`, one edit
+per cell. The "Harder difficulties" backlog above stays separate (those are
+Hard+/Nightmare *mechanics*; these are preset *numbers*). Verified headless:
+each lever measured per preset, 3-day soaks, and cross-preset orderings
+(wilds 887 > 841 > 798 > 725 sources; wells 16 > 13 > 12 > 11 buckets).
 
 ### A. Resources & scarcity (the "resources feel plentiful" fix)
 
@@ -565,15 +606,14 @@ and interior guards earlier), not just more of them.
 | C5 | Well water output | ×1.25 | ×1.1 | ×1 | ×0.9 |
 | C6 | Tool wear rate | ×0.8 | ×0.9 | ×1 | ×1.15 |
 
-### Ready-made bundles
+### Reading the spread
 
-- **Scarcity run** — A2 + A3: the wilds thin out by mid-game; combat
-  untouched. The direct answer to "resources are very plentiful".
-- **Pressure run** — B2 + B3 + C1: same monsters, but sooner, on blood
-  moons, with less daylight to prepare.
-- **Full spread** — A1–A3 + B1–B3 + C1–C3: every preset a different game;
-  Hard starts hungry, rushed and ambushed, Peaceful is a cozy build sandbox.
-- Any of these stack under the backlog's **Nightmare** fifth difficulty if
-  that ever ships.
+- **Peaceful** is a cozy build sandbox: fat wilds, fast regrowth, no waves
+  or ambushes, long days, quick wells, slow tools.
+- **Hard** starts hungry (×0.7 stores and yields), rushed (185s days),
+  ambushed (×1.5 hostile events) and crowded (×0.85), with brutes and
+  wraiths arriving a day early and monoliths mending ×1.5 between raids.
+- These preset numbers stack under the backlog's **Nightmare** fifth
+  difficulty if that ever ships.
 
 

@@ -161,10 +161,11 @@ const UI = {
     const ef = document.getElementById('essFill');
     if (ef) ef.style.width = (G.res.essence / CONFIG.ESSENCE.max * 100) + '%';
     this.els.dayLabel.textContent = 'Day ' + G.day + (G.finalNight ? ' \u26a0' : '');
-    // clock
+    // clock (day length is a difficulty lever — read it from the preset)
     let frac;
     const C = CONFIG;
-    if (G.phase === 'day') frac = G.time / C.DAY_LEN * 0.5;
+    const dayLen = (G.diffM && G.diffM.dayLen) || C.DAY_LEN;
+    if (G.phase === 'day') frac = G.time / dayLen * 0.5;
     else if (G.phase === 'dusk') frac = 0.5 + G.time / C.TRANS * (C.NIGHT_LEN * G.diffM.night) / (C.NIGHT_LEN * G.diffM.night + C.TRANS) * 0.5;
     else if (G.phase === 'night') {
       const nl = C.NIGHT_LEN * G.diffM.night;
@@ -332,7 +333,8 @@ const UI = {
       const dem = b.key === 'camp' ? '' : `<button class="warn" id="selDem">Demolish</button>`;
       const nd = b.built && !b.demo && b.def.next && BUILD[b.def.next] ? BUILD[b.def.next] : null;
       const up = nd ? `<button id="selUp">\u2b06 ${U.esc(nd.name)}</button>` : '';
-      const upCost = nd ? `${nd.cost.wood || 0} wood${nd.cost.stone ? ' \u00b7 ' + nd.cost.stone + ' stone' : ''}` : '';
+      const upC = nd ? Buildings.costOf(nd) : null;
+      const upCost = nd ? `${upC.wood || 0} wood${upC.stone ? ' \u00b7 ' + upC.stone + ' stone' : ''}` : '';
       const oldName = b.def.name;
       el.innerHTML = `
         <h3>${U.esc(b.def.name)}</h3>
@@ -473,8 +475,9 @@ const UI = {
       const afford = Buildings.afford(k);
       const card = document.createElement('button');
       card.className = 'bcard' + (unlocked ? '' : ' locked') + (this.mode && this.mode.type === 'build' && this.mode.key === k ? ' sel' : '');
-      const cost = Object.entries(def.cost).map(([r, n]) =>
-        `<span class="${G.res[r] < n ? 'costNo' : ''}">${n} ${r}</span>`).join('');
+      const cc = Buildings.costOf(def); // A5: costs shown are costs charged
+      const cost = Object.entries(def.cost).map(([r]) =>
+        `<span class="${G.res[r] < cc[r] ? 'costNo' : ''}">${cc[r]} ${r}</span>`).join('');
       card.innerHTML = `
         <div><div class="bn">${U.esc(def.name)}</div>
         <div class="bc">${cost}</div>

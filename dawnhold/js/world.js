@@ -77,34 +77,37 @@ const World = {
 
         if (this.t[i] !== T.GRASS) continue;
         const h = U.hash2(x, y), h2 = U.hash2(x + 5, y + 9);
+        // v1.4 difficulty: the wilds grow thinner or thicker (A4) — every
+        // natural object cutoff scales with the density multiplier
+        const dens = (G.diffM && G.diffM.densityMul) || 1;
 
         // ---- dark forest biome: dense pines, mushrooms, dead trees ----
         if (f > 0.63 && e > 0.40) {
-          if (h < 0.62) this.obj[i] = h2 < .82 ? OBJ.PINE : OBJ.TREE;
-          else if (h < 0.70) this.obj[i] = OBJ.MUSH;
-          else if (h < 0.735) this.obj[i] = OBJ.DEADTREE;
-          else if (h < 0.76) this.obj[i] = OBJ.HERB;
+          if (h < 0.62 * dens) this.obj[i] = h2 < .82 ? OBJ.PINE : OBJ.TREE;
+          else if (h < (0.62 + 0.08 * dens)) this.obj[i] = OBJ.MUSH;
+          else if (h < (0.70 + 0.035 * dens)) this.obj[i] = OBJ.DEADTREE;
+          else if (h < (0.735 + 0.025 * dens)) this.obj[i] = OBJ.HERB;
           continue;
         }
         // ---- highland biome: boulders, crystals, birch ----
         if (r > 0.66 && dc > 13) {
-          if (h < 0.42) this.obj[i] = h2 < 0.10 ? OBJ.CRYSTAL : OBJ.ROCK;
-          else if (h < 0.47) this.obj[i] = OBJ.PINE;
-          else if (h < 0.50) this.obj[i] = OBJ.BIRCH;
+          if (h < 0.42 * dens) this.obj[i] = h2 < 0.10 ? OBJ.CRYSTAL : OBJ.ROCK;
+          else if (h < (0.42 + 0.05 * dens)) this.obj[i] = OBJ.PINE;
+          else if (h < (0.47 + 0.03 * dens)) this.obj[i] = OBJ.BIRCH;
           continue;
         }
         // ---- meadow biome: oaks, berries, herbs, flowers, tall grass ----
         if (m > 0.48) {
-          if (h < 0.13) this.obj[i] = OBJ.TREE;
-          else if (h < 0.155) this.obj[i] = OBJ.BIRCH;
-          else if (h < 0.23) this.obj[i] = OBJ.BUSH;
-          else if (h < 0.265) this.obj[i] = OBJ.HERB;
-          else if (h < 0.34) this.obj[i] = h2 < .5 ? OBJ.FLOWER : OBJ.TGRASS;
-        } else if (h < 0.05) {
+          if (h < 0.13 * dens) this.obj[i] = OBJ.TREE;
+          else if (h < (0.13 + 0.025 * dens)) this.obj[i] = OBJ.BIRCH;
+          else if (h < (0.155 + 0.075 * dens)) this.obj[i] = OBJ.BUSH;
+          else if (h < (0.23 + 0.035 * dens)) this.obj[i] = OBJ.HERB;
+          else if (h < (0.265 + 0.075 * dens)) this.obj[i] = h2 < .5 ? OBJ.FLOWER : OBJ.TGRASS;
+        } else if (h < 0.05 * dens) {
           this.obj[i] = OBJ.TGRASS;
         }
         // stray stone even in meadows, farther out
-        if (!this.obj[i] && r > 0.63 && dc > 10 && U.hash2(x + 4, y + 2) < .12) this.obj[i] = OBJ.ROCK;
+        if (!this.obj[i] && r > 0.63 && dc > 10 && U.hash2(x + 4, y + 2) < .12 * dens) this.obj[i] = OBJ.ROCK;
       }
     }
 
@@ -116,10 +119,13 @@ const World = {
           this.t[i] = T.GRASS; this.obj[i] = OBJ.NONE;
         }
 
-    // guarantee starting resources (idempotent placement on grass)
-    const sprinkle = (type, count, rMin, rMax, amt) => {
+    // guarantee starting resources (idempotent placement on grass); the
+    // sprinkle counts scale with difficulty density (A4), yields with A2
+    const dens = (G.diffM && G.diffM.densityMul) || 1;
+    const sprinkle = (type, count, rMin, rMax) => {
       let placed = 0, tries = 0;
-      while (placed < count && tries++ < 900) {
+      const want = Math.max(1, Math.round(count * dens));
+      while (placed < want && tries++ < 900) {
         const a = Math.random() * Math.PI * 2;
         const r = rMin + Math.random() * (rMax - rMin);
         const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r);
@@ -128,20 +134,20 @@ const World = {
         if (this.t[i] !== T.GRASS) continue;
         if (this.obj[i] === type) { placed++; continue; }
         if (this.obj[i] !== OBJ.NONE && this.obj[i] !== OBJ.FLOWER && this.obj[i] !== OBJ.TGRASS && this.obj[i] !== OBJ.MUSH) continue;
-        this.obj[i] = type; if (amt) this.amt[i] = amt;
+        this.obj[i] = type; if (OBJ_AMT[type]) this.amt[i] = amtOf(type);
         placed++;
       }
     };
-    sprinkle(OBJ.BUSH, 16, 5, 13, OBJ_AMT[OBJ.BUSH]);
-    sprinkle(OBJ.TREE, 24, 7, 17, OBJ_AMT[OBJ.TREE]);
-    sprinkle(OBJ.PINE, 8, 12, 22, OBJ_AMT[OBJ.PINE]);
-    sprinkle(OBJ.ROCK, 8, 13, 20, OBJ_AMT[OBJ.ROCK]);
-    sprinkle(OBJ.HERB, 6, 6, 14, OBJ_AMT[OBJ.HERB]);
+    sprinkle(OBJ.BUSH, 16, 5, 13);
+    sprinkle(OBJ.TREE, 24, 7, 17);
+    sprinkle(OBJ.PINE, 8, 12, 22);
+    sprinkle(OBJ.ROCK, 8, 13, 20);
+    sprinkle(OBJ.HERB, 6, 6, 14);
 
     // ancient ruins scattered at mid distance
-    sprinkle(OBJ.RUIN, 8, 14, 30, CONFIG.RUIN.stone);
+    sprinkle(OBJ.RUIN, 8, 14, 30);
     // essence crystal lodes, far out (risk/reward)
-    sprinkle(OBJ.CRYSTAL, 5, 16, 28, OBJ_AMT[OBJ.CRYSTAL]);
+    sprinkle(OBJ.CRYSTAL, 5, 16, 28);
 
     // ---- monster lairs: 3 monoliths, spread angles, far from camp ----
     const baseA = Math.random() * Math.PI * 2;
@@ -181,11 +187,11 @@ const World = {
       }
     }
 
-    // fill amounts for all generated objects
+    // fill amounts for all generated objects (A2-scaled, +30% bonus units)
     for (let i = 0; i < this.obj.length; i++) {
       const o = this.obj[i];
       if (OBJ_AMT[o] && this.amt[i] === 0)
-        this.amt[i] = OBJ_AMT[o] + (U.hash2(i, 17) < .3 ? 1 : 0);
+        this.amt[i] = amtOf(o) + (U.hash2(i, 17) < .3 ? 1 : 0);
     }
 
     this.bakeAll();
@@ -272,18 +278,20 @@ const World = {
     this.bakeTile(tx, ty); // rebakes water neighbors too, so the foam ring stays right
   },
 
-  // depleted → regrowth scheduling; returns a bonus tag for the caller
+  // depleted → regrowth scheduling (A3: difficulty regrow speed); returns a
+  // bonus tag for the caller
   deplete(tx, ty) {
     const i = this.idx(tx, ty), o = this.obj[i];
     this.amt[i] = 0;
+    const rm = (G.diffM && G.diffM.regrowMul) || 1; // >1 = the wilds heal faster
     let bonus = null;
     if (o === OBJ.TREE || o === OBJ.PINE) {
       this.obj[i] = OBJ.STUMP;
-      G.regrow.set(i, { t: 150 + Math.random() * 60, kind: o });   // stump → sapling → tree
+      G.regrow.set(i, { t: (150 + Math.random() * 60) / rm, kind: o });   // stump → sapling → tree
     } else if (o === OBJ.BUSH) {
-      G.regrow.set(i, { t: 170 + Math.random() * 50, kind: OBJ.BUSH });
+      G.regrow.set(i, { t: (170 + Math.random() * 50) / rm, kind: OBJ.BUSH });
     } else if (o === OBJ.HERB) {
-      G.regrow.set(i, { t: CONFIG.HERB.regrow, kind: OBJ.HERB });
+      G.regrow.set(i, { t: CONFIG.HERB.regrow / rm, kind: OBJ.HERB });
     } else if (o === OBJ.CRYSTAL) {
       this.obj[i] = OBJ.NONE;
       bonus = 'crystal';

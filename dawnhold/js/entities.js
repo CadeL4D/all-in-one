@@ -46,7 +46,7 @@ const Entities = {
     const m = {
       kind: 'm', id: NID(), type, name: st.name, st,
       x, y, hp: Math.round(st.hp * hpMul), maxHp: Math.round(st.hp * hpMul),
-      dmg: st.dmg, spd: st.spd, atkT: st.atkT, ess: st.ess,
+      dmg: st.dmg, spd: st.spd * ((G.diffM && G.diffM.spdMul) || 1), atkT: st.atkT, ess: st.ess,
       state: 'advance', path: null, pi: 0,
       tgtE: null, tgtB: null, atkCd: 0,
       anim: Math.random() * 2, aiT: Math.random() * 0.5,

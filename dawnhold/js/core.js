@@ -103,11 +103,43 @@ const CONFIG = {
   ARRIVE: { chance: 0.65, foodNeed: 14, everyN: 3, n: 2, maxPop: 44 },
 
   // --- difficulty presets ---
+  // v1.4: every preset is a different game, not a stat slider — scarcity
+  // (start/yields/regrow/density/costs), monsters (speed/debuts/blood moons/
+  // lair mending/night 1/essence payouts) and village life (day length,
+  // arrivals, day events, comfort, wells, tool wear). See README menu A/B/C.
   DIFF: {
-    peaceful: { wave: 0,    hp: 1,    night: 0.8,  regen: 1.25, label: 'Peaceful' },
-    easy:     { wave: 0.68, hp: 0.88, night: 0.88, regen: 1.1,  label: 'Easy' },
-    normal:   { wave: 1,    hp: 1,    night: 1,    regen: 1,    label: 'Normal' },
-    hard:     { wave: 1.38, hp: 1.22, night: 1.15, regen: 0.9,  label: 'Hard' },
+    peaceful: {
+      wave: 0, hp: 1, night: 0.8, regen: 1.25, label: 'Peaceful',
+      startMul: 1.25, yieldMul: 1.15, regrowMul: 1.25, densityMul: 1.1, costMul: 0.9,
+      spdMul: 0.9, debutShift: 3, bloodMult: 1.2, lairRegenMul: 0.5, night1: 0, essMul: 1.25,
+      dayLen: 240, arrive: 0.8, eventHostile: 0,
+      comfort: { snug: 1.08, crowd: 0.98, packed: 0.92 },
+      wellMul: 1.25, wearMul: 0.8,
+    },
+    easy: {
+      wave: 0.68, hp: 0.88, night: 0.88, regen: 1.1, label: 'Easy',
+      startMul: 1.1, yieldMul: 1, regrowMul: 1.1, densityMul: 1, costMul: 1,
+      spdMul: 0.95, debutShift: 1, bloodMult: 1.35, lairRegenMul: 0.75, night1: 2, essMul: 1.1,
+      dayLen: 225, arrive: 0.7, eventHostile: 0.5,
+      comfort: { snug: 1.08, crowd: 0.95, packed: 0.88 },
+      wellMul: 1.1, wearMul: 0.9,
+    },
+    normal: {
+      wave: 1, hp: 1, night: 1, regen: 1, label: 'Normal',
+      startMul: 1, yieldMul: 0.85, regrowMul: 1, densityMul: 0.9, costMul: 1,
+      spdMul: 1, debutShift: 0, bloodMult: 1.5, lairRegenMul: 1, night1: 3, essMul: 1,
+      dayLen: 210, arrive: 0.65, eventHostile: 1,
+      comfort: { snug: 1.05, crowd: 0.95, packed: 0.88 },
+      wellMul: 1, wearMul: 1,
+    },
+    hard: {
+      wave: 1.38, hp: 1.22, night: 1.15, regen: 0.9, label: 'Hard',
+      startMul: 0.7, yieldMul: 0.7, regrowMul: 0.8, densityMul: 0.8, costMul: 1.15,
+      spdMul: 1.08, debutShift: -1, bloodMult: 1.75, lairRegenMul: 1.5, night1: 5, essMul: 0.9,
+      dayLen: 185, arrive: 0.5, eventHostile: 1.5,
+      comfort: { snug: 1.05, crowd: 0.85, packed: 0.78 },
+      wellMul: 0.9, wearMul: 1.15,
+    },
   },
 
   ZOOM: { min: 1.35, max: 4.2, start: 2.6 },
@@ -120,8 +152,14 @@ const T = { GRASS: 0, DIRT: 1, WATER: 2, ROAD: 3, SAND: 4 };
 // ---- map object ids (things standing on terrain) ----
 const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7, MUSH: 8, TGRASS: 9, HERB: 10, RUIN: 11, CRYSTAL: 12, DEADTREE: 13, BIRCH: 14, GRAVE: 15 };
 
-// object yields (units per full source)
+// object yields (units per full source), scaled by difficulty scarcity
 const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4 };
+// yield units for a wild source under the current difficulty (A2)
+function amtOf(o) {
+  const base = OBJ_AMT[o] || 0;
+  if (!base) return 0;
+  return Math.max(1, Math.round(base * (G.diffM ? G.diffM.yieldMul : 1)));
+}
 
 // ---- jobs ----
 const JOBS = ['idle', 'forager', 'lumber', 'miner', 'farmer', 'fisher', 'medic', 'builder', 'guard', 'fletcher', 'smith', 'cook', 'brewer', 'bottler', 'baker', 'scribe'];

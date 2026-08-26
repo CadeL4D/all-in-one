@@ -16,7 +16,8 @@ const Sim = {
     G.speed = 1; G.paused = false;
     G.diff = diff in C.DIFF ? diff : 'normal';
     G.diffM = C.DIFF[G.diff];
-    G.res = { ...C.START };
+    G.res = {};
+    for (const k in C.START) G.res[k] = Math.max(0, Math.round(C.START[k] * (G.diffM.startMul || 1)));
     G.villagers = []; G.monsters = []; G.buildings = []; G.clearJobs = [];
     G.effects = []; G.floaters = [];
     G.jobs = { idle: 0, forager: 2, lumber: 2, miner: 1, farmer: 0, fisher: 0, medic: 0, builder: 1, guard: 0, fletcher: 0, smith: 0, cook: 0, brewer: 0, bottler: 0, baker: 0, scribe: 0 };
@@ -70,7 +71,7 @@ const Sim = {
 
     // ----- phase machine -----
     let plen;
-    if (G.phase === 'day') plen = C.DAY_LEN;
+    if (G.phase === 'day') plen = G.diffM.dayLen || C.DAY_LEN; // C1: daylight is a difficulty lever
     else if (G.phase === 'dusk') plen = C.TRANS;
     else if (G.phase === 'night') plen = C.NIGHT_LEN * G.diffM.night;
     else plen = C.TRANS;
@@ -126,9 +127,9 @@ const Sim = {
         if (rg.t <= 0) {
           const x = i % World.W, y = (i / World.W) | 0;
           if (rg.kind === OBJ.BUSH) {
-            World.amt[i] = OBJ_AMT[OBJ.BUSH];
+            World.amt[i] = amtOf(OBJ.BUSH);
           } else if (rg.kind === OBJ.HERB) {
-            World.amt[i] = OBJ_AMT[OBJ.HERB];
+            World.amt[i] = amtOf(OBJ.HERB);
           } else if (rg.kind === OBJ.TREE || rg.kind === OBJ.PINE) {
             if (World.obj[i] === OBJ.STUMP) {
               World.obj[i] = OBJ.SAPLING;
@@ -136,7 +137,7 @@ const Sim = {
               continue;
             } else if (World.obj[i] === OBJ.SAPLING) {
               World.obj[i] = rg.kind;
-              World.amt[i] = OBJ_AMT[rg.kind];
+              World.amt[i] = amtOf(rg.kind);
             }
           }
           G.regrow.delete(i);
@@ -159,7 +160,7 @@ const Sim = {
   dusk() {
     G.phase = 'dusk';
     G.bloodMoon = G.day >= CONFIG.WAVE.bloodEvery && G.day % CONFIG.WAVE.bloodEvery === 0 && this.waveSize(G.day) > 0;
-    const n = this.waveSize(G.day) * (G.bloodMoon ? CONFIG.WAVE.bloodMult : 1);
+    const n = this.waveSize(G.day) * (G.bloodMoon ? (G.diffM.bloodMult || CONFIG.WAVE.bloodMult) : 1);
     if (n > 0) {
       // direction telegraph from the nearest living lair (readable tactics)
       const lairs = Buildings.lairs();
@@ -213,7 +214,7 @@ const Sim = {
       const isFinal = G.finalNight;
       const lairs = Buildings.lairs();
       const noLairMult = lairs.length ? 1 : CONFIG.WAVE.noLairMult;
-      const total = Math.max(1, Math.round((base * (G.bloodMoon ? CONFIG.WAVE.bloodMult : 1) * noLairMult) * (isFinal ? CONFIG.WAVE.final : 1)));
+      const total = Math.max(1, Math.round((base * (G.bloodMoon ? (G.diffM.bloodMult || CONFIG.WAVE.bloodMult) : 1) * noLairMult) * (isFinal ? CONFIG.WAVE.final : 1)));
       let comps = [];
       for (let i = 0; i < total; i++) comps.push(this.rollType(G.day));
       G.wave = { left: total, comps, t: 0, window: CONFIG.WAVE.spawnWindow };
@@ -323,10 +324,13 @@ const Sim = {
 
   dayEvent() {
     const roll = Math.random();
+    // C3: the daylight-ambush band widens or vanishes with difficulty
+    const hostile = (G.diffM && G.diffM.eventHostile != null) ? G.diffM.eventHostile : 1;
+    const ambushTo = 0.68 + 0.18 * hostile;
     if (roll < 0.38) {
       let n = 0;
       for (let i = 0; i < World.obj.length; i++) {
-        if (World.obj[i] === OBJ.BUSH && World.amt[i] < OBJ_AMT[OBJ.BUSH]) { World.amt[i] = OBJ_AMT[OBJ.BUSH]; n++; }
+        if (World.obj[i] === OBJ.BUSH && World.amt[i] < amtOf(OBJ.BUSH)) { World.amt[i] = amtOf(OBJ.BUSH); n++; }
       }
       if (n > 0) {
         UI.toast('Overnight rain — every bush hangs heavy with berries!', 'good');
@@ -337,7 +341,7 @@ const Sim = {
       this.gain('wood', w);
       UI.toast(`Foragers drag home a storm-felled oak: +${w} wood.`, 'good');
       this.log('A storm-felled oak yielded seasoned timber.', 'good');
-    } else if (roll < 0.86 && G.day >= 5 && G.monsters.length === 0) {
+    } else if (roll < ambushTo && G.day >= 5 && G.monsters.length === 0) {
       const n = U.irnd(2, 3);
       for (let i = 0; i < n; i++) {
         const p = World.edgePoint();
@@ -355,18 +359,22 @@ const Sim = {
 
   waveSize(day) {
     if (G.diffM.wave === 0) return 0;
-    return Math.min(CONFIG.WAVE.cap, Math.round((CONFIG.WAVE.base + CONFIG.WAVE.per * day) * G.diffM.wave));
+    let n = Math.min(CONFIG.WAVE.cap, Math.round((CONFIG.WAVE.base + CONFIG.WAVE.per * day) * G.diffM.wave));
+    // B5: night one has a per-difficulty floor of its own
+    if (day === 1 && G.diffM.night1) n = Math.max(n, G.diffM.night1);
+    return n;
   },
 
   rollType(day) {
     const M = CONFIG.MONS;
+    const shift = G.diffM.debutShift || 0; // B2: harder nights debut monsters sooner
     let pool = [{ t: 'shade', w: 1 }];
-    if (day >= M.runner.from) pool.push({ t: 'runner', w: M.runner.w });
-    if (day >= M.brute.from) pool.push({ t: 'brute', w: M.brute.w });
-    if (day >= M.stalker.from) pool.push({ t: 'stalker', w: M.stalker.w });
-    if (day >= M.boner.from) pool.push({ t: 'boner', w: M.boner.w });
-    if (day >= M.wraith.from) pool.push({ t: 'wraith', w: M.wraith.w });
-    if (day >= M.colossus.from) pool.push({ t: 'colossus', w: M.colossus.w });
+    if (day >= M.runner.from + shift) pool.push({ t: 'runner', w: M.runner.w });
+    if (day >= M.brute.from + shift) pool.push({ t: 'brute', w: M.brute.w });
+    if (day >= M.stalker.from + shift) pool.push({ t: 'stalker', w: M.stalker.w });
+    if (day >= M.boner.from + shift) pool.push({ t: 'boner', w: M.boner.w });
+    if (day >= M.wraith.from + shift) pool.push({ t: 'wraith', w: M.wraith.w });
+    if (day >= M.colossus.from + shift) pool.push({ t: 'colossus', w: M.colossus.w });
     let tot = pool.reduce((s, p) => s + p.w, 0);
     let r = Math.random() * tot;
     for (const p of pool) { r -= p.w; if (r <= 0) return p.t; }
@@ -413,7 +421,7 @@ const Sim = {
     for (const b of G.buildings) {
       if (b.key !== 'lair') continue;
       if (b.hitT > 0) b.hitT = Math.max(0, b.hitT - dt);
-      else if (b.hp < b.maxHp) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * CONFIG.LAIR.regenPct * dt);
+      else if (b.hp < b.maxHp) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * CONFIG.LAIR.regenPct * (G.diffM.lairRegenMul || 1) * dt);
       // struck within the last ~2.5s → the raid is live, the brood answers
       if (b === rt && b.hitT > CONFIG.LAIR.regenDelay - 2.5) {
         b.defT = (b.defT == null ? 1.2 : b.defT) - dt;
@@ -462,7 +470,7 @@ const Sim = {
     const pop = G.villagers.length;
     if (pop >= C.maxPop) return;
     let arrived = [];
-    if (G.res.food >= C.foodNeed && pop < cap && Math.random() < C.chance) {
+    if (G.res.food >= C.foodNeed && pop < cap && Math.random() < ((G.diffM && G.diffM.arrive != null) ? G.diffM.arrive : C.chance)) {
       arrived.push(this.spawnArriver('A wanderer arrives from the wilds, seeking shelter.'));
     }
     if (G.day % C.everyN === 0 && cap - pop >= C.n && G.res.food >= C.foodNeed) {
@@ -947,8 +955,9 @@ const Sim = {
 
   vWork(v, dt) {
     const ws = Entities.workSpeed(v);
-    // hands-on work wears tools out; a spare from the smithy slots right in
-    if (v.toolCond > 0) v.toolCond = Math.max(0, v.toolCond - CONFIG.TOOL.wear * dt);
+    // hands-on work wears tools out (C6: faster on harder difficulties); a
+    // spare from the smithy slots right in
+    if (v.toolCond > 0) v.toolCond = Math.max(0, v.toolCond - CONFIG.TOOL.wear * ((G.diffM && G.diffM.wearMul) || 1) * dt);
     else if (G.res.tools >= 1) { G.res.tools -= 1; v.toolCond = CONFIG.TOOL.cond; this.float(v.x, v.y - .6, 'fresh tool', '#a5a5ae'); }
     if (v.workKind && v.tgtTile) {
       const { x, y } = v.tgtTile;
@@ -1418,7 +1427,7 @@ const Sim = {
   monsterDeath(m, how) {
     if (m.dead) return;
     m.dead = true;
-    const base = how === 'dawn' ? m.ess / 2 : m.ess;
+    const base = (how === 'dawn' ? m.ess / 2 : m.ess) * (G.diffM.essMul || 1); // B6
     const ess = Math.ceil(base * (G.bloodMoon ? 2 : 1));
     G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + ess);
     G.stats.kills++;
@@ -1516,12 +1525,13 @@ const Sim = {
     }
   },
 
-  // village-wide housing contentment: beds × their comfort vs population
+  // village-wide housing contentment: beds × their comfort vs population.
+  // C4: the snug/crowded multipliers themselves are a difficulty lever
   contentment() {
     let pts = 0;
     for (const b of G.buildings) if (b.built && b.def.housing) pts += (b.def.comfort || 1) * b.def.housing;
     const r = pts / Math.max(1, G.villagers.length);
-    const C = CONFIG.COMFORT;
+    const C = Object.assign({}, CONFIG.COMFORT, (G.diffM && G.diffM.comfort) || {});
     if (r >= C.snugAt) return { mult: C.snug, label: 'Snug' };
     if (r >= C.crowdAt) return { mult: C.crowd, label: 'Content' };
     if (r >= C.packedAt) return { mult: C.packed, label: 'Crowded' };
@@ -1704,7 +1714,7 @@ window.DBG = {
     UI.toast('LAIRS: ' + s, 'magic');
     return s;
   },  res(k, n) { G.res[k] += n; UI.updateHUD(); },
-  dusk() { if (G.phase === 'day') { G.time = CONFIG.DAY_LEN - 0.01; } },
+  dusk() { if (G.phase === 'day') { G.time = (G.diffM.dayLen || CONFIG.DAY_LEN) - 0.01; } },
   night() { DBG.dusk(); },
   day(n) { G.day = n; },
   wave(n) {
