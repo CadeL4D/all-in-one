@@ -30,7 +30,11 @@
         <button class="hbtn" id="btnMenuTop" title="Menu">&#9776;</button>
       </div>
     </div>
-    <div id="resRow"></div>
+    <!-- the single materials bar: chips + the Materials tab -->
+    <div id="resBar">
+      <div id="resRow"></div>
+      <button id="btnMats" title="Materials — stock, storage, show/hide &amp; order"><canvas id="icoMats" width="16" height="16"></canvas></button>
+    </div>
   </div>
 
   <!-- boss bar -->
@@ -54,18 +58,11 @@
     <button class="dbtn" id="dockBuild"><span class="dico" id="icoBuild"></span>Build</button>
     <button class="dbtn" id="dockJobs"><span class="dico" id="icoJobs"></span>Jobs</button>
     <button class="dbtn" id="dockPowers"><span class="dico" id="icoPowers"></span>Powers</button>
-    <button class="dbtn" id="dockMap"><span class="dico" id="icoMap"></span>Map</button>
   </div>
 
   <!-- slide-up panel -->
   <div id="panelBack" class="hidden"></div>
   <div id="panel" class="hidden"><div id="panelTitle"></div><div id="panelBody"></div></div>
-
-  <!-- zoom buttons (mobile alternative to pinch) -->
-  <div id="zoomBtns" class="hidden">
-    <button id="zoomIn">+</button>
-    <button id="zoomOut">&minus;</button>
-  </div>
 
   <!-- minimap -->
   <div id="mmWrap" class="hidden"><canvas id="minimap" width="72" height="72"></canvas></div>
@@ -87,7 +84,7 @@
         <button class="bigbtn diff" data-diff="normal"><b>Normal</b><span>The intended challenge; lean wilds.</span></button>
         <button class="bigbtn diff" data-diff="hard"><b>Hard</b><span>Scant stores, hungry dark, short days.</span></button>
       </div>
-      <div class="verText">v1.4 &middot; The Difficulty Spread &middot; saves in this browser</div>
+      <div class="verText">v1.4.1 &middot; The Materials Bar &middot; saves in this browser</div>
     </div>
   </div>
 

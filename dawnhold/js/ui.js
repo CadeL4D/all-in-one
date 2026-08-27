@@ -2,8 +2,8 @@
 /* ============================================================
    Dawnhold — ui.js
    DOM UI + input. Touch-first: tap = select/place, drag = pan
-   (or paint walls/roads), pinch = zoom, plus zoom buttons and a
-   tappable minimap as alternatives (mobile best practice).
+   (or paint walls/roads), pinch = zoom, and a tappable minimap
+   as a jump aid (mobile best practice).
    ============================================================ */
 
 const UI = {
@@ -20,7 +20,29 @@ const UI = {
   _toastN: 0,
   _hudT: 0,
   _lastPlaceFail: 0,
+  _chips: {},        // resource chip elements by key (order lives in G.settings.matOrder)
   els: {},
+
+  /* Materials roster: default order = importance. `on` chips are always
+     shown until the player picks their own set; the rest appear the moment
+     they matter (first unit gained or workplace built). */
+  MATS: [
+    { k: 'wood', n: 'Wood', icon: 'wood', d: 'Walls, tents, towers, arrows', on: true },
+    { k: 'stone', n: 'Stone', icon: 'stone', d: 'Stone walls, towers, the Beacon', on: true },
+    { k: 'food', n: 'Food', icon: 'food', d: 'Eaten by every villager', on: true },
+    { k: 'essence', n: 'Essence', icon: 'essence', d: 'Fuels your Powers', on: true },
+    { k: 'herbs', n: 'Herbs', icon: 'herb', d: 'Hospital stores, ale, lamp oil', on: true },
+    { k: 'water', n: 'Water', icon: 'water', d: 'Drawn from wells; drinking, bread, bottles', b: 'well' },
+    { k: 'arrows', n: 'Arrows', icon: 'arrow', d: 'Tower and raid ammunition', b: 'fletch' },
+    { k: 'tools', n: 'Tools', icon: 'tool', d: 'Worn down by every worker', b: 'smithy' },
+    { k: 'meals', n: 'Meals', icon: 'meal', d: 'Cooked food satisfies far better', b: 'kitchen' },
+    { k: 'bread', n: 'Bread', icon: 'bread', d: 'The heartiest food, from the Bakehouse', b: 'bakery' },
+    { k: 'flour', n: 'Flour', icon: 'flour', d: 'Ground at the Mill for the Bakehouse', b: 'windmill' },
+    { k: 'charcoal', n: 'Charcoal', icon: 'charcoal', d: 'Burned at the Kiln; pressed into lamp oil', b: 'kiln' },
+    { k: 'ale', n: 'Ale', icon: 'ale', d: 'A dusk drink that speeds tomorrow\u2019s work', b: 'tavern' },
+    { k: 'oil', n: 'Lamp oil', icon: 'oil', d: 'Torches sip it through the night', b: 'press' },
+    { k: 'bottles', n: 'Bottles', icon: 'bottle', d: 'A drink without the walk to the well', b: 'bottlery' },
+  ],
 
   TUT: [
     { text: 'Welcome, Guardian.<br>Your settlers depend on you: assign their <b>Jobs</b>, raise <b>shelter</b>, stock <b>food</b> — and hold back the shades each night. Goal: raise <b>The Beacon</b> and survive the Long Night.', btn: 'Begin' },
@@ -39,7 +61,7 @@ const UI = {
       phaseIcon: $('phaseIcon'), toasts: $('toasts'), tut: $('tut'), tutText: $('tutText'),
       selCard: $('selCard'), dock: $('dock'), panel: $('panel'), panelTitle: $('panelTitle'), panelBody: $('panelBody'),
       panelBack: $('panelBack'), modeChip: $('modeChip'), modeChipText: $('modeChipText'), mmWrap: $('mmWrap'),
-      zoomBtns: $('zoomBtns'), bossBar: $('bossBar'), bossHpFill: $('bossHpFill'),
+      bossBar: $('bossBar'), bossHpFill: $('bossHpFill'),
     };
     $('btnPause').onclick = () => Sim.speedSet(G.paused ? 1 : 0);
     $('btnSpd1').onclick = () => Sim.speedSet(1);
@@ -49,10 +71,8 @@ const UI = {
     $('dockBuild').onclick = () => this.openPanel('build');
     $('dockJobs').onclick = () => this.openPanel('jobs');
     $('dockPowers').onclick = () => this.openPanel('powers');
-    $('dockMap').onclick = () => { this.els.mmWrap.classList.toggle('hidden'); };
+    $('btnMats').onclick = () => this.openPanel('materials');
     $('modeChipX').onclick = () => this.cancelMode();
-    $('zoomIn').onclick = () => this.zoomBy(0.4);
-    $('zoomOut').onclick = () => this.zoomBy(-0.4);
     $('btnHelpClose').onclick = () => { $('helpScreen').classList.add('hidden'); if (G.state === 'title') $('titleScreen').classList.remove('hidden'); };
     $('btnHelpT').onclick = () => { $('titleScreen').classList.add('hidden'); $('helpScreen').classList.remove('hidden'); };
     $('btnNew').onclick = () => { $('diffPick').classList.remove('hidden'); $('btnNew').classList.add('hidden'); };
@@ -74,9 +94,12 @@ const UI = {
     $('tutSkip').onclick = () => { G.tutOn = false; this.els.tut.classList.add('hidden'); };
     $('tutNext').onclick = () => this.tutAdvance(G.tut + 1);
 
-    // dock icons
+    // dock + bar icons
     const put = (id, name) => { const e = $(id); e.innerHTML = ''; e.appendChild(Art.iconEl(name)); };
-    put('icoBuild', 'build'); put('icoJobs', 'jobs'); put('icoPowers', 'powers'); put('icoMap', 'map');
+    put('icoBuild', 'build'); put('icoJobs', 'jobs'); put('icoPowers', 'powers');
+    const mic = $('icoMats').getContext('2d');
+    mic.imageSmoothingEnabled = false;
+    mic.drawImage(Art.s.ic_mats, 0, 0);
 
     this.buildResRow();
     this.input();
@@ -95,16 +118,48 @@ const UI = {
   },
 
   /* ================= HUD ================= */
+  matBy(k) { return this.MATS.find(m => m.k === k); },
+
+  // resolved bar order — the saved one if it still covers the roster
+  matOrder() {
+    const s = G.settings.matOrder;
+    if (Array.isArray(s) && s.length === this.MATS.length && this.MATS.every(m => s.includes(m.k))) return s;
+    return this.MATS.map(m => m.k);
+  },
+
+  // auto visibility (before the player pins a choice): the vital five, plus
+  // anything the village has actually touched
+  matAutoShown(m) { return !!m.on || (G.res[m.k] || 0) >= 1 || !!(m.b && Buildings.built(m.b)); },
+
+  matShown(m) {
+    if (G.settings.matPin && G.settings.matPin[m.k]) return !(G.settings.matHidden && G.settings.matHidden[m.k]);
+    return this.matAutoShown(m);
+  },
+
+  // "42 / 120" — storage cap beside the stock (null = no cap)
+  matCap(k) { return k === 'essence' ? CONFIG.ESSENCE.max : Buildings.capOf(k); },
+  matStockHTML(k) {
+    const cap = this.matCap(k);
+    return Math.floor(G.res[k] || 0) + (cap != null ? ` <span class="cap">/ ${cap}</span>` : '');
+  },
+
+  layoutResRow() {
+    const row = this.els.resRow;
+    for (const k of this.matOrder()) if (this._chips[k]) row.appendChild(this._chips[k]);
+    if (this._chips.pop) row.appendChild(this._chips.pop); // population stays at the end
+  },
+
   buildResRow() {
     const row = this.els.resRow;
     row.innerHTML = '';
+    this._chips = {};
     const mk = (id, icon, title) => {
       const d = document.createElement('div');
       d.className = 'chip'; d.id = 'chip_' + id; d.title = title;
       d.appendChild(Art.iconEl(icon));
       const v = document.createElement('span'); v.id = 'val_' + id; v.textContent = '0';
       d.appendChild(v);
-      row.appendChild(d);
+      this._chips[id] = d;
       return d;
     };
     mk('wood', 'wood', 'Wood — walls, tents, towers');
@@ -118,11 +173,14 @@ const UI = {
     mk('arrows', 'arrow', 'Arrows — burned by towers and raiding guards; Fletchers make them from wood');
     mk('tools', 'tool', 'Tools — worn down by every worker; forged at the Smithy');
     mk('meals', 'meal', 'Meals — cooked food satisfies far better than raw berries');
+    mk('bread', 'bread', 'Bread — the heartiest food, from the Bakehouse');
+    mk('flour', 'flour', 'Flour — ground at the Mill for the Bakehouse');
+    mk('charcoal', 'charcoal', 'Charcoal — burned at the Kiln, pressed into lamp oil');
     mk('ale', 'ale', 'Ale — a dusk drink at the Tavern speeds tomorrow\u2019s work');
     mk('oil', 'oil', 'Lamp oil — torches sip it through the night; pressed from charcoal + herbs');
     mk('bottles', 'bottle', 'Bottles — a drink without the walk to the well; filled at the Bottlery');
-    mk('bread', 'bread', 'Bread — the heartiest food, from the Bakehouse');
     mk('pop', 'pop', 'Villagers / housing capacity');
+    this.layoutResRow();
   },
 
   updateHUD() {
@@ -141,15 +199,13 @@ const UI = {
     set('oil', Math.floor(G.res.oil || 0));
     set('bottles', Math.floor(G.res.bottles || 0));
     set('bread', Math.floor(G.res.bread || 0));
-    const show = (k, cond) => { const c = document.getElementById('chip_' + k); if (c) c.style.display = cond ? '' : 'none'; };
-    show('arrows', G.res.arrows >= 1 || Buildings.built('fletch'));
-    show('tools', G.res.tools >= 1 || Buildings.built('smithy'));
-    show('meals', G.res.meals >= 1 || Buildings.built('kitchen'));
-    show('ale', G.res.ale >= 1 || Buildings.built('tavern'));
-    show('water', G.res.water >= 1 || Buildings.built('well'));
-    show('oil', G.res.oil >= 1 || Buildings.built('press'));
-    show('bottles', G.res.bottles >= 1 || Buildings.built('bottlery'));
-    show('bread', G.res.bread >= 1 || Buildings.built('bakery'));
+    set('flour', Math.floor(G.res.flour || 0));
+    set('charcoal', Math.floor(G.res.charcoal || 0));
+    // bar membership: the player's pinned choice, else the auto rule
+    for (const m of this.MATS) {
+      const c = this._chips[m.k]; // the essence chip is renamed #essChip, so go by element
+      if (c) c.style.display = this.matShown(m) ? '' : 'none';
+    }
     for (const k of ['wood', 'stone', 'food']) {
       const cap = Buildings.capOf(k), chip = document.getElementById('chip_' + k);
       if (chip) chip.title = `${k[0].toUpperCase() + k.slice(1)} — ${Math.floor(G.res[k])} / ${cap} (Granaries & Storehouses raise caps)`;
@@ -176,6 +232,15 @@ const UI = {
     if (this._lastPhase !== G.phase) { this._lastPhase = G.phase; this.drawPhaseIcon(); }
     if (G.boss) this.els.bossHpFill.style.width = U.clamp(G.boss.hp / G.boss.maxHp * 100, 0, 100) + '%';
     if (!this.els.selCard.classList.contains('hidden')) this.selRender();
+    if (this.open === 'materials') this.matsLive();
+  },
+
+  // stock & caps tick live while the Materials tab is open
+  matsLive() {
+    for (const m of this.MATS) {
+      const el = document.getElementById('matVal_' + m.k);
+      if (el) el.innerHTML = this.matStockHTML(m.k);
+    }
   },
 
   drawPhaseIcon() {
@@ -398,6 +463,10 @@ const UI = {
       T.innerHTML = 'Guardian Powers' + xBtn;
       B.innerHTML = '';
       B.appendChild(this.powersList());
+    } else if (name === 'materials') {
+      T.innerHTML = 'Materials' + xBtn;
+      B.innerHTML = '';
+      B.appendChild(this.materialsList());
     } else if (name === 'menu') {
       T.innerHTML = 'Menu' + xBtn;
       B.innerHTML = '';
@@ -439,6 +508,11 @@ const UI = {
     });
     wrap.appendChild(tabs);
 
+    const hint = document.createElement('div');
+    hint.className = 'jnote';
+    hint.innerHTML = 'Tap a card to pick a site — or drag its <b>\u283f</b> edge straight onto the map. Drag anywhere else to scroll the menu.';
+    wrap.appendChild(hint);
+
     const grid = document.createElement('div');
     grid.className = 'bgrid';
     const keys = Object.keys(BUILD).filter(k => BUILD[k].cat === cat);
@@ -479,6 +553,7 @@ const UI = {
       const cost = Object.entries(def.cost).map(([r]) =>
         `<span class="${G.res[r] < cc[r] ? 'costNo' : ''}">${cc[r]} ${r}</span>`).join('');
       card.innerHTML = `
+        <span class="bgrab" title="Drag from here to place straight onto the map">\u283f</span>
         <div><div class="bn">${U.esc(def.name)}</div>
         <div class="bc">${cost}</div>
         <div class="bd">${U.esc(def.desc)}${unlocked ? '' : `<br><b style="color:var(--amber)">Unlocks day ${def.unlock}</b>`}</div></div>`;
@@ -491,9 +566,12 @@ const UI = {
         this.closePanel();
       };
       // drag the card straight out onto the map — the building ghost rides
-      // the finger; release parks it, then a tap on the outline builds
+      // the finger; release parks it, then a tap on the outline builds.
+      // On touch only the ⠿ grip starts the drag; the rest of the card is
+      // scroll room (the browser claims the gesture otherwise)
       card.onpointerdown = e => {
         if (!unlocked || !afford) return;
+        if (e.pointerType === 'touch' && !(e.target && e.target.closest && e.target.closest('.bgrab'))) return;
         try { card.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
         this._cardDrag = { key: k, x: e.clientX, y: e.clientY, moved: false };
       };
@@ -626,6 +704,130 @@ const UI = {
     return wrap;
   },
 
+  /* ================= materials tab ================= */
+  materialsList() {
+    const wrap = document.createElement('div');
+
+    // the Map button's new home — off the bottom dock
+    const mmRow = document.createElement('div');
+    mmRow.className = 'toggleRow';
+    mmRow.innerHTML = '<span>Minimap <small style="color:var(--dim);font-weight:400">— the little map, top right</small></span>';
+    const mmBtn = document.createElement('button');
+    mmBtn.className = 'togBtn' + (!this.els.mmWrap.classList.contains('hidden') ? ' on' : '');
+    mmBtn.onclick = () => {
+      this.els.mmWrap.classList.toggle('hidden');
+      mmBtn.classList.toggle('on', !this.els.mmWrap.classList.contains('hidden'));
+    };
+    mmRow.appendChild(mmBtn);
+    wrap.appendChild(mmRow);
+
+    const note = document.createElement('div');
+    note.className = 'jnote';
+    note.innerHTML = 'Shown materials line up in the top bar, most vital first. Drag a row\u2019s <b>\u283f</b> to reorder it; <b>Show/Hide</b> picks what the bar carries. Everything keeps gathering while hidden.';
+    wrap.appendChild(note);
+
+    const order = this.matOrder();
+    const pin = G.settings.matPin || (G.settings.matPin = {});
+    const hid = G.settings.matHidden || (G.settings.matHidden = {});
+    const list = document.createElement('div');
+    for (const k of order) {
+      const m = this.matBy(k);
+      const shown = this.matShown(m);
+      const row = document.createElement('div');
+      row.className = 'matRow' + (shown ? '' : ' off');
+
+      const grip = document.createElement('div');
+      grip.className = 'grip';
+      grip.textContent = '\u283f';
+      grip.title = 'Drag to reorder';
+      row.appendChild(grip);
+
+      row.appendChild(Art.iconEl(m.icon));
+      const txt = document.createElement('div');
+      txt.style.flex = '1';
+      txt.innerHTML = `<div class="mn">${U.esc(m.n)}</div><div class="md">${U.esc(m.d)}</div>`;
+      row.appendChild(txt);
+
+      const stock = document.createElement('div');
+      stock.className = 'stock';
+      stock.id = 'matVal_' + m.k;
+      stock.innerHTML = this.matStockHTML(m.k);
+      row.appendChild(stock);
+
+      const eye = document.createElement('button');
+      eye.className = 'eyeBtn';
+      eye.textContent = shown ? 'Hide' : 'Show';
+      eye.onclick = () => {
+        pin[m.k] = true; // a manual choice stops the auto rules for this material
+        if (shown) hid[m.k] = true; else delete hid[m.k];
+        this.layoutResRow();
+        this.openPanel('materials');
+      };
+      row.appendChild(eye);
+
+      this.matDrag(list, row, grip);
+      list.appendChild(row);
+    }
+    wrap.appendChild(list);
+
+    const rst = document.createElement('button');
+    rst.className = 'mbtn';
+    rst.innerHTML = 'Reset bar to defaults <small>default order &amp; visibility</small>';
+    rst.onclick = () => {
+      delete G.settings.matOrder; delete G.settings.matPin; delete G.settings.matHidden;
+      this.layoutResRow();
+      this.openPanel('materials');
+    };
+    wrap.appendChild(rst);
+    return wrap;
+  },
+
+  // drag a materials row by its grip; neighbours slide aside and the order
+  // commits on release (touch drags elsewhere in the panel just scroll)
+  matDrag(list, row, grip) {
+    grip.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      try { grip.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+      const rows = [...list.children].filter(r => r.classList.contains('matRow'));
+      const idx0 = rows.indexOf(row);
+      const h = row.offsetHeight + 7; // row + margin
+      let idx = idx0;
+      row.classList.add('drag');
+      const move = ev => {
+        const dy = ev.clientY - e.clientY;
+        row.style.transform = `translateY(${dy}px)`;
+        const pr = this.els.panelBody.getBoundingClientRect();
+        if (ev.clientY < pr.top + 48) this.els.panelBody.scrollTop -= 8;
+        else if (ev.clientY > pr.bottom - 48) this.els.panelBody.scrollTop += 8;
+        idx = U.clamp(idx0 + Math.round(dy / h), 0, rows.length - 1);
+        rows.forEach((r, i) => {
+          if (r === row) return;
+          let off = 0;
+          if (i > idx0 && i <= idx) off = -h;
+          else if (i < idx0 && i >= idx) off = h;
+          r.style.transition = 'transform .12s';
+          r.style.transform = off ? `translateY(${off}px)` : '';
+        });
+      };
+      const finish = () => {
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', finish);
+        grip.removeEventListener('pointercancel', finish);
+        if (idx !== idx0) {
+          const ord = UI.matOrder();
+          const [k] = ord.splice(idx0, 1);
+          ord.splice(idx, 0, k);
+          G.settings.matOrder = ord;
+          UI.layoutResRow();
+        }
+        UI.openPanel('materials');
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', finish);
+      grip.addEventListener('pointercancel', finish);
+    });
+  },
+
   menuList() {
     const wrap = document.createElement('div');
     const btn = (label, sub, fn, warn) => {
@@ -656,7 +858,7 @@ const UI = {
       this.closePanel();
       document.getElementById('titleScreen').classList.remove('hidden');
       this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden');
-      this.els.zoomBtns.classList.add('hidden'); this.els.mmWrap.classList.add('hidden');
+      this.els.mmWrap.classList.add('hidden');
       this.selHide(); this.cancelMode();
       document.getElementById('btnContinue').classList.remove('hidden');
     });
@@ -667,7 +869,7 @@ const UI = {
       document.getElementById('titleScreen').classList.remove('hidden');
       document.getElementById('diffPick').classList.remove('hidden');
       document.getElementById('btnNew').classList.add('hidden');
-      this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden'); this.els.zoomBtns.classList.add('hidden');
+      this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden'); this.els.mmWrap.classList.add('hidden');
     }, true);
     return wrap;
   },
@@ -996,19 +1198,10 @@ const UI = {
     else this.selHide();
   },
 
-  zoomBy(dz) {
-    const before = Render.screenToWorld(Render.cw / 2, Render.ch / 2);
-    G.cam.z = U.clamp(G.cam.z + dz, CONFIG.ZOOM.min, CONFIG.ZOOM.max);
-    const after = Render.screenToWorld(Render.cw / 2, Render.ch / 2);
-    G.cam.x += before.x - after.x;
-    G.cam.y += before.y - after.y;
-  },
-
   /* ================= screens ================= */
   showGameUI() {
     this.els.hud.classList.remove('hidden');
     this.els.dock.classList.remove('hidden');
-    this.els.zoomBtns.classList.remove('hidden');
     this.els.mmWrap.classList.remove('hidden');
     this.syncSpeedBtns();
     this.updateHUD();
@@ -1022,7 +1215,7 @@ const UI = {
   endScreen(kind) {
     this.closePanel(); this.cancelMode(); this.selHide();
     this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden');
-    this.els.zoomBtns.classList.add('hidden'); this.els.mmWrap.classList.add('hidden');
+    this.els.mmWrap.classList.add('hidden');
     this.els.tut.classList.add('hidden');
     const scr = document.getElementById('endScreen');
     const c = document.getElementById('endContent');
@@ -1089,8 +1282,9 @@ const UI = {
       <h2>Controls</h2>
       <ul>
         <li><b>Tap</b> a villager, monster, building or monolith to inspect it.</li>
-        <li><b>Drag</b> to pan. <b>Pinch</b> or use <b>+/&minus;</b> buttons to zoom. Tap the <b>minimap</b> (top right) to jump — purple dots are lairs.</li>
-        <li><b>Build:</b> drag a card straight out of the menu and the building rides your finger — release to park it, then <b>tap the outline to build</b> (tap elsewhere to re-aim; tapping the card alone works too). Walls, gates, roads and traps <b>paint as you drag</b>. While placing a building, <b>two fingers pan & zoom</b>.</li>
+        <li><b>Drag</b> to pan. <b>Pinch</b> to zoom (scroll wheel on desktop). Tap the <b>minimap</b> (top right) to jump — purple dots are lairs.</li>
+        <li><b>Build:</b> drag a card by its <b>\u283f edge</b> and the building rides your finger — release to park it, then <b>tap the outline to build</b> (tap elsewhere to re-aim; tapping the card alone works too). Drag the rest of the menu to scroll. Walls, gates, roads and traps <b>paint as you drag</b>. While placing a building, <b>two fingers pan & zoom</b>.</li>
+        <li><b>Materials tab</b> (right end of the resource bar): stock &amp; storage of every good, with show/hide and drag-to-reorder for the chips. The minimap toggle lives there too.</li>
         <li>Speed: pause / 1\u00d7 / 2\u00d7 / 3\u00d7 (space bar pauses on desktop).</li>
       </ul>
       <h2>Jobs</h2>
@@ -1113,7 +1307,7 @@ const UI = {
         <li><b>Arrows are ammunition</b> — every tower shot spends 1 (ballistae 2), and raids pack quivers (5). Dry quivers: towers hold fire, guards hit at 75%. Build a Fletcher Hut before your towers go up.</li>
         <li><b>Tools wear out</b> — each worker burns through tools (a Smithy forges them from 2 wood + 1 stone). Bare-handed villagers work at 65% speed.</li>
         <li><b>Cooked beats raw</b> — Kitchen meals satisfy 85 hunger vs 54 for 3 raw food.</li>
-        <li><b>Stores have caps</b> — wood/stone 120, food 80, herbs 20. Granaries & Storehouses raise them; overflow spoils to vermin at dawn.</li>
+        <li><b>Stores have caps</b> — wood/stone 120, food 80, herbs 20. Granaries & Storehouses raise them; overflow spoils to vermin at dawn. The <b>Materials tab</b> tracks every stock and cap.</li>
         <li><b>Comfort matters</b> — bedrolls (Tent) \u2192 real beds (Cottage) \u2192 manor life: snug villagers work +5%, miserable crowds work slower and some may leave at dawn.</li>
         <li><b>Upgrades</b> — select a built Watchtower, Wheat Plot or Palisade and press the \u2b06 button for a stronger tier in place.</li>
       </ul>

@@ -7,6 +7,14 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
+> **v1.4.1 — The Materials Bar:** all resource chips in **one bar** ending
+> in a **Materials tab** — live stock &amp; storage for every good, with
+> show/hide and drag-to-reorder (the vital five first by default; flour and
+> charcoal now visible). The +/− **zoom buttons are gone** (pinch/wheel
+> remain), the **Map** button left the dock for that tab, and the **build
+> menu scrolls on touch**: only a card's **⠿ grip** drags it out, so a
+> scrolling finger can't place buildings by accident.
+
 > **v1.4 — The Difficulty Spread:** every preset is a **different game**, not
 > a stat slider — 21 levers per difficulty: scarcity (starting stores, wild
 > yields, regrow, map density, build costs), the horde (speed, **debut days**,
@@ -59,6 +67,24 @@ Great Beacon to bring back the dawn.
 ---
 
 ## Changelog
+
+### v1.4.1 — The Materials Bar
+- **One materials bar:** every resource chip now lives in a single top bar
+  ending in a **Materials tab** (the stacked-crates button). The bottom-right
+  **+/− zoom buttons are gone** — pinch (or the mouse wheel) already did the
+  job — and the dock's **Map** button moved into the Materials tab as the
+  **Minimap** toggle, leaving the dock at Build / Jobs / Powers.
+- **The Materials tab** lists all 15 goods (flour and charcoal included, both
+  with new icons) with **live stock / storage cap** for each. **Show/Hide**
+  picks what the bar carries, **drag the ⠿ grip** to set the order, and
+  **Reset** returns to the default spread — the vital five (wood, stone,
+  food, essence, herbs) first, the rest appearing the moment the village
+  first gains or builds them. Choices are pinned per material and persist in
+  saves; hidden goods keep gathering.
+- **Build menu scrolls on touch.** Panels used to ignore touch drags (a
+  page-wide `touch-action:none`), so dragging a card 12px "placed" the
+  building. Now only a card's **⠿ grip edge** starts a drag-out — the rest of
+  the card and every panel scroll natively, and a tap still picks the site.
 
 ### v1.4 — The Difficulty Spread
 - **Every preset is a different game, not a stat slider.** The four
@@ -328,9 +354,10 @@ keep them at their posts.
   (Colossi arrive from day 15).
 - **Lose:** only when every villager is dead.
 
-**Controls:** tap = select/place · drag a build card onto the map to aim it,
-tap the outline to build · one-finger drag = pan (or steer the ghost while
-placing; walls/roads/gates/traps paint as you drag) · two-finger drag/pinch =
+**Controls:** tap = select/place · drag a build card by its **⠿ edge** onto
+the map to aim it, tap the outline to build (drag the rest of the menu to
+scroll it) · one-finger drag = pan (or steer the ghost while placing;
+walls/roads/gates/traps paint as you drag) · two-finger drag/pinch =
 pan & zoom any time, including mid-placement · minimap tap = jump ·
 pause/1×/2×/3× (or space/1/2/3).
 

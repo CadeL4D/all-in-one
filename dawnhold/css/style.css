@@ -7,11 +7,11 @@
   --sab: env(safe-area-inset-bottom,0px);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
-html,body{height:100%;overflow:hidden;background:var(--bg);touch-action:none;overscroll-behavior:none}
+html,body{height:100%;overflow:hidden;background:var(--bg);touch-action:manipulation;overscroll-behavior:none}
 body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);user-select:none;-webkit-user-select:none}
 #app{position:fixed;inset:0;overflow:hidden}
 canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
-#game{position:absolute;inset:0;width:100%;height:100%;background:#0c0e14}
+#game{position:absolute;inset:0;width:100%;height:100%;background:#0c0e14;touch-action:none}
 .hidden{display:none!important}
 
 /* ---------- top HUD ---------- */
@@ -28,8 +28,14 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .hbtn{width:40px;height:40px;border:2px solid var(--line);border-radius:10px;background:rgba(30,34,43,.9);
   color:var(--ink);font-size:12px;font-weight:700;cursor:pointer}
 .hbtn.active{background:var(--amber);border-color:var(--amber2);color:#241a08}
-#resRow{display:flex;gap:6px;margin-top:6px;overflow-x:auto;pointer-events:auto;scrollbar-width:none;padding:3px 0}
+/* the single materials bar — chips + the Materials tab button */
+#resBar{display:flex;gap:6px;align-items:stretch;margin-top:6px;pointer-events:auto}
+#resRow{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:3px 0}
 #resRow::-webkit-scrollbar{display:none}
+#btnMats{flex:none;display:flex;align-items:center;justify-content:center;width:44px;margin:3px 0;
+  background:rgba(13,15,20,.92);border:2px solid #4a5468;border-radius:9px;cursor:pointer}
+#btnMats:active,#btnMats.on{border-color:var(--amber)}
+#btnMats canvas{width:22px;height:22px}
 .chip{display:flex;align-items:center;gap:6px;background:rgba(13,15,20,.92);border:2px solid #4a5468;
   border-radius:9px;padding:4px 9px;font-size:15px;font-weight:800;white-space:nowrap;
   font-variant-numeric:tabular-nums;color:#f2efe6}
@@ -108,7 +114,7 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 @keyframes panelUp{from{transform:translateY(30px);opacity:.4}}
 #panelTitle{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;font-size:15px;font-weight:800;letter-spacing:.5px}
 #panelTitle .x{width:34px;height:34px;border:2px solid var(--line);border-radius:50%;background:var(--panel2);color:var(--ink);font-size:14px}
-#panelBody{overflow-y:auto;padding:2px 12px 12px;-webkit-overflow-scrolling:touch}
+#panelBody{overflow-y:auto;padding:2px 12px 12px;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 
 /* build grid */
 .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
@@ -117,6 +123,10 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .bcard.sel{border-color:var(--amber);background:#33301f}
 .bcard.locked{opacity:.45}
 .bcard canvas{width:38px;height:38px;flex:none}
+/* card grip — the only zone that drags a building out (touch elsewhere scrolls) */
+.bgrab{flex:none;align-self:stretch;display:flex;align-items:center;justify-content:center;width:26px;
+  margin:-4px 0 -4px -4px;border-right:2px dotted #4a5468;color:var(--dim);font-size:15px;font-weight:800;touch-action:none}
+.bgrab:active{color:var(--amber2)}
 .bcard .bn{font-size:13px;font-weight:700}
 .bcard .bc{font-size:11px;color:var(--dim);margin-top:2px;display:flex;gap:8px}
 .bcard .bd{font-size:10.5px;color:var(--dim);margin-top:2px;line-height:1.3}
@@ -165,10 +175,20 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .togBtn.on{background:#3d5a2e;border-color:var(--green)}
 .togBtn.on::after{left:26px;background:var(--green)}
 
-/* zoom buttons */
-#zoomBtns{position:absolute;right:8px;bottom:calc(var(--sab) + 84px);z-index:24;display:flex;flex-direction:column;gap:6px}
-#zoomBtns button{width:42px;height:42px;font-size:22px;font-weight:800;border:2px solid var(--line);border-radius:10px;
-  background:rgba(30,34,43,.9);color:var(--ink)}
+/* materials manager rows */
+.matRow{display:flex;align-items:center;gap:9px;background:var(--panel2);border:2px solid var(--line);border-radius:11px;
+  padding:7px 10px;margin-bottom:7px;position:relative}
+.matRow.drag{border-color:var(--amber);z-index:2;box-shadow:0 6px 16px rgba(0,0,0,.5)}
+.matRow.off .mn,.matRow.off canvas{opacity:.4}
+.matRow canvas{width:30px;height:30px;flex:none}
+.matRow .mn{font-size:13px;font-weight:700}
+.matRow .md{font-size:10.5px;color:var(--dim);line-height:1.3;margin-top:1px}
+.matRow .stock{margin-left:auto;font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.matRow .stock .cap{color:var(--dim);font-weight:700;font-size:12px}
+.grip{flex:none;width:26px;align-self:stretch;display:flex;align-items:center;justify-content:center;
+  color:var(--dim);font-size:17px;letter-spacing:-2px;cursor:grab;touch-action:none}
+.eyeBtn{flex:none;width:56px;border:2px solid var(--line);background:var(--panel);color:var(--ink);
+  border-radius:8px;padding:6px 0;font-size:11px;font-weight:700}
 
 /* minimap */
 #mmWrap{position:absolute;top:calc(var(--sat) + 66px);right:8px;z-index:23;border:2px solid var(--line);border-radius:8px;
