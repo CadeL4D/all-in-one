@@ -8,6 +8,10 @@ enum WorkoutUnit { pounds, kilograms }
 
 enum WorkoutStatus { scheduled, inProgress, completed, missed, recovery }
 
+enum WorkoutSplit { fullBody, upperLower, pushPullLegs }
+
+enum WorkoutLocation { gym, home }
+
 extension WorkoutGoalLabel on WorkoutGoal {
   String get label => switch (this) {
     WorkoutGoal.balanced => 'Balanced',
@@ -46,29 +50,61 @@ extension WorkoutUnitLabel on WorkoutUnit {
   String get shortLabel => this == WorkoutUnit.pounds ? 'lb' : 'kg';
 }
 
+extension WorkoutSplitLabel on WorkoutSplit {
+  String get label => switch (this) {
+    WorkoutSplit.fullBody => 'Full body',
+    WorkoutSplit.upperLower => 'Upper / Lower',
+    WorkoutSplit.pushPullLegs => 'Push / Pull / Legs',
+  };
+
+  String get description => switch (this) {
+    WorkoutSplit.fullBody =>
+      'Every session trains everything. Great for 2–3 days a week.',
+    WorkoutSplit.upperLower =>
+      'Alternate upper- and lower-body days. Great for 4 days a week.',
+    WorkoutSplit.pushPullLegs =>
+      'Rotate pushing, pulling, and leg days. Great for 5–6 days a week.',
+  };
+
+  String get shortName => switch (this) {
+    WorkoutSplit.fullBody => 'Full body',
+    WorkoutSplit.upperLower => 'Upper/Lower',
+    WorkoutSplit.pushPullLegs => 'PPL',
+  };
+}
+
+extension WorkoutLocationLabel on WorkoutLocation {
+  String get label => switch (this) {
+    WorkoutLocation.gym => 'Gym',
+    WorkoutLocation.home => 'Home',
+  };
+}
+
 class WorkoutProfile {
   WorkoutProfile({
-    required this.isYouth,
-    required this.supervisionConfirmed,
     required this.goal,
     required this.experience,
+    required this.split,
     required this.trainingDays,
     required this.sessionMinutes,
     required this.equipment,
     required this.unit,
     required this.reminderMinutes,
+    required this.notificationsEnabled,
     required this.estimatedMaxes,
-  });
+    Map<int, int>? reminderMinutesByDay,
+  }) : reminderMinutesByDay = reminderMinutesByDay ?? <int, int>{};
 
   factory WorkoutProfile.fromJson(Map<String, dynamic> json) {
     return WorkoutProfile(
-      isYouth: json['isYouth'] as bool? ?? false,
-      supervisionConfirmed: json['supervisionConfirmed'] as bool? ?? false,
       goal: WorkoutGoal.values.byName(
         json['goal'] as String? ?? WorkoutGoal.balanced.name,
       ),
       experience: WorkoutExperience.values.byName(
         json['experience'] as String? ?? WorkoutExperience.newLifter.name,
+      ),
+      split: WorkoutSplit.values.byName(
+        json['split'] as String? ?? WorkoutSplit.fullBody.name,
       ),
       trainingDays: (json['trainingDays'] as List<dynamic>? ?? <dynamic>[])
           .whereType<num>()
@@ -83,6 +119,7 @@ class WorkoutProfile {
         json['unit'] as String? ?? WorkoutUnit.pounds.name,
       ),
       reminderMinutes: (json['reminderMinutes'] as num?)?.toInt() ?? 18 * 60,
+      notificationsEnabled: json['notificationsEnabled'] as bool? ?? true,
       estimatedMaxes:
           (json['estimatedMaxes'] as Map<String, dynamic>? ??
                   <String, dynamic>{})
@@ -90,30 +127,44 @@ class WorkoutProfile {
                 (String key, dynamic value) =>
                     MapEntry<String, double>(key, (value as num).toDouble()),
               ),
+      reminderMinutesByDay:
+          (json['reminderMinutesByDay'] as Map<String, dynamic>? ??
+                  <String, dynamic>{})
+              .map(
+                (String key, dynamic value) =>
+                    MapEntry<int, int>(int.parse(key), (value as num).toInt()),
+              ),
     );
   }
 
-  final bool isYouth;
-  final bool supervisionConfirmed;
   final WorkoutGoal goal;
   final WorkoutExperience experience;
+  final WorkoutSplit split;
   final Set<int> trainingDays;
   final int sessionMinutes;
   final Set<WorkoutEquipment> equipment;
   final WorkoutUnit unit;
-  final int reminderMinutes;
+  int reminderMinutes;
+  bool notificationsEnabled;
+  final Map<int, int> reminderMinutesByDay;
   final Map<String, double> estimatedMaxes;
 
+  int reminderMinutesFor(int weekday) =>
+      reminderMinutesByDay[weekday] ?? reminderMinutes;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'isYouth': isYouth,
-    'supervisionConfirmed': supervisionConfirmed,
     'goal': goal.name,
     'experience': experience.name,
+    'split': split.name,
     'trainingDays': trainingDays.toList()..sort(),
     'sessionMinutes': sessionMinutes,
     'equipment': equipment.map((WorkoutEquipment value) => value.name).toList(),
     'unit': unit.name,
     'reminderMinutes': reminderMinutes,
+    'notificationsEnabled': notificationsEnabled,
+    'reminderMinutesByDay': reminderMinutesByDay.map(
+      (int key, int value) => MapEntry<String, int>(key.toString(), value),
+    ),
     'estimatedMaxes': estimatedMaxes,
   };
 }
@@ -197,6 +248,8 @@ class PlannedExercise {
   int get completedSets =>
       logs.where((WorkoutSetLog set) => set.completed).length;
 
+  int get targetTotalReps => targetReps * sets;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'exerciseId': exerciseId,
     'name': name,
@@ -219,6 +272,8 @@ class PlannedWorkout {
     required this.pressure,
     required this.exercises,
     this.status = WorkoutStatus.scheduled,
+    this.location = WorkoutLocation.gym,
+    this.focus = '',
     this.startedAt,
     this.finishedAt,
     this.resolveDelta = 0,
@@ -238,6 +293,10 @@ class PlannedWorkout {
       status: WorkoutStatus.values.byName(
         json['status'] as String? ?? WorkoutStatus.scheduled.name,
       ),
+      location: WorkoutLocation.values.byName(
+        json['location'] as String? ?? WorkoutLocation.gym.name,
+      ),
+      focus: json['focus'] as String? ?? '',
       startedAt: json['startedAt'] == null
           ? null
           : DateTime.parse(json['startedAt'] as String),
@@ -253,8 +312,10 @@ class PlannedWorkout {
   DateTime date;
   final String title;
   final int pressure;
-  final List<PlannedExercise> exercises;
+  List<PlannedExercise> exercises;
   WorkoutStatus status;
+  WorkoutLocation location;
+  String focus;
   DateTime? startedAt;
   DateTime? finishedAt;
   int resolveDelta;
@@ -270,6 +331,12 @@ class PlannedWorkout {
     (int total, PlannedExercise exercise) => total + exercise.completedSets,
   );
 
+  /// Reps the plan asked for across every programmed set.
+  int get targetTotalReps => exercises.fold<int>(
+    0,
+    (int total, PlannedExercise exercise) => total + exercise.targetTotalReps,
+  );
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'id': id,
     'date': date.toIso8601String(),
@@ -279,6 +346,8 @@ class PlannedWorkout {
         .map((PlannedExercise item) => item.toJson())
         .toList(),
     'status': status.name,
+    'location': location.name,
+    'focus': focus,
     'startedAt': startedAt?.toIso8601String(),
     'finishedAt': finishedAt?.toIso8601String(),
     'resolveDelta': resolveDelta,
@@ -312,7 +381,7 @@ class WorkoutState {
   final List<PlannedWorkout> workouts;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'schemaVersion': 1,
+    'schemaVersion': 2,
     'profile': profile.toJson(),
     'resolve': resolve,
     'ratedWorkouts': ratedWorkouts,

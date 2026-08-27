@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../core/local_store.dart';
 import '../../screens/app_scaffold.dart';
 import 'resolve_badge.dart';
+import 'workout_coach.dart';
 import 'workout_engine.dart';
 import 'workout_models.dart';
 import 'workout_notifications.dart';
@@ -139,6 +140,9 @@ class _WorkoutsAppState extends State<WorkoutsApp> with WidgetsBindingObserver {
         now: DateTime.now(),
       ),
     );
+    if (profile.notificationsEnabled) {
+      await _notifications.requestPermission();
+    }
     setState(() => _state = state);
     await _save();
   }
@@ -201,7 +205,13 @@ class _WorkoutsAppState extends State<WorkoutsApp> with WidgetsBindingObserver {
       _TodayPage(state: state, onChanged: _save),
       _WeekPage(state: state, onChanged: _save),
       _HistoryPage(state: state),
-      _ProfilePage(state: state, onReset: _reset),
+      _CoachPage(state: state),
+      _ProfilePage(
+        state: state,
+        onReset: _reset,
+        onChanged: _save,
+        onRequestPermission: _notifications.requestPermission,
+      ),
     ];
     return Column(
       children: <Widget>[
@@ -228,6 +238,11 @@ class _WorkoutsAppState extends State<WorkoutsApp> with WidgetsBindingObserver {
               label: 'History',
             ),
             NavigationDestination(
+              icon: Icon(Icons.psychology_outlined),
+              selectedIcon: Icon(Icons.psychology_rounded),
+              label: 'Coach',
+            ),
+            NavigationDestination(
               icon: Icon(Icons.tune_outlined),
               selectedIcon: Icon(Icons.tune_rounded),
               label: 'Profile',
@@ -250,20 +265,24 @@ class _WorkoutsAppState extends State<WorkoutsApp> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'How Workouts chooses weight',
+                'How Workouts builds the plan',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
               ),
               SizedBox(height: 12),
               Text(
-                'Adult plans use a conservative estimate from a recent 1–10 rep set, then prescribe a goal-specific percentage. Actual reps and reps in reserve adjust later loads.',
+                'Your split is chosen to fit your training days so every movement pattern is trained at least twice a week, with weekly volume in the evidence-backed 10–20 sets per muscle range.',
               ),
               SizedBox(height: 12),
               Text(
-                'Youth Mode never prescribes from a maximum. It uses moderate repetitions, gradual progression, and requires qualified adult supervision.',
+                'Loads come from a conservative estimate of a recent 1–10 rep set, prescribed as a goal-specific percentage. Beating the top of a rep range with reps to spare raises future loads automatically.',
               ),
               SizedBox(height: 12),
               Text(
-                'Resolve measures consistency against each workout’s Pressure—not absolute strength. Extra-rep credit is capped and requires at least one rep in reserve.',
+                'Resolve follows the rep total. Beat the planned reps and Resolve rises—more when the workout outranked you. Fall short and it dips slightly. Recovery days are free.',
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Every recommendation is grounded in published research—open the Coach tab for the studies behind it.',
               ),
               SizedBox(height: 12),
               Text(
@@ -289,11 +308,10 @@ class _WorkoutOnboarding extends StatefulWidget {
 
 class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
   int _step = 0;
-  bool _isYouth = false;
-  bool _supervision = false;
   bool _safetyAcknowledged = false;
   WorkoutGoal _goal = WorkoutGoal.balanced;
   WorkoutExperience _experience = WorkoutExperience.newLifter;
+  WorkoutSplit _split = WorkoutSplit.fullBody;
   final Set<int> _days = <int>{
     DateTime.monday,
     DateTime.wednesday,
@@ -305,6 +323,7 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
     WorkoutEquipment.dumbbells,
   };
   WorkoutUnit _unit = WorkoutUnit.pounds;
+  bool _remindersEnabled = true;
   int _reminderMinutes = 18 * 60;
   final Map<String, TextEditingController> _weightControllers =
       <String, TextEditingController>{};
@@ -323,10 +342,9 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
   }
 
   bool get _canContinue => switch (_step) {
-    0 => _safetyAcknowledged && (!_isYouth || _supervision),
-    1 => true,
+    0 => _safetyAcknowledged,
     2 => _days.length >= 2,
-    3 => _equipment.isNotEmpty,
+    4 => _equipment.isNotEmpty,
     _ => true,
   };
 
@@ -334,7 +352,7 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
     if (!_canContinue) {
       return;
     }
-    if (_step < 5) {
+    if (_step < 6) {
       setState(() => _step++);
     } else {
       widget.onComplete(_buildProfile());
@@ -343,36 +361,45 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
 
   WorkoutProfile _buildProfile() {
     final Map<String, double> maxes = <String, double>{};
-    if (!_isYouth) {
-      for (final WorkoutExerciseDefinition exercise
-          in WorkoutEngine.baselineExercises(_equipment)) {
-        final double? weight = double.tryParse(
-          _weightControllers[exercise.id]?.text ?? '',
-        );
-        final int? reps = int.tryParse(
-          _repControllers[exercise.id]?.text ?? '',
-        );
-        if (weight == null || reps == null) {
-          continue;
-        }
-        final double? estimate = WorkoutEngine.estimateOneRepMax(weight, reps);
-        if (estimate != null) {
-          maxes[exercise.id] = estimate;
-        }
+    for (final WorkoutExerciseDefinition exercise
+        in WorkoutEngine.baselineExercises(_equipment)) {
+      final double? weight = double.tryParse(
+        _weightControllers[exercise.id]?.text ?? '',
+      );
+      final int? reps = int.tryParse(_repControllers[exercise.id]?.text ?? '');
+      if (weight == null || reps == null) {
+        continue;
+      }
+      final double? estimate = WorkoutEngine.estimateOneRepMax(weight, reps);
+      if (estimate != null) {
+        maxes[exercise.id] = estimate;
       }
     }
     return WorkoutProfile(
-      isYouth: _isYouth,
-      supervisionConfirmed: _supervision,
       goal: _goal,
       experience: _experience,
+      split: _split,
       trainingDays: Set<int>.of(_days),
       sessionMinutes: _minutes,
       equipment: Set<WorkoutEquipment>.of(_equipment),
       unit: _unit,
       reminderMinutes: _reminderMinutes,
+      notificationsEnabled: _remindersEnabled,
       estimatedMaxes: maxes,
     );
+  }
+
+  Future<void> _pickReminderTime() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: _reminderMinutes ~/ 60,
+        minute: _reminderMinutes % 60,
+      ),
+    );
+    if (picked != null) {
+      setState(() => _reminderMinutes = picked.hour * 60 + picked.minute);
+    }
   }
 
   @override
@@ -384,7 +411,7 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
           child: Row(
             children: <Widget>[
               Text(
-                'SETUP ${_step + 1} OF 6',
+                'SETUP ${_step + 1} OF 7',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
                   fontSize: 10,
@@ -395,7 +422,7 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
               const SizedBox(width: 12),
               Expanded(
                 child: LinearProgressIndicator(
-                  value: (_step + 1) / 6,
+                  value: (_step + 1) / 7,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -428,11 +455,11 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
                   key: const ValueKey<String>('workouts-setup-next'),
                   onPressed: _canContinue ? _next : null,
                   icon: Icon(
-                    _step == 5
+                    _step == 6
                         ? Icons.auto_awesome_rounded
                         : Icons.arrow_forward_rounded,
                   ),
-                  label: Text(_step == 5 ? 'Build my week' : 'Continue'),
+                  label: Text(_step == 6 ? 'Build my week' : 'Continue'),
                 ),
               ],
             ),
@@ -443,12 +470,13 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
   }
 
   Widget _content() => switch (_step) {
-    0 => _safetyStep(),
+    0 => _welcomeStep(),
     1 => _goalStep(),
     2 => _scheduleStep(),
-    3 => _equipmentStep(),
-    4 => _baselineStep(),
-    _ => _reviewStep(),
+    3 => _splitStep(),
+    4 => _equipmentStep(),
+    5 => _baselineStep(),
+    _ => _remindersStep(),
   };
 
   Widget _heading(String title, String body) => Column(
@@ -461,52 +489,14 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
     ],
   );
 
-  Widget _safetyStep() {
+  Widget _welcomeStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _heading(
-          'A plan that meets you where you are',
-          'Answer a few questions and everything is generated locally. You can leave every strength baseline blank.',
+          'A plan built around your answers',
+          'Pick your split, approve the exercises, and get weight suggestions grounded in training research. You can leave every strength baseline blank.',
         ),
-        SegmentedButton<bool>(
-          segments: const <ButtonSegment<bool>>[
-            ButtonSegment<bool>(
-              value: false,
-              icon: Icon(Icons.person_rounded),
-              label: Text('Adult'),
-            ),
-            ButtonSegment<bool>(
-              value: true,
-              icon: Icon(Icons.family_restroom_rounded),
-              label: Text('Under 18'),
-            ),
-          ],
-          selected: <bool>{_isYouth},
-          onSelectionChanged: (Set<bool> value) => setState(() {
-            _isYouth = value.first;
-            if (!_isYouth) {
-              _supervision = false;
-            }
-          }),
-        ),
-        const SizedBox(height: 16),
-        if (_isYouth)
-          _NoticeCard(
-            color: _workoutAmber,
-            icon: Icons.supervisor_account_rounded,
-            title: 'Youth Mode',
-            body: 'This mode avoids maximum-based loads. A qualified adult should supervise every weighted session.',
-            footer: CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _supervision,
-              onChanged: (bool? value) =>
-                  setState(() => _supervision = value ?? false),
-              title: const Text('Adult supervision is available'),
-              controlAffinity: ListTileControlAffinity.leading,
-            ),
-          ),
-        const SizedBox(height: 12),
         CheckboxListTile(
           contentPadding: EdgeInsets.zero,
           value: _safetyAcknowledged,
@@ -568,7 +558,7 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
       children: <Widget>[
         _heading(
           'Choose your training days',
-          'Select at least two. An unopened workout is marked missed when its day ends at 12:00 AM.',
+          'Select at least two. An unopened workout is marked missed when its day ends at 12:00 AM. Each day can have its own reminder time.',
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -604,22 +594,45 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
           label: '$_minutes min',
           onChanged: (double value) => setState(() => _minutes = value.round()),
         ),
-        const SizedBox(height: 18),
-        const Text('REMINDER', style: _eyebrowStyle),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<int>(
-          initialValue: _reminderMinutes,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.notifications_rounded),
+      ],
+    );
+  }
+
+  Widget _splitStep() {
+    final WorkoutSplit recommended = WorkoutCoach.recommendedSplit(
+      _days.length,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _heading(
+          'How should the week be split?',
+          'You choose the split; the plan fills in exercises and weights. You can swap any exercise before starting.',
+        ),
+        _NoticeCard(
+          color: _workoutMint,
+          icon: Icons.auto_awesome_rounded,
+          title: 'Recommended for ${_days.length} days',
+          body: WorkoutCoach.splitAdvice(_days.length),
+          footer: _split == recommended
+              ? null
+              : TextButton.icon(
+                  onPressed: () => setState(() => _split = recommended),
+                  icon: const Icon(Icons.check_rounded, size: 16),
+                  label: Text('Use ${recommended.label}'),
+                ),
+        ),
+        const SizedBox(height: 12),
+        ...WorkoutSplit.values.map(
+          (WorkoutSplit split) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _ChoiceCard(
+              selected: _split == split,
+              title: split.label,
+              subtitle: split.description,
+              onTap: () => setState(() => _split = split),
+            ),
           ),
-          items: const <DropdownMenuItem<int>>[
-            DropdownMenuItem<int>(value: 7 * 60, child: Text('7:00 AM')),
-            DropdownMenuItem<int>(value: 12 * 60, child: Text('12:00 PM')),
-            DropdownMenuItem<int>(value: 18 * 60, child: Text('6:00 PM')),
-            DropdownMenuItem<int>(value: 20 * 60, child: Text('8:00 PM')),
-          ],
-          onChanged: (int? value) =>
-              setState(() => _reminderMinutes = value ?? 18 * 60),
         ),
       ],
     );
@@ -631,7 +644,7 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
       children: <Widget>[
         _heading(
           'What can you train with?',
-          'The exercise library chooses movements and substitutions that match what you have.',
+          'The exercise library chooses movements and substitutions that match what you have. Bodyweight is always available as a fallback.',
         ),
         Wrap(
           spacing: 9,
@@ -673,23 +686,6 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
   }
 
   Widget _baselineStep() {
-    if (_isYouth) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _heading(
-            'No maximum needed',
-            'Youth Mode starts with technique-focused sets of 10–15 repetitions. The supervising adult chooses a manageable resistance only after the movement is controlled.',
-          ),
-          const _NoticeCard(
-            color: _workoutMint,
-            icon: Icons.verified_user_rounded,
-            title: 'Technique drives progression',
-            body: 'Weights should rise gradually only when every repetition stays controlled and pain-free.',
-          ),
-        ],
-      );
-    }
     final List<WorkoutExerciseDefinition> baselines =
         WorkoutEngine.baselineExercises(_equipment);
     return Column(
@@ -697,7 +693,7 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
       children: <Widget>[
         _heading(
           'Optional strength baseline',
-          'Enter the most weight you recently completed for 1–10 clean repetitions. Leave anything unknown blank—there is no max test.',
+          'Enter the most weight you recently completed for 1–10 clean repetitions. Leave anything unknown blank—there is no max test, and loads also adapt from what you log.',
         ),
         if (baselines.isEmpty)
           const _NoticeCard(
@@ -773,15 +769,41 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
     );
   }
 
-  Widget _reviewStep() {
+  Widget _remindersStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _heading(
-          'Ready to meet the pressure',
-          'Your first two weeks will be generated now and will keep adapting from completed sets.',
+          'Reminders and review',
+          'Reminders fire on every scheduled day. You can give each weekday its own time later in Profile.',
         ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _remindersEnabled,
+          onChanged: (bool value) => setState(() => _remindersEnabled = value),
+          title: const Text('Workout reminders'),
+          subtitle: const Text(
+            'A notification on each training day before the session is due.',
+          ),
+        ),
+        if (_remindersEnabled)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.notifications_rounded),
+            title: const Text('Default reminder time'),
+            trailing: Text(
+              _formatMinutes(_reminderMinutes),
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            onTap: _pickReminderTime,
+          ),
+        const SizedBox(height: 14),
         _ReviewRow(icon: Icons.flag_rounded, label: 'Goal', value: _goal.label),
+        _ReviewRow(
+          icon: Icons.call_split_rounded,
+          label: 'Split',
+          value: _split.label,
+        ),
         _ReviewRow(
           icon: Icons.calendar_month_rounded,
           label: 'Schedule',
@@ -794,17 +816,12 @@ class _WorkoutOnboardingState extends State<_WorkoutOnboarding> {
               .map((WorkoutEquipment item) => item.label)
               .join(', '),
         ),
-        _ReviewRow(
-          icon: Icons.shield_rounded,
-          label: 'Plan mode',
-          value: _isYouth ? 'Youth · supervised' : 'Adult · estimated load',
-        ),
         const SizedBox(height: 18),
         const _NoticeCard(
           color: _workoutMint,
           icon: Icons.bolt_rounded,
           title: 'Resolve starts at 1,000',
-          body: 'Each workout has a Pressure rating. Complete the plan to gain Resolve; safe extra reps earn a little more.',
+          body: 'Each workout has a Pressure rating. Beat the planned rep total to gain Resolve—more when the workout outranks you. Fall short and it dips slightly.',
         ),
       ],
     );
@@ -868,6 +885,35 @@ class _TodayPageState extends State<_TodayPage> {
           workout: workout,
           onSave: widget.onChanged,
         ),
+      ),
+    );
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _toggleLocation(PlannedWorkout workout) async {
+    setState(() {
+      WorkoutEngine.relocateSession(
+        workout,
+        widget.state.profile,
+        workout.location == WorkoutLocation.gym
+            ? WorkoutLocation.home
+            : WorkoutLocation.gym,
+      );
+    });
+    await widget.onChanged();
+  }
+
+  Future<void> _pickExercises(PlannedWorkout workout) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext context) => _ExercisePickerSheet(
+        state: widget.state,
+        workout: workout,
+        onChanged: widget.onChanged,
       ),
     );
     if (mounted) {
@@ -962,6 +1008,12 @@ class _TodayPageState extends State<_TodayPage> {
             onRecovery: today.status == WorkoutStatus.scheduled
                 ? () => _markRecovery(today)
                 : null,
+            onToggleLocation: today.status == WorkoutStatus.scheduled
+                ? () => _toggleLocation(today)
+                : null,
+            onPickExercises: today.status == WorkoutStatus.scheduled
+                ? () => _pickExercises(today)
+                : null,
           ),
         const SizedBox(height: 18),
         const _MiniPrincipleCard(),
@@ -1024,6 +1076,8 @@ class _WorkoutOpponentCard extends StatelessWidget {
     required this.onStart,
     required this.onReschedule,
     required this.onRecovery,
+    required this.onToggleLocation,
+    required this.onPickExercises,
   });
 
   final PlannedWorkout workout;
@@ -1032,6 +1086,8 @@ class _WorkoutOpponentCard extends StatelessWidget {
   final VoidCallback? onStart;
   final VoidCallback? onReschedule;
   final VoidCallback? onRecovery;
+  final VoidCallback? onToggleLocation;
+  final VoidCallback? onPickExercises;
 
   @override
   Widget build(BuildContext context) {
@@ -1069,9 +1125,31 @@ class _WorkoutOpponentCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (workout.location == WorkoutLocation.home) ...<Widget>[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _workoutAmber.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'HOME',
+                      style: TextStyle(
+                        color: Color(0xFFB45309),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.7,
+                      ),
+                    ),
+                  ),
+                ],
                 const Spacer(),
                 Text(
-                  '${workout.totalSets} sets',
+                  '${workout.totalSets} sets · ${workout.targetTotalReps} reps',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -1161,9 +1239,34 @@ class _WorkoutOpponentCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              if (onToggleLocation != null)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    key: const ValueKey<String>('workouts-toggle-location'),
+                    onPressed: onToggleLocation,
+                    icon: Icon(
+                      workout.location == WorkoutLocation.home
+                          ? Icons.fitness_center_rounded
+                          : Icons.home_rounded,
+                    ),
+                    label: Text(
+                      workout.location == WorkoutLocation.home
+                          ? 'Back to the gym version'
+                          : 'Train at home instead',
+                    ),
+                  ),
+                ),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 6,
+                runSpacing: 2,
                 children: <Widget>[
+                  if (onPickExercises != null)
+                    TextButton(
+                      onPressed: onPickExercises,
+                      child: const Text('Change exercises'),
+                    ),
                   if (onReschedule != null)
                     TextButton(
                       onPressed: onReschedule,
@@ -1181,6 +1284,136 @@ class _WorkoutOpponentCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Lets the user swap any planned exercise for an alternative that matches
+/// the same movement pattern and available equipment, with a suggested load.
+class _ExercisePickerSheet extends StatefulWidget {
+  const _ExercisePickerSheet({
+    required this.state,
+    required this.workout,
+    required this.onChanged,
+  });
+
+  final WorkoutState state;
+  final PlannedWorkout workout;
+  final Future<void> Function() onChanged;
+
+  @override
+  State<_ExercisePickerSheet> createState() => _ExercisePickerSheetState();
+}
+
+class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
+  void _select(int index, WorkoutExerciseDefinition definition) {
+    setState(() {
+      widget.workout.exercises[index] = WorkoutEngine.planExerciseFor(
+        widget.state.profile,
+        definition,
+        widget.workout.location,
+      );
+    });
+    widget.onChanged();
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final WorkoutProfile profile = widget.state.profile;
+    return DraggableScrollableSheet(
+      expand: false,
+      maxChildSize: 0.85,
+      initialChildSize: 0.6,
+      builder: (BuildContext context, ScrollController scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+          children: <Widget>[
+            Text(
+              'Pick your exercises',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Swaps keep the same movement pattern, sets, and target reps. Suggested weights come from your logged lifts.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            for (
+              int index = 0;
+              index < widget.workout.exercises.length;
+              index++
+            )
+              _slot(index, profile),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _slot(int index, WorkoutProfile profile) {
+    final PlannedExercise current = widget.workout.exercises[index];
+    final List<WorkoutExerciseDefinition> alternatives =
+        WorkoutEngine.alternativesFor(
+          current.pattern,
+          profile,
+          widget.workout.location,
+        );
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ExpansionTile(
+        key: ValueKey<String>('workout-slot-$index'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+        title: Text(current.name),
+        subtitle: Text(
+          '${current.pattern} · ${current.sets} × ${current.targetReps}',
+        ),
+        children: <Widget>[
+          RadioGroup<String>(
+            groupValue: current.exerciseId,
+            onChanged: (String? value) => _select(
+              index,
+              alternatives.firstWhere(
+                (WorkoutExerciseDefinition item) => item.id == value,
+              ),
+            ),
+            child: Column(
+              children: <Widget>[
+                for (final WorkoutExerciseDefinition definition in alternatives)
+                  RadioListTile<String>(
+                    value: definition.id,
+                    title: Text(definition.name),
+                    subtitle: Text(
+                      _alternativeSubtitle(definition, profile),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    dense: true,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _alternativeSubtitle(
+    WorkoutExerciseDefinition definition,
+    WorkoutProfile profile,
+  ) {
+    if (definition.equipment == WorkoutEquipment.bodyweight) {
+      return 'Bodyweight · ${definition.compound ? 'compound' : 'accessory'}';
+    }
+    final double? max = WorkoutEngine.estimatedMaxFor(profile, definition.id);
+    if (max == null) {
+      return '${definition.equipment.label} · set weight when logging';
+    }
+    final String tag =
+        WorkoutEngine.estimateIsApproximate(profile, definition.id)
+        ? ' (est.)'
+        : '';
+    return '${definition.equipment.label} · around ${_weight(max, profile.unit)} max$tag';
   }
 }
 
@@ -1273,7 +1506,7 @@ class _ActiveWorkoutScreenState extends State<_ActiveWorkoutScreen> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) => AlertDialog(
-        title: const Text('Pressure met'),
+        title: Text(delta >= 0 ? 'Pressure met' : 'Pressure slipped'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -1284,7 +1517,7 @@ class _ActiveWorkoutScreenState extends State<_ActiveWorkoutScreen> {
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
             ),
             Text(
-              'Resolve +$delta · ${(widget.workout.performanceScore * 100).round()}% performance',
+              'Resolve ${_signed(delta)} · ${(widget.workout.performanceScore * 100).round()}% of target reps',
             ),
           ],
         ),
@@ -1668,15 +1901,157 @@ class _HistoryPage extends StatelessWidget {
   }
 }
 
-class _ProfilePage extends StatelessWidget {
-  const _ProfilePage({required this.state, required this.onReset});
+/// Searchable, research-grounded answers plus a summary of the user's split.
+class _CoachPage extends StatefulWidget {
+  const _CoachPage({required this.state});
 
   final WorkoutState state;
-  final VoidCallback onReset;
+
+  @override
+  State<_CoachPage> createState() => _CoachPageState();
+}
+
+class _CoachPageState extends State<_CoachPage> {
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
-    final WorkoutProfile profile = state.profile;
+    final WorkoutProfile profile = widget.state.profile;
+    final List<CoachEntry> entries = WorkoutCoach.search(_query);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+      children: <Widget>[
+        Text('Coach', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 4),
+        Text('Ask a question or browse the research behind your plan.'),
+        const SizedBox(height: 12),
+        TextField(
+          key: const ValueKey<String>('workouts-coach-search'),
+          onChanged: (String value) => setState(() => _query = value),
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search_rounded),
+            hintText: 'Search: sets, failure, home, splits…',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 14),
+        _NoticeCard(
+          color: _workoutMint,
+          icon: Icons.call_split_rounded,
+          title: 'Your split: ${profile.split.label}',
+          body:
+              '${profile.split.description} ${WorkoutCoach.splitAdvice(profile.trainingDays.length)}',
+        ),
+        const SizedBox(height: 14),
+        if (entries.isEmpty)
+          const _NoticeCard(
+            color: _workoutAmber,
+            icon: Icons.search_off_rounded,
+            title: 'No matches',
+            body: 'Try a shorter word like “sets”, “home”, or “failure”.',
+          )
+        else
+          ...entries.map(
+            (CoachEntry entry) => Card(
+              margin: const EdgeInsets.only(bottom: 9),
+              child: ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+                childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                title: Text(
+                  entry.question,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(entry.category),
+                children: <Widget>[
+                  Text(entry.answer),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Source: ${entry.source}',
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ProfilePage extends StatefulWidget {
+  const _ProfilePage({
+    required this.state,
+    required this.onReset,
+    required this.onChanged,
+    required this.onRequestPermission,
+  });
+
+  final WorkoutState state;
+  final VoidCallback onReset;
+  final Future<void> Function() onChanged;
+  final Future<bool> Function() onRequestPermission;
+
+  @override
+  State<_ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<_ProfilePage> {
+  Future<void> _toggleNotifications(bool value) async {
+    final WorkoutProfile profile = widget.state.profile;
+    if (value) {
+      final bool granted = await widget.onRequestPermission();
+      if (!granted) {
+        return;
+      }
+    }
+    setState(() => profile.notificationsEnabled = value);
+    await widget.onChanged();
+  }
+
+  Future<void> _pickDefaultTime() async {
+    final WorkoutProfile profile = widget.state.profile;
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: profile.reminderMinutes ~/ 60,
+        minute: profile.reminderMinutes % 60,
+      ),
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() => profile.reminderMinutes = picked.hour * 60 + picked.minute);
+    await widget.onChanged();
+  }
+
+  Future<void> _pickDayTime(int weekday) async {
+    final WorkoutProfile profile = widget.state.profile;
+    final int current = profile.reminderMinutesFor(weekday);
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      helpText: 'Reminder time',
+      initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      profile.reminderMinutesByDay[weekday] = picked.hour * 60 + picked.minute;
+    });
+    await widget.onChanged();
+  }
+
+  void _clearDayTime(int weekday) {
+    setState(() => widget.state.profile.reminderMinutesByDay.remove(weekday));
+    widget.onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final WorkoutProfile profile = widget.state.profile;
+    final List<int> days = profile.trainingDays.toList()..sort();
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
       children: <Widget>[
@@ -1689,6 +2064,11 @@ class _ProfilePage extends StatelessWidget {
                 leading: const Icon(Icons.flag_rounded),
                 title: const Text('Goal'),
                 trailing: Text(profile.goal.label),
+              ),
+              ListTile(
+                leading: const Icon(Icons.call_split_rounded),
+                title: const Text('Split'),
+                trailing: Text(profile.split.label),
               ),
               ListTile(
                 leading: const Icon(Icons.calendar_month_rounded),
@@ -1705,11 +2085,63 @@ class _ProfilePage extends StatelessWidget {
                 title: const Text('Units'),
                 trailing: Text(profile.unit.shortLabel),
               ),
-              ListTile(
-                leading: const Icon(Icons.shield_rounded),
-                title: const Text('Plan mode'),
-                trailing: Text(profile.isYouth ? 'Youth' : 'Adult'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text('REMINDERS', style: _eyebrowStyle),
+        const SizedBox(height: 8),
+        Card(
+          child: Column(
+            children: <Widget>[
+              SwitchListTile(
+                value: profile.notificationsEnabled,
+                onChanged: _toggleNotifications,
+                title: const Text('Workout reminders'),
+                subtitle: const Text(
+                  'A notification on each training day before the session is due.',
+                ),
               ),
+              if (profile.notificationsEnabled) ...<Widget>[
+                ListTile(
+                  leading: const Icon(Icons.schedule_rounded),
+                  title: const Text('Default time'),
+                  trailing: Text(
+                    _formatMinutes(profile.reminderMinutes),
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  onTap: _pickDefaultTime,
+                ),
+                for (final int day in days)
+                  ListTile(
+                    leading: const Icon(Icons.notifications_active_outlined),
+                    title: Text(_weekday(DateTime(2024, 1, day))),
+                    subtitle: Text(
+                      profile.reminderMinutesByDay.containsKey(day)
+                          ? 'Custom time'
+                          : 'Uses the default',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          _formatMinutes(profile.reminderMinutesFor(day)),
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.edit_rounded, size: 16),
+                        if (profile.reminderMinutesByDay.containsKey(day))
+                          IconButton(
+                            tooltip: 'Use the default time again',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _clearDayTime(day),
+                            icon: const Icon(Icons.close_rounded, size: 16),
+                          ),
+                      ],
+                    ),
+                    onTap: () => _pickDayTime(day),
+                  ),
+              ],
             ],
           ),
         ),
@@ -1722,7 +2154,7 @@ class _ProfilePage extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         OutlinedButton.icon(
-          onPressed: onReset,
+          onPressed: widget.onReset,
           icon: const Icon(Icons.restart_alt_rounded),
           label: const Text('Build a new plan'),
         ),
@@ -1901,8 +2333,8 @@ class _MiniPrincipleCard extends StatelessWidget {
   Widget build(BuildContext context) => const _NoticeCard(
     color: _workoutAmber,
     icon: Icons.lightbulb_rounded,
-    title: 'Win with control',
-    body: 'The target is a strong set with 2–3 reps left—not failure. Extra-rep Resolve is intentionally capped.',
+    title: 'Beat the rep total',
+    body: 'Resolve follows the planned reps. Finish above the total to climb—extra reps count when a rep is still in reserve.',
   );
 }
 
@@ -1917,7 +2349,8 @@ class _WeekWorkoutTile extends StatelessWidget {
       leading: _StatusIcon(status: workout.status),
       title: Text(workout.title),
       subtitle: Text(
-        '${_weekday(workout.date)} · ${workout.totalSets} sets · Pressure ${workout.pressure}',
+        '${_weekday(workout.date)} · ${workout.totalSets} sets · Pressure ${workout.pressure}'
+        '${workout.location == WorkoutLocation.home ? ' · Home' : ''}',
       ),
       trailing: Text(switch (workout.status) {
         WorkoutStatus.completed ||
@@ -1939,7 +2372,7 @@ class _HistoryTile extends StatelessWidget {
       leading: _StatusIcon(status: workout.status),
       title: Text(workout.title),
       subtitle: Text(
-        '${_shortDate(workout.date)} · ${(workout.performanceScore * 100).round()}% performance',
+        '${_shortDate(workout.date)} · ${(workout.performanceScore * 100).round()}% of target reps',
       ),
       trailing: Text(
         workout.status == WorkoutStatus.recovery
@@ -2032,6 +2465,14 @@ String _weight(double value, WorkoutUnit unit) {
 }
 
 String _signed(int value) => value >= 0 ? '+$value' : '$value';
+
+String _formatMinutes(int minutes) {
+  final int hour = minutes ~/ 60;
+  final int minute = minutes % 60;
+  final String suffix = hour >= 12 ? 'PM' : 'AM';
+  final int hour12 = hour % 12 == 0 ? 12 : hour % 12;
+  return '$hour12:${minute.toString().padLeft(2, '0')} $suffix';
+}
 
 String _weekday(DateTime date) => const <String>[
   'Monday',

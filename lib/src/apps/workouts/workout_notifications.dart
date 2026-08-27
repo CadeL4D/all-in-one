@@ -11,27 +11,26 @@ class WorkoutNotifications {
   String? _lastSignature;
 
   Future<void> sync(WorkoutState state) async {
-    final String signature = state.workouts
-        .map(
-          (PlannedWorkout workout) =>
-              '${workout.id}:${workout.date.toIso8601String()}:${workout.status.name}',
-        )
-        .join('|');
+    final String signature =
+        '${state.profile.notificationsEnabled ? 'on' : 'off'}|${state.workouts.map((PlannedWorkout workout) => '${workout.id}:${workout.date.toIso8601String()}:${workout.status.name}').join('|')}';
     if (_lastSignature == signature) {
       return;
     }
     _lastSignature = signature;
     try {
       await _initialize();
-      for (final PlannedWorkout workout in state.workouts) {
-        await _plugin.cancel(id: _idFor(workout.id));
+      await _cancelAll();
+      if (!state.profile.notificationsEnabled) {
+        return;
       }
       final DateTime now = DateTime.now();
       for (final PlannedWorkout workout in state.workouts) {
         if (workout.status != WorkoutStatus.scheduled) {
           continue;
         }
-        final int minutes = state.profile.reminderMinutes;
+        final int minutes = state.profile.reminderMinutesFor(
+          workout.date.weekday,
+        );
         final DateTime reminder = DateTime(
           workout.date.year,
           workout.date.month,
@@ -42,11 +41,14 @@ class WorkoutNotifications {
         if (!reminder.isAfter(now)) {
           continue;
         }
+        final String where = workout.location == WorkoutLocation.home
+            ? 'home'
+            : 'the gym';
         await _plugin.zonedSchedule(
           id: _idFor(workout.id),
           title: 'Pressure is waiting',
           body:
-              '${workout.title} is rated ${workout.pressure}. Meet it before midnight.',
+              '${workout.title} at $where is rated ${workout.pressure}. Meet it before midnight.',
           scheduledDate: tz.TZDateTime.from(reminder, tz.local),
           notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(
@@ -75,6 +77,32 @@ class WorkoutNotifications {
     }
   }
 
+  /// Asks the OS for notification permission. Call when the user turns
+  /// reminders on from settings; returns true when allowed (or unavailable).
+  Future<bool> requestPermission() async {
+    try {
+      await _initialize();
+      final bool? android = await _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.requestNotificationsPermission();
+      final bool? apple = await _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: false, sound: true);
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: false, sound: true);
+      return android ?? apple ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> _initialize() async {
     if (_initialized) {
       return;
@@ -95,17 +123,11 @@ class WorkoutNotifications {
         ),
       ),
     );
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin
-        >()
-        ?.requestPermissions(alert: true, badge: false, sound: true);
     _initialized = true;
+  }
+
+  Future<void> _cancelAll() async {
+    await _plugin.cancelAll();
   }
 
   int _idFor(String id) {

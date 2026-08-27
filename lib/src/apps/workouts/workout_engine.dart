@@ -9,6 +9,7 @@ class WorkoutExerciseDefinition {
     required this.pattern,
     required this.equipment,
     required this.instructions,
+    this.compound = true,
     this.supportsEstimatedMax = false,
   });
 
@@ -17,16 +18,43 @@ class WorkoutExerciseDefinition {
   final String pattern;
   final WorkoutEquipment equipment;
   final String instructions;
+  final bool compound;
   final bool supportsEstimatedMax;
 }
+
+/// One movement-pattern slot inside a split day. Accessory slots get higher
+/// rep, lower intensity prescriptions than compound slots.
+class _SessionSlot {
+  const _SessionSlot(this.pattern, {this.accessory = false});
+
+  final String pattern;
+  final bool accessory;
+}
+
+class _SessionTemplate {
+  const _SessionTemplate(this.id, this.title, this.slots);
+
+  final String id;
+  final String title;
+  final List<_SessionSlot> slots;
+}
+
+const String kPatternKnee = 'Knee dominant';
+const String kPatternHip = 'Hip dominant';
+const String kPatternHPush = 'Horizontal push';
+const String kPatternVPush = 'Vertical push';
+const String kPatternHPull = 'Horizontal pull';
+const String kPatternVPull = 'Vertical pull';
+const String kPatternCore = 'Core';
 
 abstract final class WorkoutEngine {
   static const List<WorkoutExerciseDefinition> exercises =
       <WorkoutExerciseDefinition>[
+        // Barbell.
         WorkoutExerciseDefinition(
           id: 'back_squat',
           name: 'Back squat',
-          pattern: 'Knee dominant',
+          pattern: kPatternKnee,
           equipment: WorkoutEquipment.barbell,
           supportsEstimatedMax: true,
           instructions: 'Brace before each rep, keep the bar balanced over mid-foot, and use a depth you control without pain.',
@@ -34,7 +62,7 @@ abstract final class WorkoutEngine {
         WorkoutExerciseDefinition(
           id: 'bench_press',
           name: 'Bench press',
-          pattern: 'Horizontal push',
+          pattern: kPatternHPush,
           equipment: WorkoutEquipment.barbell,
           supportsEstimatedMax: true,
           instructions: 'Keep feet planted and shoulder blades stable. Lower with control and use a spotter or safeties.',
@@ -42,29 +70,47 @@ abstract final class WorkoutEngine {
         WorkoutExerciseDefinition(
           id: 'deadlift',
           name: 'Deadlift',
-          pattern: 'Hip dominant',
+          pattern: kPatternHip,
           equipment: WorkoutEquipment.barbell,
           supportsEstimatedMax: true,
           instructions: 'Brace with the bar close, push the floor away, and stop the set if your position changes sharply.',
         ),
         WorkoutExerciseDefinition(
+          id: 'romanian_deadlift',
+          name: 'Romanian deadlift',
+          pattern: kPatternHip,
+          equipment: WorkoutEquipment.barbell,
+          supportsEstimatedMax: true,
+          instructions: 'Push the hips back with a braced trunk and stop when hamstring tension limits the range.',
+        ),
+        WorkoutExerciseDefinition(
           id: 'barbell_row',
           name: 'Barbell row',
-          pattern: 'Horizontal pull',
+          pattern: kPatternHPull,
           equipment: WorkoutEquipment.barbell,
+          supportsEstimatedMax: true,
           instructions: 'Hold a steady torso, pull toward the lower ribs, and lower without losing your brace.',
         ),
         WorkoutExerciseDefinition(
           id: 'overhead_press',
           name: 'Overhead press',
-          pattern: 'Vertical push',
+          pattern: kPatternVPush,
           equipment: WorkoutEquipment.barbell,
+          supportsEstimatedMax: true,
           instructions: 'Squeeze glutes and ribs down, then press in a smooth path without leaning back.',
         ),
         WorkoutExerciseDefinition(
+          id: 'barbell_hip_thrust',
+          name: 'Barbell hip thrust',
+          pattern: kPatternHip,
+          equipment: WorkoutEquipment.barbell,
+          instructions: 'Drive the hips to full extension with the pad away from your joints and ribs kept down.',
+        ),
+        // Dumbbells.
+        WorkoutExerciseDefinition(
           id: 'goblet_squat',
           name: 'Goblet squat',
-          pattern: 'Knee dominant',
+          pattern: kPatternKnee,
           equipment: WorkoutEquipment.dumbbells,
           supportsEstimatedMax: true,
           instructions: 'Hold the weight close, sit between your hips, and keep full-foot pressure.',
@@ -72,7 +118,7 @@ abstract final class WorkoutEngine {
         WorkoutExerciseDefinition(
           id: 'dumbbell_press',
           name: 'Dumbbell bench press',
-          pattern: 'Horizontal push',
+          pattern: kPatternHPush,
           equipment: WorkoutEquipment.dumbbells,
           supportsEstimatedMax: true,
           instructions: 'Keep shoulders supported on the bench and lower the dumbbells through a comfortable range.',
@@ -80,7 +126,7 @@ abstract final class WorkoutEngine {
         WorkoutExerciseDefinition(
           id: 'dumbbell_rdl',
           name: 'Dumbbell Romanian deadlift',
-          pattern: 'Hip dominant',
+          pattern: kPatternHip,
           equipment: WorkoutEquipment.dumbbells,
           supportsEstimatedMax: true,
           instructions: 'Push the hips back with a braced trunk and stop when hamstring tension limits the range.',
@@ -88,21 +134,30 @@ abstract final class WorkoutEngine {
         WorkoutExerciseDefinition(
           id: 'one_arm_row',
           name: 'One-arm dumbbell row',
-          pattern: 'Horizontal pull',
+          pattern: kPatternHPull,
           equipment: WorkoutEquipment.dumbbells,
           instructions: 'Support your torso, pull your elbow toward your hip, and avoid twisting for momentum.',
         ),
         WorkoutExerciseDefinition(
           id: 'shoulder_press',
           name: 'Dumbbell shoulder press',
-          pattern: 'Vertical push',
+          pattern: kPatternVPush,
           equipment: WorkoutEquipment.dumbbells,
+          supportsEstimatedMax: true,
           instructions: 'Press from a stable seated or standing position without arching your lower back.',
         ),
         WorkoutExerciseDefinition(
+          id: 'dumbbell_lunge',
+          name: 'Dumbbell lunge',
+          pattern: kPatternKnee,
+          equipment: WorkoutEquipment.dumbbells,
+          instructions: 'Step to a comfortable length, lower under control, and keep the front shin quiet.',
+        ),
+        // Machines.
+        WorkoutExerciseDefinition(
           id: 'leg_press',
           name: 'Leg press',
-          pattern: 'Knee dominant',
+          pattern: kPatternKnee,
           equipment: WorkoutEquipment.machines,
           supportsEstimatedMax: true,
           instructions: 'Keep hips against the pad and use a controlled range without locking the knees forcefully.',
@@ -110,7 +165,7 @@ abstract final class WorkoutEngine {
         WorkoutExerciseDefinition(
           id: 'machine_chest_press',
           name: 'Machine chest press',
-          pattern: 'Horizontal push',
+          pattern: kPatternHPush,
           equipment: WorkoutEquipment.machines,
           supportsEstimatedMax: true,
           instructions: 'Adjust the seat so the handles align with mid-chest and press without shrugging.',
@@ -118,68 +173,187 @@ abstract final class WorkoutEngine {
         WorkoutExerciseDefinition(
           id: 'seated_row',
           name: 'Seated row',
-          pattern: 'Horizontal pull',
+          pattern: kPatternHPull,
           equipment: WorkoutEquipment.machines,
           supportsEstimatedMax: true,
           instructions: 'Stay tall, lead with the elbows, and pause before returning the weight under control.',
         ),
         WorkoutExerciseDefinition(
+          id: 'lat_pulldown',
+          name: 'Lat pulldown',
+          pattern: kPatternVPull,
+          equipment: WorkoutEquipment.machines,
+          supportsEstimatedMax: true,
+          instructions: 'Pull toward the upper chest with the ribs down; avoid leaning far back for momentum.',
+        ),
+        WorkoutExerciseDefinition(
           id: 'leg_curl',
           name: 'Leg curl',
-          pattern: 'Hip dominant',
+          pattern: kPatternHip,
           equipment: WorkoutEquipment.machines,
+          compound: false,
           instructions: 'Set the machine to match your knee joint and keep the movement smooth.',
         ),
         WorkoutExerciseDefinition(
-          id: 'push_up',
-          name: 'Push-up',
-          pattern: 'Horizontal push',
-          equipment: WorkoutEquipment.bodyweight,
-          instructions: 'Keep a straight line from shoulders to ankles and choose an incline if full reps lose form.',
+          id: 'leg_extension',
+          name: 'Leg extension',
+          pattern: kPatternKnee,
+          equipment: WorkoutEquipment.machines,
+          compound: false,
+          instructions: 'Align the pad just above the ankle and squeeze at the top without swinging.',
         ),
         WorkoutExerciseDefinition(
-          id: 'split_squat',
-          name: 'Split squat',
-          pattern: 'Knee dominant',
-          equipment: WorkoutEquipment.bodyweight,
-          instructions: 'Use a stable stance, descend vertically, and hold support if balance limits your technique.',
+          id: 'machine_fly',
+          name: 'Machine chest fly',
+          pattern: kPatternHPush,
+          equipment: WorkoutEquipment.machines,
+          compound: false,
+          instructions: 'Set the arms level with the chest, hug an arc, and keep the shoulders relaxed.',
         ),
-        WorkoutExerciseDefinition(
-          id: 'glute_bridge',
-          name: 'Glute bridge',
-          pattern: 'Hip dominant',
-          equipment: WorkoutEquipment.bodyweight,
-          instructions: 'Brace your trunk and extend the hips without arching your lower back.',
-        ),
-        WorkoutExerciseDefinition(
-          id: 'inverted_row',
-          name: 'Supported body row',
-          pattern: 'Horizontal pull',
-          equipment: WorkoutEquipment.bodyweight,
-          instructions: 'Use a securely fixed bar or suspension point, keep a straight body line, and adjust your foot position for control.',
-        ),
-        WorkoutExerciseDefinition(
-          id: 'plank',
-          name: 'Plank',
-          pattern: 'Core',
-          equipment: WorkoutEquipment.bodyweight,
-          instructions: 'Maintain steady breathing and stop when you can no longer hold a stacked trunk position.',
-        ),
+        // Bands.
         WorkoutExerciseDefinition(
           id: 'band_row',
           name: 'Band row',
-          pattern: 'Horizontal pull',
+          pattern: kPatternHPull,
           equipment: WorkoutEquipment.bands,
           instructions: 'Anchor the band securely, pull toward the ribs, and return with control.',
         ),
         WorkoutExerciseDefinition(
           id: 'band_press',
           name: 'Band chest press',
-          pattern: 'Horizontal push',
+          pattern: kPatternHPush,
           equipment: WorkoutEquipment.bands,
           instructions: 'Use a secure anchor and a split stance, then press without letting the ribs flare.',
         ),
+        WorkoutExerciseDefinition(
+          id: 'band_pulldown',
+          name: 'Band pulldown',
+          pattern: kPatternVPull,
+          equipment: WorkoutEquipment.bands,
+          instructions: 'Anchor the band overhead, kneel tall, and pull the elbows down to your sides.',
+        ),
+        // Bodyweight.
+        WorkoutExerciseDefinition(
+          id: 'push_up',
+          name: 'Push-up',
+          pattern: kPatternHPush,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Keep a straight line from shoulders to ankles. Too hard? Elevate your hands. Too easy? Elevate your feet.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'decline_push_up',
+          name: 'Decline push-up',
+          pattern: kPatternHPush,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Feet raised on a stable surface. The higher the feet, the harder the rep—keep the body line strict.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'pike_push_up',
+          name: 'Pike push-up',
+          pattern: kPatternVPush,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Hips high, lower the crown of your head toward the floor between your hands.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'chair_dip',
+          name: 'Chair dip',
+          pattern: kPatternVPush,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Hands on a stable chair or bench behind you; keep the chest tall and shoulders happy.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'pull_up',
+          name: 'Pull-up',
+          pattern: kPatternVPull,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Hang from a sturdy bar and pull your chest toward it. Add a band or jump-assist to build up.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'inverted_row',
+          name: 'Supported body row',
+          pattern: kPatternHPull,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Use a securely fixed bar or sturdy table, keep a straight body line, and adjust your foot position for control.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'bodyweight_squat',
+          name: 'Bodyweight squat',
+          pattern: kPatternKnee,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Sit between your hips with the chest tall. Pause at the bottom to make each rep count.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'split_squat',
+          name: 'Split squat',
+          pattern: kPatternKnee,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Use a stable stance, descend vertically, and hold support if balance limits your technique.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'step_up',
+          name: 'Step-up',
+          pattern: kPatternKnee,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Use a knee-height stable surface and drive through the whole foot without pushing off the back leg.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'glute_bridge',
+          name: 'Glute bridge',
+          pattern: kPatternHip,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Brace your trunk and extend the hips without arching your lower back. Pause at the top.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'single_leg_glute_bridge',
+          name: 'Single-leg glute bridge',
+          pattern: kPatternHip,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'One foot planted, hips level. Slow the tempo down to keep the rep honest.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'nordic_curl',
+          name: 'Nordic curl',
+          pattern: kPatternHip,
+          equipment: WorkoutEquipment.bodyweight,
+          instructions: 'Anchor the ankles (sofa or partner) and lower as slowly as you control. Use your hands to reset.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'dead_bug',
+          name: 'Dead bug',
+          pattern: kPatternCore,
+          equipment: WorkoutEquipment.bodyweight,
+          compound: false,
+          instructions: 'Press the low back into the floor while the opposite arm and leg reach away.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'bird_dog',
+          name: 'Bird dog',
+          pattern: kPatternCore,
+          equipment: WorkoutEquipment.bodyweight,
+          compound: false,
+          instructions: 'From all fours, reach the opposite arm and leg long without letting the hips tilt.',
+        ),
+        WorkoutExerciseDefinition(
+          id: 'bicycle_crunch',
+          name: 'Bicycle crunch',
+          pattern: kPatternCore,
+          equipment: WorkoutEquipment.bodyweight,
+          compound: false,
+          instructions: 'Rotate from the ribs, not the neck, and keep the lower back comfortable.',
+        ),
       ];
+
+  /// Rough one-rep-max estimates for exercises without a logged baseline,
+  /// derived from a related lift. These are starting suggestions only.
+  static const Map<String, (String, double)> _loadHints =
+      <String, (String, double)>{
+        'overhead_press': ('bench_press', 0.60),
+        'barbell_row': ('bench_press', 0.70),
+        'romanian_deadlift': ('deadlift', 0.75),
+        'dumbbell_press': ('bench_press', 0.40),
+        'goblet_squat': ('back_squat', 0.30),
+        'leg_press': ('back_squat', 2.2),
+      };
 
   static double? estimateOneRepMax(double weight, int reps) {
     if (weight <= 0 || reps < 1 || reps > 10) {
@@ -196,22 +370,101 @@ abstract final class WorkoutEngine {
   static List<WorkoutExerciseDefinition> baselineExercises(
     Set<WorkoutEquipment> equipment,
   ) {
-    final WorkoutEquipment preferred =
-        equipment.contains(WorkoutEquipment.barbell)
-        ? WorkoutEquipment.barbell
-        : equipment.contains(WorkoutEquipment.dumbbells)
-        ? WorkoutEquipment.dumbbells
-        : equipment.contains(WorkoutEquipment.machines)
-        ? WorkoutEquipment.machines
-        : WorkoutEquipment.bodyweight;
-    return exercises
+    final List<WorkoutExerciseDefinition> pool = exercises
         .where(
           (WorkoutExerciseDefinition exercise) =>
-              exercise.equipment == preferred && exercise.supportsEstimatedMax,
+              equipment.contains(exercise.equipment) &&
+              exercise.supportsEstimatedMax,
         )
-        .take(3)
         .toList(growable: false);
+    return pool.take(4).toList(growable: false);
   }
+
+  /// Best available one-rep-max estimate for an exercise: a logged estimate
+  /// first, then a family hint from a related lift.
+  static double? estimatedMaxFor(WorkoutProfile profile, String exerciseId) {
+    final double? direct = profile.estimatedMaxes[exerciseId];
+    if (direct != null && direct > 0) {
+      return direct;
+    }
+    final (String, double)? hint = _loadHints[exerciseId];
+    if (hint == null) {
+      return null;
+    }
+    final double? base = profile.estimatedMaxes[hint.$1];
+    if (base == null || base <= 0) {
+      return null;
+    }
+    return base * hint.$2;
+  }
+
+  /// True when the estimate came from a related-lift ratio rather than this
+  /// exercise's own logs, so the UI can flag it as approximate.
+  static bool estimateIsApproximate(WorkoutProfile profile, String exerciseId) {
+    final double? direct = profile.estimatedMaxes[exerciseId];
+    return (direct == null || direct <= 0) &&
+        _loadHints.containsKey(exerciseId);
+  }
+
+  static List<_SessionTemplate> _templatesFor(WorkoutSplit split) =>
+      switch (split) {
+        WorkoutSplit.fullBody => const <_SessionTemplate>[
+          _SessionTemplate('full_a', 'Full body · Foundation', <_SessionSlot>[
+            _SessionSlot(kPatternKnee),
+            _SessionSlot(kPatternHPush),
+            _SessionSlot(kPatternHip),
+            _SessionSlot(kPatternHPull),
+            _SessionSlot(kPatternVPush),
+            _SessionSlot(kPatternCore, accessory: true),
+          ]),
+          _SessionTemplate('full_b', 'Full body · Build', <_SessionSlot>[
+            _SessionSlot(kPatternKnee),
+            _SessionSlot(kPatternHPull),
+            _SessionSlot(kPatternHip),
+            _SessionSlot(kPatternVPull),
+            _SessionSlot(kPatternVPush),
+            _SessionSlot(kPatternCore, accessory: true),
+          ]),
+        ],
+        WorkoutSplit.upperLower => const <_SessionTemplate>[
+          _SessionTemplate('upper', 'Upper body', <_SessionSlot>[
+            _SessionSlot(kPatternHPush),
+            _SessionSlot(kPatternHPull),
+            _SessionSlot(kPatternVPush),
+            _SessionSlot(kPatternVPull),
+            _SessionSlot(kPatternHPush, accessory: true),
+            _SessionSlot(kPatternCore, accessory: true),
+          ]),
+          _SessionTemplate('lower', 'Lower body', <_SessionSlot>[
+            _SessionSlot(kPatternKnee),
+            _SessionSlot(kPatternHip),
+            _SessionSlot(kPatternKnee, accessory: true),
+            _SessionSlot(kPatternHip, accessory: true),
+            _SessionSlot(kPatternCore, accessory: true),
+          ]),
+        ],
+        WorkoutSplit.pushPullLegs => const <_SessionTemplate>[
+          _SessionTemplate('push', 'Push day', <_SessionSlot>[
+            _SessionSlot(kPatternHPush),
+            _SessionSlot(kPatternVPush),
+            _SessionSlot(kPatternHPush, accessory: true),
+            _SessionSlot(kPatternCore, accessory: true),
+          ]),
+          _SessionTemplate('pull', 'Pull day', <_SessionSlot>[
+            _SessionSlot(kPatternHPull),
+            _SessionSlot(kPatternVPull),
+            _SessionSlot(kPatternHPull, accessory: true),
+            _SessionSlot(kPatternCore, accessory: true),
+          ]),
+          _SessionTemplate('legs', 'Leg day', <_SessionSlot>[
+            _SessionSlot(kPatternKnee),
+            _SessionSlot(kPatternHip),
+            _SessionSlot(kPatternKnee, accessory: true),
+            _SessionSlot(kPatternHip, accessory: true),
+            _SessionSlot(kPatternCore, accessory: true),
+          ]),
+        ],
+      };
 
   static List<PlannedWorkout> generateSchedule({
     required WorkoutProfile profile,
@@ -220,6 +473,7 @@ abstract final class WorkoutEngine {
     int days = 14,
   }) {
     final DateTime today = _dateOnly(now);
+    final List<_SessionTemplate> rotation = _templatesFor(profile.split);
     final List<PlannedWorkout> result = <PlannedWorkout>[];
     int sessionIndex = 0;
     for (int offset = 0; offset < days; offset++) {
@@ -227,23 +481,14 @@ abstract final class WorkoutEngine {
       if (!profile.trainingDays.contains(date.weekday)) {
         continue;
       }
-      final List<WorkoutExerciseDefinition> selected = _sessionExercises(
-        profile,
-        sessionIndex,
+      final _SessionTemplate template =
+          rotation[sessionIndex % rotation.length];
+      final List<PlannedExercise> planned = _planSession(
+        profile: profile,
+        template: template,
+        location: WorkoutLocation.gym,
+        varyPreference: sessionIndex.isOdd,
       );
-      final _Prescription prescription = _prescription(profile);
-      final int maxExercises = profile.sessionMinutes <= 30
-          ? 4
-          : profile.sessionMinutes <= 45
-          ? 5
-          : 6;
-      final List<PlannedExercise> planned = selected
-          .take(maxExercises)
-          .map(
-            (WorkoutExerciseDefinition exercise) =>
-                _planExercise(profile, exercise, prescription),
-          )
-          .toList();
       final int totalSets = planned.fold<int>(
         0,
         (int value, PlannedExercise exercise) => value + exercise.sets,
@@ -256,19 +501,161 @@ abstract final class WorkoutEngine {
       };
       final int pressure = (resolve - 35 + goalPressure + (totalSets - 8) * 5)
           .clamp(resolve - 60, resolve + 120);
-      final String title = _sessionTitle(profile, sessionIndex);
       result.add(
         PlannedWorkout(
           id: '${_dateKey(date)}-${sessionIndex + 1}',
           date: date,
-          title: title,
+          title: template.title,
           pressure: pressure,
           exercises: planned,
+          focus: template.id,
         ),
       );
       sessionIndex++;
     }
     return result;
+  }
+
+  /// Swaps a scheduled session between gym and bodyweight versions while
+  /// keeping its date, pressure, and Resolve stakes.
+  static void relocateSession(
+    PlannedWorkout workout,
+    WorkoutProfile profile,
+    WorkoutLocation location,
+  ) {
+    if (workout.status != WorkoutStatus.scheduled ||
+        workout.location == location) {
+      return;
+    }
+    workout.location = location;
+    final List<_SessionTemplate> rotation = _templatesFor(profile.split);
+    final _SessionTemplate template = rotation.firstWhere(
+      (_SessionTemplate template) => template.id == workout.focus,
+      orElse: () => rotation.first,
+    );
+    workout.exercises = _planSession(
+      profile: profile,
+      template: template,
+      location: location,
+      varyPreference: false,
+    );
+  }
+
+  static List<PlannedExercise> _planSession({
+    required WorkoutProfile profile,
+    required _SessionTemplate template,
+    required WorkoutLocation location,
+    required bool varyPreference,
+  }) {
+    final Set<WorkoutEquipment> available = location == WorkoutLocation.home
+        ? <WorkoutEquipment>{
+            WorkoutEquipment.bodyweight,
+            if (profile.equipment.contains(WorkoutEquipment.bands))
+              WorkoutEquipment.bands,
+          }
+        : <WorkoutEquipment>{...profile.equipment, WorkoutEquipment.bodyweight};
+    final List<WorkoutEquipment> preference = varyPreference
+        ? <WorkoutEquipment>[
+            WorkoutEquipment.dumbbells,
+            WorkoutEquipment.machines,
+            WorkoutEquipment.barbell,
+            WorkoutEquipment.bands,
+            WorkoutEquipment.bodyweight,
+          ]
+        : <WorkoutEquipment>[
+            WorkoutEquipment.barbell,
+            WorkoutEquipment.dumbbells,
+            WorkoutEquipment.machines,
+            WorkoutEquipment.bands,
+            WorkoutEquipment.bodyweight,
+          ];
+    final int maxExercises = profile.sessionMinutes <= 30
+        ? 4
+        : profile.sessionMinutes <= 45
+        ? 5
+        : 6;
+    final Set<String> usedIds = <String>{};
+    final List<PlannedExercise> planned = <PlannedExercise>[];
+    for (final _SessionSlot slot in template.slots) {
+      if (planned.length >= maxExercises) {
+        break;
+      }
+      final WorkoutExerciseDefinition? chosen = _chooseExercise(
+        slot.pattern,
+        available,
+        preference,
+        usedIds,
+      );
+      if (chosen == null) {
+        continue;
+      }
+      usedIds.add(chosen.id);
+      planned.add(_planExercise(profile, chosen, slot.accessory, location));
+    }
+    return planned;
+  }
+
+  static WorkoutExerciseDefinition? _chooseExercise(
+    String pattern,
+    Set<WorkoutEquipment> available,
+    List<WorkoutEquipment> preference,
+    Set<String> usedIds,
+  ) {
+    for (final WorkoutEquipment equipment in preference) {
+      if (!available.contains(equipment)) {
+        continue;
+      }
+      for (final WorkoutExerciseDefinition exercise in exercises) {
+        if (exercise.pattern == pattern &&
+            exercise.equipment == equipment &&
+            !usedIds.contains(exercise.id)) {
+          return exercise;
+        }
+      }
+    }
+    for (final WorkoutExerciseDefinition exercise in exercises) {
+      if (exercise.pattern == pattern &&
+          available.contains(exercise.equipment) &&
+          !usedIds.contains(exercise.id)) {
+        return exercise;
+      }
+    }
+    return null;
+  }
+
+  /// Exercise options for a pattern given the equipment for the location,
+  /// best matches first. Powers the "pick my exercises" sheet.
+  static List<WorkoutExerciseDefinition> alternativesFor(
+    String pattern,
+    WorkoutProfile profile,
+    WorkoutLocation location,
+  ) {
+    final Set<WorkoutEquipment> available = location == WorkoutLocation.home
+        ? <WorkoutEquipment>{
+            WorkoutEquipment.bodyweight,
+            if (profile.equipment.contains(WorkoutEquipment.bands))
+              WorkoutEquipment.bands,
+          }
+        : <WorkoutEquipment>{...profile.equipment, WorkoutEquipment.bodyweight};
+    final List<WorkoutExerciseDefinition> matches = exercises
+        .where(
+          (WorkoutExerciseDefinition exercise) =>
+              exercise.pattern == pattern &&
+              available.contains(exercise.equipment),
+        )
+        .toList(growable: false);
+    final List<WorkoutEquipment> order = <WorkoutEquipment>[
+      WorkoutEquipment.barbell,
+      WorkoutEquipment.dumbbells,
+      WorkoutEquipment.machines,
+      WorkoutEquipment.bands,
+      WorkoutEquipment.bodyweight,
+    ];
+    matches.sort(
+      (WorkoutExerciseDefinition a, WorkoutExerciseDefinition b) =>
+          order.indexOf(a.equipment).compareTo(order.indexOf(b.equipment)),
+    );
+    return matches;
   }
 
   static int completeWorkout(WorkoutState state, PlannedWorkout workout) {
@@ -283,50 +670,36 @@ abstract final class WorkoutEngine {
       ..status = WorkoutStatus.completed
       ..finishedAt = DateTime.now()
       ..performanceScore = score
-      ..resolveDelta = max(1, delta);
-    state.resolve = max(100, state.resolve + workout.resolveDelta);
+      ..resolveDelta = delta;
+    state.resolve = max(100, state.resolve + delta);
     state.ratedWorkouts++;
     _updateEstimatedMaxes(state.profile, workout);
     _progressFutureLoads(state, workout);
-    return workout.resolveDelta;
+    return delta;
   }
 
+  /// Credited reps divided by the reps the plan asked for. Meeting every
+  /// target scores 1.0; safe extra reps score higher; missed sets score 0.
   static double performanceScore(PlannedWorkout workout) {
-    final List<WorkoutSetLog> sets = workout.exercises
-        .expand((PlannedExercise exercise) => exercise.logs)
-        .toList();
-    if (sets.isEmpty) {
+    final int target = workout.targetTotalReps;
+    if (target == 0) {
       return 0;
     }
-    final int completed = sets
-        .where((WorkoutSetLog set) => set.completed)
-        .length;
-    final double completion = completed / sets.length;
-    double repFulfillment = 0;
-    double extraEarned = 0;
-    double extraPossible = 0;
-    for (final WorkoutSetLog set in sets) {
-      if (!set.completed) {
-        continue;
-      }
-      repFulfillment += min(set.actualReps / set.targetReps, 1);
-      final int safeExtraCap = max(1, min(2, (set.targetReps * 0.2).ceil()));
-      extraPossible += safeExtraCap;
-      if (set.rir >= 1) {
-        extraEarned += min(
-          max(0, set.actualReps - set.targetReps),
-          safeExtraCap,
-        );
+    int credited = 0;
+    for (final PlannedExercise exercise in workout.exercises) {
+      for (final WorkoutSetLog set in exercise.logs) {
+        if (!set.completed) {
+          continue;
+        }
+        final int withinTarget = min(set.actualReps, exercise.targetReps);
+        final int extra = max(0, set.actualReps - exercise.targetReps);
+        // Extra reps count fully only when at least one rep was left in
+        // reserve; grinding to failure earns minimal bonus credit.
+        final int extraCap = set.rir >= 1 ? 5 : 1;
+        credited += withinTarget + min(extra, extraCap);
       }
     }
-    final double repScore = repFulfillment / sets.length;
-    final double extraScore = extraPossible == 0
-        ? 0
-        : extraEarned / extraPossible;
-    return (completion * 0.70 + repScore * 0.15 + extraScore * 0.15).clamp(
-      0,
-      1,
-    );
+    return credited / target;
   }
 
   static int reconcileMissed(WorkoutState state, DateTime now) {
@@ -344,7 +717,7 @@ abstract final class WorkoutEngine {
         workout
           ..status = WorkoutStatus.missed
           ..finishedAt = workout.date.add(const Duration(days: 1))
-          ..resolveDelta = min(-1, delta)
+          ..resolveDelta = min(delta, -4)
           ..performanceScore = 0;
         state.resolve = max(100, state.resolve + workout.resolveDelta);
         state.ratedWorkouts++;
@@ -354,28 +727,53 @@ abstract final class WorkoutEngine {
     return missed;
   }
 
-  static DateTime dateOnly(DateTime value) => _dateOnly(value);
-
-  static String dateKey(DateTime value) => _dateKey(value);
-
+  /// Resolve moves with the rep total: beating the planned reps adds Resolve,
+  /// falling short trims a little, and harder opponents swing the stakes more.
   static int _ratingDelta({
     required int resolve,
     required int pressure,
     required double score,
     required int ratedWorkouts,
   }) {
-    final double expected = 1 / (1 + pow(10, (pressure - resolve) / 400));
-    final int k = ratedWorkouts < 10 ? 40 : 28;
-    return (k * (score - expected)).round();
+    final double difficulty = (1 + (pressure - resolve) / 800).clamp(0.6, 1.5);
+    final int k = ratedWorkouts < 10 ? 32 : 24;
+    if (score >= 1) {
+      return max((k * (score - 1) * difficulty).round() + 2, 2);
+    }
+    return (k * (score - 1) * difficulty).round().clamp(-10, -1);
   }
+
+  /// Prescribes a single exercise (used when the user swaps an exercise in
+  /// the picker). Accessories get the higher-rep prescription.
+  static PlannedExercise planExerciseFor(
+    WorkoutProfile profile,
+    WorkoutExerciseDefinition exercise,
+    WorkoutLocation location,
+  ) => _planExercise(profile, exercise, !exercise.compound, location);
 
   static PlannedExercise _planExercise(
     WorkoutProfile profile,
     WorkoutExerciseDefinition exercise,
-    _Prescription prescription,
+    bool accessory,
+    WorkoutLocation location,
   ) {
-    final double? estimatedMax = profile.estimatedMaxes[exercise.id];
-    final double? weight = profile.isYouth || estimatedMax == null
+    if (location == WorkoutLocation.home) {
+      final (int reps, int repMax) = _bodyweightReps(exercise.pattern);
+      return PlannedExercise(
+        exerciseId: exercise.id,
+        name: exercise.name,
+        pattern: exercise.pattern,
+        sets: 3,
+        targetReps: reps,
+        repRangeMax: repMax,
+        targetRir: 2,
+        weight: null,
+        instructions: exercise.instructions,
+      );
+    }
+    final _Prescription prescription = _prescription(profile, accessory);
+    final double? estimatedMax = estimatedMaxFor(profile, exercise.id);
+    final double? weight = estimatedMax == null
         ? null
         : _roundLoad(estimatedMax * prescription.percent, profile.unit);
     return PlannedExercise(
@@ -391,125 +789,86 @@ abstract final class WorkoutEngine {
     );
   }
 
-  static _Prescription _prescription(WorkoutProfile profile) {
-    if (profile.isYouth) {
-      return const _Prescription(
-        sets: 2,
-        reps: 10,
-        repMax: 15,
-        rir: 3,
-        percent: 0,
-      );
+  static (int, int) _bodyweightReps(String pattern) => switch (pattern) {
+    kPatternKnee => (14, 20),
+    kPatternHip => (12, 18),
+    kPatternVPull => (8, 12),
+    kPatternVPush => (8, 12),
+    kPatternHPull => (10, 15),
+    _ => (12, 16),
+  };
+
+  static _Prescription _prescription(WorkoutProfile profile, bool accessory) {
+    if (accessory) {
+      return switch (profile.goal) {
+        WorkoutGoal.strength => const _Prescription(
+          sets: 3,
+          reps: 8,
+          repMax: 10,
+          rir: 2,
+          percent: 0.65,
+        ),
+        WorkoutGoal.muscle => const _Prescription(
+          sets: 3,
+          reps: 10,
+          repMax: 12,
+          rir: 1,
+          percent: 0.65,
+        ),
+        WorkoutGoal.returning => const _Prescription(
+          sets: 2,
+          reps: 10,
+          repMax: 12,
+          rir: 3,
+          percent: 0.55,
+        ),
+        WorkoutGoal.balanced => const _Prescription(
+          sets: 3,
+          reps: 9,
+          repMax: 12,
+          rir: 2,
+          percent: 0.62,
+        ),
+      };
     }
     return switch (profile.goal) {
       WorkoutGoal.strength => _Prescription(
-        sets: profile.experience == WorkoutExperience.newLifter ? 2 : 3,
+        sets: profile.experience == WorkoutExperience.newLifter ? 3 : 4,
         reps: 5,
         repMax: 6,
         rir: 2,
         percent: profile.experience == WorkoutExperience.newLifter
-            ? 0.70
+            ? 0.72
             : 0.78,
       ),
       WorkoutGoal.muscle => const _Prescription(
-        sets: 3,
-        reps: 8,
-        repMax: 10,
+        sets: 4,
+        reps: 6,
+        repMax: 8,
         rir: 2,
-        percent: 0.67,
+        percent: 0.72,
       ),
       WorkoutGoal.returning => const _Prescription(
         sets: 2,
         reps: 8,
         repMax: 10,
         rir: 3,
-        percent: 0.55,
+        percent: 0.60,
       ),
       WorkoutGoal.balanced => const _Prescription(
         sets: 3,
-        reps: 8,
-        repMax: 10,
+        reps: 6,
+        repMax: 8,
         rir: 2,
-        percent: 0.65,
+        percent: 0.70,
       ),
     };
-  }
-
-  static List<WorkoutExerciseDefinition> _sessionExercises(
-    WorkoutProfile profile,
-    int index,
-  ) {
-    final Set<WorkoutEquipment> available = <WorkoutEquipment>{
-      ...profile.equipment,
-      WorkoutEquipment.bodyweight,
-    };
-    WorkoutExerciseDefinition choose(
-      String pattern,
-      List<WorkoutEquipment> preference,
-    ) {
-      for (final WorkoutEquipment equipment in preference) {
-        for (final WorkoutExerciseDefinition exercise in exercises) {
-          if (exercise.pattern == pattern &&
-              exercise.equipment == equipment &&
-              available.contains(equipment)) {
-            return exercise;
-          }
-        }
-      }
-      return exercises.firstWhere(
-        (WorkoutExerciseDefinition exercise) =>
-            exercise.pattern == pattern &&
-            available.contains(exercise.equipment),
-      );
-    }
-
-    final List<WorkoutEquipment> preference = index.isEven
-        ? <WorkoutEquipment>[
-            WorkoutEquipment.barbell,
-            WorkoutEquipment.dumbbells,
-            WorkoutEquipment.machines,
-            WorkoutEquipment.bands,
-            WorkoutEquipment.bodyweight,
-          ]
-        : <WorkoutEquipment>[
-            WorkoutEquipment.dumbbells,
-            WorkoutEquipment.machines,
-            WorkoutEquipment.barbell,
-            WorkoutEquipment.bands,
-            WorkoutEquipment.bodyweight,
-          ];
-    return <WorkoutExerciseDefinition>[
-      choose('Knee dominant', preference),
-      choose('Horizontal push', preference),
-      choose('Hip dominant', preference),
-      choose('Horizontal pull', preference),
-      if (!profile.isYouth &&
-          available.any(
-            (WorkoutEquipment item) =>
-                item == WorkoutEquipment.barbell ||
-                item == WorkoutEquipment.dumbbells,
-          ))
-        choose('Vertical push', preference),
-      exercises.firstWhere(
-        (WorkoutExerciseDefinition exercise) => exercise.id == 'plank',
-      ),
-    ];
-  }
-
-  static String _sessionTitle(WorkoutProfile profile, int index) {
-    if (profile.trainingDays.length <= 3) {
-      return index.isEven ? 'Full body · Foundation' : 'Full body · Build';
-    }
-    return index.isEven ? 'Strength circuit' : 'Volume circuit';
   }
 
   static void _updateEstimatedMaxes(
     WorkoutProfile profile,
     PlannedWorkout workout,
   ) {
-    if (profile.isYouth) {
-      return;
-    }
     for (final PlannedExercise exercise in workout.exercises) {
       final double? weight = exercise.weight;
       if (weight == null) {
@@ -575,6 +934,10 @@ abstract final class WorkoutEngine {
 
   static DateTime _dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);
+
+  static DateTime dateOnly(DateTime value) => _dateOnly(value);
+
+  static String dateKey(DateTime value) => _dateKey(value);
 
   static String _dateKey(DateTime value) =>
       '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';

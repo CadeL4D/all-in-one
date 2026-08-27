@@ -13,7 +13,7 @@ Flutter's single codebase.
 - **Focus** — named focus/break timers with an optional extra check-in timer and background completion alerts.
 - **Noises** — colored-noise soundscapes with independently toggleable Creative Commons nature layers.
 - **Simon** — a pure 4×4 sequence-memory game where any square can follow or repeat, with optional visual decoys, recent runs, and persistent high scores.
-- **Workouts** — a private weekly strength planner with age-aware programming, active set logging, and Resolve-versus-Pressure ratings.
+- **Workouts** — a private strength planner with pick-your-own splits and exercises, suggested loads, research-cited Coach answers, one-tap gym↔home sessions, per-day reminders, and a Resolve rating that follows the planned rep total.
 
 Tasks, prompts, routines, workout plans/history, Maths scores, Simon
 records/history, and recently opened hub cards are saved locally with
