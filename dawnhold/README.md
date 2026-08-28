@@ -7,6 +7,19 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
+> **v1.4.2 — The Pocket Update:** built for the **vertical phone screen**.
+> The **day dial stretches tall** on the left of the HUD with the materials
+> chips flowing beside it in the top-right (the Materials tab rides as the
+> last chip); the minimap shrinks to a **little orb that expands while you
+> steer it**. The build menu finally **shows every building's sprite** with
+> icon costs, a greyed can't-afford state, and **one-line intents** — jobs
+> became a **compact card grid** — and **holding any card pops its full
+> story**. Nights are **graded by phase** — dusk bleeds orange into violet,
+> dawn washes gold — and torchlight now breathes. Toasts fold repeats into a
+> **×N badge** instead of stacking copies, the difficulty picker grew a
+> **Back** button, and the title moon is a proper crescent again.
+> Rebuild the portable file anytime with `node rebake.js`.
+
 > **v1.4.1 — The Materials Bar:** all resource chips in **one bar** ending
 > in a **Materials tab** — live stock &amp; storage for every good, with
 > show/hide and drag-to-reorder (the vital five first by default; flour and
@@ -67,6 +80,38 @@ Great Beacon to bring back the dawn.
 ---
 
 ## Changelog
+
+### v1.4.2 — The Pocket Update
+- **Portrait-first HUD:** on narrow screens the **day dial stretches tall**
+  on the left while the materials chips **flow beside it in the top-right**
+  — no more chips lost past the screen edge, no dead corner. The Materials
+  tab rides as the **last chip** of the bar it opens. The minimap becomes a
+  64px orb that **expands to full size while touched** and tucks back after
+  a moment; orb, speed cluster, toasts, tutorial and boss bar pin just
+  below the materials block (JS tracks its live height every tick).
+- **Build cards show the buildings:** each card now carries its real sprite —
+  `drawCardIcon` was already called but every regular card lacked a `<canvas>`
+  to paint into, so the menu was text-only. Costs render as the same 16px
+  icons the bar uses (red when short), unaffordable cards grey out, and each
+  card says only its **one-line intent** (`short` in `BUILD`).
+- **Jobs board, compact:** duties render as a **card grid** (two columns on
+  a phone) — icon, name, count and wide −/+ taps, no paragraph per row. The
+  whole roster fits one screen.
+- **Hold any card for the full story:** press-and-hold a job or building
+  card pops a detail card (description, recipe, unlock) and fades; the
+  release that ends a hold never counts as a tap.
+- **Graded nights:** dusk tints orange → violet as the dark rises, dawn
+  washes gold, torch warm-glow radii wobble with the flame, the lit Beacon
+  pulses. Blood-moon and existing light holes unchanged.
+- **Calmer toasts:** identical consecutive messages fold into a **×N badge**
+  on one toast (timer restarts) instead of stacking copies; at most **two**
+  show at once.
+- **Title flow:** the difficulty picker has a **Back** button (it no longer
+  replaces New Game with no way back), and the title/defeat crescent moon is
+  a proper pixel crescent — the old offset rectangle painted a dark box over
+  the stars (the "broken L" artifact).
+- **`node rebake.js`** regenerates `onefile.html` from the source tree
+  (byte-identical to the committed build recipe).
 
 ### v1.4.1 — The Materials Bar
 - **One materials bar:** every resource chip now lives in a single top bar
@@ -319,7 +364,8 @@ Great Beacon to bring back the dawn.
 - **Editable build:** double-click `index.html`; it loads the files in `css/`
   and `js/`.
 - **Single-file build:** double-click or share `onefile.html`; all CSS and
-  JavaScript are embedded inside it.
+  JavaScript are embedded inside it. After editing the source tree, run
+  `node rebake.js` in this folder to regenerate it.
 - Saves live in your browser's localStorage. Both builds work in Chrome, Edge,
   Firefox, and Safari on desktop and mobile.
 - **Or serve it** (nicer for full-screen mobile): `python -m http.server 8137`
@@ -450,6 +496,7 @@ Every knob is one edit in `CONFIG` — tune freely.
 ```text
 index.html          shell: canvas + HUD/panel/screen DOM
 onefile.html        portable build with the same CSS and JavaScript embedded
+rebake.js           regenerates onefile.html from index.html + css/ + js/
 css/style.css       mobile-first dark UI, safe areas, touch targets
 js/core.js          CONFIG (all balance), enums, utils, global state G
 js/art.js           every sprite painted procedurally (16px), title art

@@ -41,9 +41,8 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .hbtn.active{background:var(--amber);border-color:var(--amber2);color:#241a08}
 /* the single materials bar — chips + the Materials tab button */
 #resBar{display:flex;gap:6px;align-items:stretch;margin-top:6px;pointer-events:auto}
-#resRow{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:3px 0}
-#resRow::-webkit-scrollbar{display:none}
-#btnMats{flex:none;display:flex;align-items:center;justify-content:center;width:44px;margin:3px 0;
+#resRow{flex:1;min-width:0;display:flex;gap:6px;flex-wrap:wrap;overflow-y:hidden;scrollbar-width:none;padding:3px 0}
+#btnMats{flex:none;align-self:stretch;display:flex;align-items:center;justify-content:center;width:44px;
   background:rgba(13,15,20,.92);border:2px solid #4a5468;border-radius:9px;cursor:pointer}
 #btnMats:active,#btnMats.on{border-color:var(--amber)}
 #btnMats canvas{width:22px;height:22px}
@@ -75,7 +74,15 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .toast.good{border-left-color:var(--green)}
 .toast.magic{border-left-color:var(--purple)}
 .toast.fadeout{opacity:0;transition:opacity .6s}
+.toast .tn{color:var(--dim);font-size:11px;font-weight:800;margin-left:6px}
 @keyframes toastIn{from{transform:translateY(-8px);opacity:0}}
+
+/* hold-for-details popup (jobs, build cards) */
+#ipop{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--sab) + 84px);z-index:40;width:min(92vw,400px);
+  background:rgba(24,26,34,.97);border:2px solid var(--line);border-left:4px solid var(--amber);border-radius:10px;
+  padding:9px 12px;font-size:12.5px;line-height:1.5;box-shadow:0 6px 18px rgba(0,0,0,.55);pointer-events:none}
+#ipop b{color:var(--amber2)}
+#ipop.fadeout{opacity:0;transition:opacity .5s}
 
 /* ---------- tutorial ---------- */
 #tut{position:absolute;top:calc(var(--sat) + 66px);left:50%;transform:translateX(-50%);z-index:29;width:min(92vw,400px);
@@ -133,26 +140,33 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .bcard:active{border-color:var(--amber)}
 .bcard.sel{border-color:var(--amber);background:#33301f}
 .bcard.locked{opacity:.45}
-.bcard canvas{width:38px;height:38px;flex:none}
+.bcard.poor{opacity:.62;filter:grayscale(.5)}
+.bcard.poor.sel{filter:none;opacity:1}
+.bcard>canvas{width:44px;height:44px;flex:none}
 /* card grip — the only zone that drags a building out (touch elsewhere scrolls) */
 .bgrab{flex:none;align-self:stretch;display:flex;align-items:center;justify-content:center;width:26px;
   margin:-4px 0 -4px -4px;border-right:2px dotted #4a5468;color:var(--dim);font-size:15px;font-weight:800;touch-action:none}
 .bgrab:active{color:var(--amber2)}
 .bcard .bn{font-size:13px;font-weight:700}
-.bcard .bc{font-size:11px;color:var(--dim);margin-top:2px;display:flex;gap:8px}
+.bcard .bc{font-size:11px;color:var(--dim);margin-top:2px;display:flex;gap:7px;flex-wrap:wrap}
 .bcard .bd{font-size:10.5px;color:var(--dim);margin-top:2px;line-height:1.3}
 .bcard .costNo{color:var(--red)}
+.cchip{display:inline-flex;align-items:center;gap:3px;font-weight:800;color:var(--ink)}
+.cchip canvas{width:14px;height:14px}
+.cchip.no{color:var(--red)}
 .catTabs{display:flex;gap:6px;margin:2px 0 10px;flex-wrap:wrap}
 .catTab{border:2px solid var(--line);background:var(--panel2);color:var(--dim);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700}
 .catTab.on{color:#241a08;background:var(--amber);border-color:var(--amber2)}
 
-/* jobs rows */
-.jrow{display:flex;align-items:center;gap:10px;background:var(--panel2);border:2px solid var(--line);border-radius:11px;padding:8px 10px;margin-bottom:7px}
-.jrow canvas{width:34px;height:34px;flex:none}
-.jrow .jn{font-size:13px;font-weight:700}
-.jrow .jd{font-size:10.5px;color:var(--dim);line-height:1.3;margin-top:1px}
-.jrow .cnt{margin-left:auto;font-size:18px;font-weight:800;min-width:26px;text-align:center}
-.jrow button{width:38px;height:38px;font-size:19px;font-weight:800;border:2px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);flex:none}
+/* jobs — compact card grid; the full story pops on press-and-hold */
+.jgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:7px}
+.jrow{display:flex;flex-direction:column;gap:5px;background:var(--panel2);border:2px solid var(--line);border-radius:10px;padding:6px 7px}
+.jrow .jtop{display:flex;align-items:center;gap:7px;min-width:0}
+.jrow canvas{width:26px;height:26px;flex:none}
+.jrow .jn{flex:1;min-width:0;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jrow .cnt{font-size:15px;font-weight:800;min-width:18px;text-align:center;font-variant-numeric:tabular-nums}
+.jrow .jbtns{display:flex;gap:6px}
+.jrow button{flex:1;height:28px;font-size:15px;font-weight:800;border:2px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);cursor:pointer}
 .jrow.locked{opacity:.45;filter:grayscale(.9)}
 .jnote{font-size:11.5px;color:var(--dim);padding:6px 2px;line-height:1.4}
 
@@ -204,7 +218,7 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 /* minimap */
 #mmWrap{position:absolute;top:calc(var(--sat) + 66px);right:8px;z-index:23;border:2px solid var(--line);border-radius:8px;
   overflow:hidden;background:#0c0e14;box-shadow:0 4px 14px rgba(0,0,0,.5)}
-#minimap{width:132px;height:132px}
+#minimap{width:132px;height:132px;transition:width .15s,height .15s}
 
 /* ---------- screens ---------- */
 .screen{position:absolute;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;overflow-y:auto}
@@ -234,6 +248,24 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
 @media (orientation:landscape) and (max-height:480px){
   #titleArt{display:none} h1{font-size:30px;letter-spacing:6px;margin-top:calc(var(--sat) + 8px)}
   .titleInner{gap:6px}
+}
+/* ---------- narrow / portrait phones ----------
+   The day dial stretches tall on the left while the materials chips flow
+   beside it in the top-right (the Materials tab rides as the last chip).
+   The minimap becomes a small orb that expands while you steer it; it and
+   the speed cluster pin just below the materials block — JS keeps those
+   offsets under the bar's live height (updateHUD). */
+@media (max-width:560px){
+  #hud{display:grid;grid-template-columns:auto 1fr;gap:5px 6px;align-items:stretch}
+  #hudTop{display:contents}
+  #clockWrap{flex-direction:column;justify-content:center;gap:5px;min-width:84px}
+  #clockBar{width:100%;height:8px;flex:none}
+  #resBar{display:contents}
+  #resRow{align-content:flex-start}
+  #hudBtns{position:absolute;right:6px;top:170px;flex-direction:column}
+  #minimap{width:64px;height:64px}
+  #mmWrap.big #minimap{width:132px;height:132px}
+  #toasts{left:10px;transform:none;align-items:flex-start;width:min(72vw,420px)}
 }
 </style>
 </head>
@@ -310,8 +342,9 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
         <button class="bigbtn diff" data-diff="easy"><b>Easy</b><span>Gentle nights; the wilds give freely.</span></button>
         <button class="bigbtn diff" data-diff="normal"><b>Normal</b><span>The intended challenge; lean wilds.</span></button>
         <button class="bigbtn diff" data-diff="hard"><b>Hard</b><span>Scant stores, hungry dark, short days.</span></button>
+        <button id="btnDiffBack" class="bigbtn ghost">Back</button>
       </div>
-      <div class="verText">v1.4.1 &middot; The Materials Bar &middot; saves in this browser</div>
+      <div class="verText">v1.4.2 &middot; The Pocket Update &middot; saves in this browser</div>
     </div>
   </div>
 
@@ -1706,7 +1739,12 @@ const Art = {
     ic('powers', x => { R(x, 7, 1, 2, 14, '#c9a94b'); R(x, 1, 7, 14, 2, '#c9a94b'); R(x, 4, 4, 8, 8, '#8a5cd0'); R(x, 6, 6, 4, 4, '#d0b0ff'); });
     ic('map', x => { R(x, 1, 3, 14, 10, '#d8cbb0'); R(x, 1, 3, 14, 1, '#b0a388'); R(x, 1, 8, 14, 1, '#b0a388'); R(x, 5, 5, 2, 2, '#4a8f3c'); R(x, 9, 9, 2, 2, '#3b6ea8'); R(x, 10, 4, 2, 2, '#e05555'); });
     ic('sun', x => { R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 7, 1, 2, 3, '#ffd94a'); R(x, 7, 12, 2, 3, '#ffd94a'); R(x, 1, 7, 3, 2, '#ffd94a'); R(x, 12, 7, 3, 2, '#ffd94a'); R(x, 6, 6, 2, 2, '#fff2b0'); });
-    ic('moon', x => { R(x, 4, 2, 7, 12, '#c9d4f0'); R(x, 8, 2, 6, 12, '#1e222b'); R(x, 3, 5, 2, 2, '#c9d4f0'); R(x, 2, 9, 2, 2, '#c9d4f0'); });
+    ic('moon', x => {
+      // pixel crescent opening right — thick back, tapering arms
+      R(x, 6, 1, 4, 2, '#c9d4f0'); R(x, 4, 2, 4, 2, '#c9d4f0');
+      R(x, 2, 3, 4, 10, '#c9d4f0'); R(x, 4, 12, 4, 2, '#c9d4f0');
+      R(x, 6, 13, 4, 2, '#c9d4f0');
+    });
     ic('dusk', x => { R(x, 1, 7, 14, 2, '#e8894a'); R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 11, 5, 5, 6, '#1e222b'); });
     ic('arrow', x => { R(x, 12, 2, 2, 2, '#e8e0d0'); R(x, 10, 4, 2, 2, '#e8e0d0'); R(x, 3, 11, 8, 2, '#c9b47a'); R(x, 2, 12, 2, 2, '#b8b8c0'); R(x, 4, 10, 2, 2, '#cfd8e0'); R(x, 11, 1, 2, 2, '#e05555'); });
     ic('tool', x => { R(x, 6, 2, 4, 8, '#8a6a4a'); R(x, 4, 9, 8, 4, PAL.metal); R(x, 4, 9, 8, 1, PAL.metalD); R(x, 7, 3, 1, 6, '#6b4a32'); });
@@ -1790,8 +1828,16 @@ const Art = {
     // moon / sun
     if (mode === 'win') { x.fillStyle = '#fff2b0'; x.fillRect(w / 2 - 20, h * .52, 40, 40); x.fillStyle = '#ffd94a'; x.fillRect(w / 2 - 26, h * .55, 52, 40); }
     else {
-      x.fillStyle = '#e8ecf8'; x.fillRect(w * .74, h * .16, 26, 26);
-      x.fillStyle = mode === 'lose' ? '#141830' : '#1c1440'; x.fillRect(w * .74 + 10, h * .16 - 4, 26, 26);
+      // pixel crescent stamped 2x — same design as the HUD moon icon, floats
+      // clean on the gradient sky (the old offset-rectangle carve left a
+      // dark box and an L-shaped blob)
+      const u = 2, mx = w * .74, my = h * .16 - 6;
+      x.fillStyle = '#dce6f6';
+      x.fillRect(mx + 6 * u, my + 1 * u, 4 * u, 2 * u);
+      x.fillRect(mx + 4 * u, my + 2 * u, 4 * u, 2 * u);
+      x.fillRect(mx + 2 * u, my + 3 * u, 4 * u, 10 * u);
+      x.fillRect(mx + 4 * u, my + 12 * u, 4 * u, 2 * u);
+      x.fillRect(mx + 6 * u, my + 13 * u, 4 * u, 2 * u);
     }
     // ground
     x.fillStyle = mode === 'lose' ? '#0c0e18' : '#1a2416';
@@ -2395,96 +2441,115 @@ const BUILD = {
   tent: {
     name: 'Tent', cat: 'basics', w: 1, h: 1, hp: 130, cost: { wood: 8 }, time: 16,
     housing: 2, comfort: 1, light: 2.2, kind: 'house', unlock: 0,
+    short: 'Beds for 2 — cheap first shelter.',
     desc: 'Bedrolls for two villagers. Cheap and quick — your first priority.',
   },
   farm: {
     name: 'Wheat Plot', cat: 'basics', w: 2, h: 2, hp: 140, cost: { wood: 6 }, time: 18,
     kind: 'farm', grassOnly: true, unlock: 0, next: 'farm2',
+    short: 'Steady food; a Farmer harvests ~15. Upgradable.',
     desc: 'Reliable food. Wheat ripens in the sun; a Farmer harvests ~15 food. Can be upgraded to irrigated rows.',
   },
   road: {
     name: 'Road', cat: 'basics', w: 1, h: 1, hp: 1, cost: { stone: 1 }, time: 0,
     kind: 'road', terrain: true, unlock: 0, paint: true,
+    short: 'Villagers walk 30% faster. Drag to paint.',
     desc: 'Stone path. Villagers walk 30% faster along roads. Drag to paint.',
   },
   well: {
     name: 'Well', cat: 'basics', w: 1, h: 1, hp: 160, cost: { wood: 6, stone: 2 }, time: 14,
     kind: 'well', light: 1.4, unlock: 0,
+    short: '+1 water / 10s. Villagers drink here.',
     desc: 'Sweet water, drawn a bucket at a time (+1 water per 10s). Thirsty villagers walk here to drink — the Bottlery spares them the trip.',
   },
   cottage: {
     name: 'Cottage', cat: 'basics', w: 2, h: 2, hp: 380, cost: { wood: 14, stone: 12 }, time: 42,
     housing: 4, comfort: 2, light: 2.8, kind: 'house', unlock: 4,
+    short: 'Real beds for 4 — comfy, better work.',
     desc: 'Sturdy stone home for four — real beds, real rest. Warm windows glow at night.',
   },
   wallW: {
     name: 'Palisade', cat: 'defense', w: 1, h: 1, hp: 220, cost: { wood: 2 }, time: 5,
     kind: 'wall', paint: true, unlock: 0, next: 'wallSF',
+    short: 'Blocks the horde. Drag to paint.',
     desc: 'Wooden wall. Blocks the horde. Drag to draw long lines; can be stone-faced later.',
   },
   wallS: {
     name: 'Stone Wall', cat: 'defense', w: 1, h: 1, hp: 520, cost: { stone: 4 }, time: 9,
     kind: 'wall', paint: true, unlock: 2,
+    short: 'Tough wall — brutes take ages.',
     desc: 'Thick stone wall. Brutes hammer a long time before it gives.',
   },
   gateW: {
     name: 'Wooden Gate', cat: 'defense', w: 1, h: 1, hp: 260, cost: { wood: 4 }, time: 9,
     kind: 'gate', unlock: 2,
+    short: 'Your folk pass; the horde must break it.',
     desc: 'Your people pass freely; the horde must batter it down.',
   },
   gateS: {
     name: 'Stone Gate', cat: 'defense', w: 1, h: 1, hp: 600, cost: { stone: 8 }, time: 14,
     kind: 'gate', unlock: 6,
+    short: 'The strongest door in the valley.',
     desc: 'Reinforced gate. The strongest door in the valley.',
   },
   tower: {
     name: 'Watchtower', cat: 'defense', w: 1, h: 1, hp: 300, cost: { wood: 14, stone: 10 }, time: 32,
     kind: 'tower', atk: CONFIG.TOWER, light: 2.7, tall: 16, unlock: 3, next: 'tower2',
+    short: 'Auto-shoots: 8 dmg, range 5.5. Burns 1 arrow a shot.',
     desc: 'Rains arrows on the horde (8 dmg, range 5.5) — 1 arrow a shot. Works alone, all night, while the quivers last.',
   },
   ballista: {
     name: 'Ballista', cat: 'defense', w: 1, h: 1, hp: 420, cost: { wood: 22, stone: 26 }, time: 50,
     kind: 'tower', atk: CONFIG.BALLISTA, light: 1.6, tall: 16, unlock: 7,
+    short: '27 dmg, range 7.5 — punches brutes. 2 arrows a shot.',
     desc: 'Heavy bolts punch through brutes (27 dmg, range 7.5).',
   },
   torch: {
     name: 'Torch', cat: 'defense', w: 1, h: 1, hp: 70, cost: { wood: 2, stone: 1 }, time: 5,
     kind: 'torch', light: 4.3, tall: 8, unlock: 0,
+    short: 'Light: shades crawl slower. Sips oil.',
     desc: 'Pushes back the dark. Shades crawl slower in the light.',
   },
   warehouse: {
     name: 'Warehouse', cat: 'basics', w: 2, h: 2, hp: 420, cost: { wood: 18, stone: 8 }, time: 40,
     kind: 'store', light: 3.0, unlock: 5,
+    short: '+60 wood & stone caps; shorter hauls.',
     desc: 'A second stockpile — shortens hauling trips and raises wood & stone caps by 60.',
   },
   fisher: {
     name: 'Fishing Dock', cat: 'basics', w: 1, h: 1, hp: 160, cost: { wood: 10 }, time: 22,
     kind: 'fisher', needsWater: true, tall: 8, unlock: 3,
+    short: 'Needs shore. Steady food, no farmland.',
     desc: 'Must touch water. A Fisher brings in steady food — no farmland used.',
   },
   windmill: {
     name: 'Windmill', cat: 'basics', w: 2, h: 2, hp: 300, cost: { wood: 20, stone: 8 }, time: 55,
     kind: 'windmill', tall: 28, unlock: 4,
+    short: 'Nearby farms +35% growth; grinds flour.',
     desc: 'Wheat plots within 6 tiles grow 35% faster in its breeze. While a Bakehouse stands, its stones also grind wheat into flour.',
   },
   kiln: {
     name: 'Charcoal Kiln', cat: 'basics', w: 1, h: 1, hp: 200, cost: { wood: 8, stone: 3 }, time: 20,
     kind: 'kiln', light: 1.6, unlock: 2,
+    short: '2 wood → 1 charcoal.',
     desc: 'Slowly chars 2 wood into 1 charcoal (never dips below 10 wood). The press\u2019s fuel — the same tree that feeds arrows, tools and meals.',
   },
   press: {
     name: 'Oil Press', cat: 'basics', w: 1, h: 1, hp: 180, cost: { wood: 10, stone: 4 }, time: 24,
     kind: 'press', unlock: 4,
+    short: '1 charcoal + 1 herb → 3 lamp oil.',
     desc: 'Squeezes 1 charcoal + 1 herb into 3 lamp oil. Torches sip 1 oil a minute through the night and gutter to half-light when dry.',
   },
   trap: {
     name: 'Spike Trap', cat: 'defense', w: 1, h: 1, hp: 120, cost: { wood: 2, stone: 1 }, time: 5,
     kind: 'trap', paint: true, unlock: 5,
+    short: 'Wounds & slows monsters. Drag to lay rows.',
     desc: 'Wounds and slows monsters that walk over it. Wears out. Drag to lay rows.',
   },
   hospital: {
     name: 'Hospital', cat: 'basics', w: 2, h: 2, hp: 320, cost: { wood: 14, stone: 10 }, time: 40,
     kind: 'healer', light: 2.6, tall: 8, unlock: 2,
+    short: 'Mends the wounded nearby. Unlocks Medic.',
     desc: 'Mends wounded villagers nearby, one herb at a time. Unlocks the Medic job. Buildable after your first night.',
   },
   herbalistHut: { // legacy — no longer buildable, but old saves keep working
@@ -2495,71 +2560,85 @@ const BUILD = {
   mine: {
     name: 'Mine Shaft', cat: 'basics', w: 1, h: 1, hp: 260, cost: { wood: 12 }, time: 30,
     kind: 'mine', onRock: true, tall: 4, unlock: 7,
+    short: 'On a boulder: endless stone.',
     desc: 'Build atop a boulder. Miners work it forever — slow but endless stone.',
   },
   barracks: {
     name: 'Barracks', cat: 'defense', w: 2, h: 2, hp: 500, cost: { wood: 25, stone: 20 }, time: 60,
     kind: 'barracks', capOne: true, light: 2.0, tall: 4, unlock: 8,
+    short: 'All guards +30% damage. One only.',
     desc: 'Drill yard and armory: all Guards deal +30% damage. Only one may stand.',
   },
   granary: {
     name: 'Granary', cat: 'basics', w: 2, h: 2, hp: 280, cost: { wood: 10, stone: 6 }, time: 24,
     kind: 'store', light: 1.8, tall: 5, unlock: 1,
+    short: '+80 food cap (and meals/ale/herbs).',
     desc: 'Raises food, meal, ale & herb caps (+80 food, +10 herbs) and serves as a store. Build more to hoard more.',
   },
   storehouse: {
     name: 'Storehouse', cat: 'basics', w: 2, h: 2, hp: 340, cost: { wood: 12, stone: 8 }, time: 30,
     kind: 'store', light: 1.8, tall: 6, unlock: 1,
+    short: '+100 wood & stone caps.',
     desc: 'Raises the wood & stone caps by 100 and serves as a store. Raw materials need room to pile.',
   },
   smithy: {
     name: 'Smithy', cat: 'basics', w: 2, h: 2, hp: 340, cost: { wood: 12, stone: 12 }, time: 36,
     kind: 'craft', craft: 'tools', light: 2.6, tall: 9, unlock: 2,
+    short: 'Smith forges tools (2 wood + 1 stone).',
     desc: 'A Smith forges tools (2 wood + 1 stone each); workers wear them out and bare hands are slow. Unlocks the Smith job.',
   },
   kitchen: {
     name: 'Kitchen', cat: 'basics', w: 2, h: 2, hp: 300, cost: { wood: 12, stone: 6 }, time: 30,
     kind: 'craft', craft: 'meals', light: 2.6, tall: 8, unlock: 2,
+    short: 'Cook: 3 food + 1 wood → 2 meals.',
     desc: 'A Cook simmers 3 food + 1 wood into 2 meals that satisfy far better than raw berries. Unlocks the Cook job.',
   },
   fletch: {
     name: 'Fletcher Hut', cat: 'defense', w: 2, h: 2, hp: 280, cost: { wood: 12, stone: 4 }, time: 26,
     kind: 'craft', craft: 'arrows', light: 2.0, tall: 7, unlock: 3,
+    short: 'Fletcher: wood → arrows. Towers need them.',
     desc: 'A Fletcher fashions arrows from wood. Towers burn 1 a shot (ballistae 2) and raids pack quivers. Unlocks the Fletcher job.',
   },
   tavern: {
     name: 'Tavern', cat: 'basics', w: 2, h: 2, hp: 360, cost: { wood: 16, stone: 8 }, time: 44,
     kind: 'craft', craft: 'ale', light: 3.2, tall: 8, unlock: 4,
+    short: 'Brewer: ale → +10% work tomorrow.',
     desc: 'A Brewer mashes food + herbs into ale; a drink at dusk puts +10% into tomorrow\u2019s work. Unlocks the Brewer job.',
   },
   bottlery: {
     name: 'Bottlery', cat: 'basics', w: 2, h: 2, hp: 300, cost: { wood: 12, stone: 6 }, time: 30,
     kind: 'craft', craft: 'bottles', light: 2.2, tall: 8, unlock: 3,
+    short: 'Bottler: 2 water → 2 bottles. No well walks.',
     desc: 'A Bottler fills 2 water into 2 bottles. Bottled folk drink where they stand instead of walking to the well — fewer trips, more work. Unlocks the Bottler job.',
   },
   bakery: {
     name: 'Bakehouse', cat: 'basics', w: 2, h: 2, hp: 340, cost: { wood: 18, stone: 10 }, time: 40,
     kind: 'craft', craft: 'bread', light: 2.6, tall: 10, capOne: true, unlock: 5,
+    short: 'Baker: flour + water → bread. One only.',
     desc: 'The lord\u2019s monopoly — one per village. A Baker turns flour + water into bread, the heartiest food (Windmill grinds wheat into flour). Unlocks the Baker job.',
   },
   school: {
     name: 'Schoolhouse', cat: 'basics', w: 2, h: 2, hp: 320, cost: { wood: 20, stone: 12 }, time: 50,
     kind: 'school', light: 2.2, tall: 12, unlock: 6,
+    short: 'Scribe: +12% work, forever.',
     desc: 'A Scribe teaches one villager at a time; the schooled work +12% forever. A pair of hands now for better hands later. Unlocks the Scribe job.',
   },
   manor: {
     name: 'Manor', cat: 'basics', w: 3, h: 2, hp: 520, cost: { wood: 24, stone: 16 }, time: 70,
     housing: 6, comfort: 3, light: 3.0, tall: 10, kind: 'house', unlock: 6,
+    short: 'Plush beds for 6.',
     desc: 'Grand lodgings for six — the plushest beds in the valley. Snug villagers work better.',
   },
   shrine: {
     name: 'Shrine', cat: 'mystic', w: 1, h: 1, hp: 200, cost: { stone: 16 }, time: 28,
     kind: 'shrine', light: 3.1, tall: 8, essence: true, unlock: 8,
+    short: 'Essence regenerates faster.',
     desc: 'Faith of the valley made stone. Slowly regenerates your Essence.',
   },
   beacon: {
     name: 'The Beacon', cat: 'mystic', w: 3, h: 3, hp: 900, cost: { wood: 100, stone: 80 }, time: 110,
     kind: 'beacon', light: 0, tall: 40, unlock: 10,
+    short: 'Light it, survive the Long Night, win.',
     desc: 'The Great Beacon of legend. Lighting it calls the final horde — survive that night and dawn returns forever.',
   },
   // ---- upgrade tiers: reached by upgrading in place, never built directly ----
@@ -5501,7 +5580,8 @@ const Render = {
       ctx.drawImage(lc, 0, 0);
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-      // warm additive glow on top of the carved light holes
+      // warm additive glow on top of the carved light holes — torches
+      // breathe (radius wobble) so the night never sits still
       ctx.globalCompositeOperation = 'lighter';
       const warmGlow = (wx, wy, r) => {
         const s = this.worldToScreen(wx * 16, wy * 16);
@@ -5516,11 +5596,12 @@ const Render = {
       for (const b of G.buildings) {
         if (!b.built || !b.def.light) continue;
         const dim = b.key === 'torch' && oilDry;
-        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, b.key === 'torch' ? (dim ? 1.0 : 2.2) : b.def.light * 0.8);
+        const wob = b.key === 'torch' ? 1 + Math.sin(this._t * 9 + b.id * 1.7) * 0.09 : 1;
+        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, (b.key === 'torch' ? (dim ? 1.0 : 2.2) : b.def.light * 0.8) * wob);
       }
       if (G.beaconLit) {
         const b = G.buildings.find(bb => bb.key === 'beacon' && bb.built);
-        if (b) warmGlow(b.x + 1.5, b.y + 0.8, 11);
+        if (b) warmGlow(b.x + 1.5, b.y + 0.8, 11 + Math.sin(this._t * 5) * 0.7);
       }
       ctx.globalCompositeOperation = 'source-over';
       this.firefliesDraw();
@@ -5529,9 +5610,18 @@ const Render = {
       ctx.fillStyle = `rgba(160,30,40,${0.16 * dark})`;
       ctx.fillRect(0, 0, this.cw, this.ch);
     }
+    // time-of-day grade: dusk bleeds orange into violet as the dark rises;
+    // dawn washes gold instead
     if (warm > 0.02) {
-      ctx.fillStyle = `rgba(255,140,50,${warm * 0.14})`;
-      ctx.fillRect(0, 0, this.cw, this.ch);
+      if (G.phase === 'dusk') {
+        ctx.fillStyle = `rgba(255,140,50,${warm * 0.13})`;
+        ctx.fillRect(0, 0, this.cw, this.ch);
+        ctx.fillStyle = `rgba(120,60,160,${warm * 0.12 * dark})`;
+        ctx.fillRect(0, 0, this.cw, this.ch);
+      } else {
+        ctx.fillStyle = `rgba(255,196,90,${warm * 0.12})`;
+        ctx.fillRect(0, 0, this.cw, this.ch);
+      }
     }
   },
 
@@ -5656,7 +5746,6 @@ const UI = {
   _pinch: null,
   _panning: false,
   _lastPhase: '',
-  _toastN: 0,
   _hudT: 0,
   _lastPlaceFail: 0,
   _chips: {},        // resource chip elements by key (order lives in G.settings.matOrder)
@@ -5700,7 +5789,7 @@ const UI = {
       phaseIcon: $('phaseIcon'), toasts: $('toasts'), tut: $('tut'), tutText: $('tutText'),
       selCard: $('selCard'), dock: $('dock'), panel: $('panel'), panelTitle: $('panelTitle'), panelBody: $('panelBody'),
       panelBack: $('panelBack'), modeChip: $('modeChip'), modeChipText: $('modeChipText'), mmWrap: $('mmWrap'),
-      bossBar: $('bossBar'), bossHpFill: $('bossHpFill'),
+      bossBar: $('bossBar'), bossHpFill: $('bossHpFill'), hudBtns: $('hudBtns'),
     };
     $('btnPause').onclick = () => Sim.speedSet(G.paused ? 1 : 0);
     $('btnSpd1').onclick = () => Sim.speedSet(1);
@@ -5715,6 +5804,7 @@ const UI = {
     $('btnHelpClose').onclick = () => { $('helpScreen').classList.add('hidden'); if (G.state === 'title') $('titleScreen').classList.remove('hidden'); };
     $('btnHelpT').onclick = () => { $('titleScreen').classList.add('hidden'); $('helpScreen').classList.remove('hidden'); };
     $('btnNew').onclick = () => { $('diffPick').classList.remove('hidden'); $('btnNew').classList.add('hidden'); };
+    $('btnDiffBack').onclick = () => { $('diffPick').classList.add('hidden'); $('btnNew').classList.remove('hidden'); };
     $('btnContinue').onclick = () => {
       let ok = SaveSys.load('auto');
       if (!ok) for (let i = 1; i <= 3; i++) if (SaveSys.has(i) && SaveSys.load(i)) { ok = true; break; }
@@ -5786,6 +5876,8 @@ const UI = {
     const row = this.els.resRow;
     for (const k of this.matOrder()) if (this._chips[k]) row.appendChild(this._chips[k]);
     if (this._chips.pop) row.appendChild(this._chips.pop); // population stays at the end
+    const bm = document.getElementById('btnMats');
+    if (bm) row.appendChild(bm); // the Materials tab rides at the end of its chips
   },
 
   buildResRow() {
@@ -5872,6 +5964,17 @@ const UI = {
     if (G.boss) this.els.bossHpFill.style.width = U.clamp(G.boss.hp / G.boss.maxHp * 100, 0, 100) + '%';
     if (!this.els.selCard.classList.contains('hidden')) this.selRender();
     if (this.open === 'materials') this.matsLive();
+    // narrow layout: the materials block's height varies with shown goods, so
+    // pin orb / speed cluster / notices just below it instead of fixed offsets
+    if (window.matchMedia('(max-width:560px)').matches) {
+      const b = Math.round(this.els.resRow.getBoundingClientRect().bottom) + 8;
+      this.els.mmWrap.style.top = b + 'px';
+      this.els.toasts.style.top = b + 'px';
+      this.els.tut.style.top = b + 'px';
+      this.els.bossBar.style.top = b + 'px';
+      const mmH = this.els.mmWrap.classList.contains('hidden') ? 0 : this.els.mmWrap.offsetHeight;
+      this.els.hudBtns.style.top = (b + mmH + 8) + 'px';
+    }
   },
 
   // stock & caps tick live while the Materials tab is open
@@ -5902,14 +6005,63 @@ const UI = {
 
   /* ================= toasts ================= */
   toast(msg, kind) {
+    const box = this.els.toasts;
+    const top = box.lastElementChild;
+    if (top && top._msg === msg) {
+      // same message again — fold into a ×N badge instead of stacking a copy
+      top._n = (top._n || 1) + 1;
+      let b = top.querySelector('.tn');
+      if (!b) { b = document.createElement('b'); b.className = 'tn'; top.appendChild(b); }
+      b.textContent = '\u00d7' + top._n;
+      clearTimeout(top._t1); clearTimeout(top._t2);
+      top.classList.remove('fadeout');
+      top._t1 = setTimeout(() => top.classList.add('fadeout'), 4200);
+      top._t2 = setTimeout(() => top.remove(), 4900);
+      return;
+    }
     const t = document.createElement('div');
     t.className = 'toast ' + (kind || '');
     t.innerHTML = U.esc(msg).replace(/\u26a0/g, '\u26a0\ufe0f');
-    this.els.toasts.appendChild(t);
-    this._toastN++;
-    while (this.els.toasts.children.length > 4) this.els.toasts.firstChild.remove();
-    setTimeout(() => { t.classList.add('fadeout'); setTimeout(() => t.remove(), 650); }, 4200);
+    t._msg = msg;
+    box.appendChild(t);
+    while (box.children.length > 2) box.firstChild.remove();
+    t._t1 = setTimeout(() => t.classList.add('fadeout'), 4200);
+    t._t2 = setTimeout(() => t.remove(), 4900);
   },
+
+  /* -------- hold-for-details -------- */
+  // press-and-hold on a compact card pops its full story (jobs, buildings)
+  showInfoPop(html) {
+    let p = document.getElementById('ipop');
+    if (!p) { p = document.createElement('div'); p.id = 'ipop'; document.getElementById('app').appendChild(p); }
+    p.innerHTML = html;
+    p.classList.remove('fadeout');
+    clearTimeout(this._ipopT); clearTimeout(this._ipopT2);
+    this._popT = performance.now(); // a card's click right after a hold is a release, not a tap
+    this._ipopT = setTimeout(() => p.classList.add('fadeout'), 3600);
+    this._ipopT2 = setTimeout(() => p.remove(), 4200);
+  },
+
+  holdInfo(el, html) {
+    el.addEventListener('pointerdown', e => {
+      const sx = e.clientX, sy = e.clientY;
+      let t = null;
+      const clean = () => {
+        if (t) { clearTimeout(t); t = null; }
+        el.removeEventListener('pointermove', move);
+        el.removeEventListener('pointerup', clean);
+        el.removeEventListener('pointercancel', clean);
+      };
+      const move = ev => { if (t && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 12) { clearTimeout(t); t = null; } };
+      t = setTimeout(() => { t = null; clean(); this.showInfoPop(html); }, 430);
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', clean);
+      el.addEventListener('pointercancel', clean);
+    });
+  },
+
+  // a click within 700ms of an info popup is the release that ended the hold
+  afterPop() { return performance.now() - (this._popT || 0) < 700; },
 
   /* ================= tutorial ================= */
   tutStart() { G.tut = 0; this.tutRender(); },
@@ -6166,9 +6318,10 @@ const UI = {
         card.className = 'bcard' + (this.mode && this.mode.type === 'demolish' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#3a2020"></canvas>
           <div><div class="bn">Demolish</div><div class="bc"><span>reclaims 50%</span></div>
-          <div class="bd">Builders tear the building down and half its cost is refunded. Tap again to cancel an order. Drag across walls.</div></div>`;
-        card.onclick = () => { this.setMode({ type: 'demolish' }); this.closePanel(); };
+          <div class="bd">Tear buildings down — half the cost comes back. Drag across walls.</div></div>`;
+        card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'demolish' }); this.closePanel(); };
         this.drawCardIcon(card, 'wallW', true);
+        this.holdInfo(card, '<b>Demolish</b> — builders tear the building down and half its cost is refunded. Tap an order again to cancel. Drag across walls to clear a whole line.');
         grid.appendChild(card);
         continue;
       }
@@ -6177,9 +6330,10 @@ const UI = {
         card.className = 'bcard' + (this.mode && this.mode.type === 'clear' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#2a3320"></canvas>
           <div><div class="bn">Clear Land</div><div class="bc"><span>builders</span></div>
-          <div class="bd">Mark trees, boulders, berry bushes, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap shore water to fill it with stone (${CONFIG.CLEAR.waterCost} stone a tile) and make new land. Tap again to cancel.</div></div>`;
-        card.onclick = () => { this.setMode({ type: 'clear' }); this.closePanel(); };
+          <div class="bd">Mark trees, rocks & ruins — or fill shore water (${CONFIG.CLEAR.waterCost} stone a tile).</div></div>`;
+        card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'clear' }); this.closePanel(); };
         this.drawCardIcon(card, 'tree0', true);
+        this.holdInfo(card, `<b>Clear Land</b> — mark trees, boulders, berry bushes, ruins or crystals and a Builder clears the tile (half the yield is salvaged). Tap shore water to fill it with stone (${CONFIG.CLEAR.waterCost} stone a tile) and make new land. Tap again to cancel.`);
         grid.appendChild(card);
         continue;
       }
@@ -6187,18 +6341,22 @@ const UI = {
       const unlocked = !!G.unlocks[k];
       const afford = Buildings.afford(k);
       const card = document.createElement('button');
-      card.className = 'bcard' + (unlocked ? '' : ' locked') + (this.mode && this.mode.type === 'build' && this.mode.key === k ? ' sel' : '');
+      card.className = 'bcard' + (unlocked ? '' : ' locked') + (unlocked && !afford ? ' poor' : '') + (this.mode && this.mode.type === 'build' && this.mode.key === k ? ' sel' : '');
       const cc = Buildings.costOf(def); // A5: costs shown are costs charged
       const cost = Object.entries(def.cost).map(([r]) =>
-        `<span class="${G.res[r] < cc[r] ? 'costNo' : ''}">${cc[r]} ${r}</span>`).join('');
+        `<span class="cchip${G.res[r] < cc[r] ? ' no' : ''}" data-r="${r}">${cc[r]}</span>`).join('');
       card.innerHTML = `
         <span class="bgrab" title="Drag from here to place straight onto the map">\u283f</span>
+        <canvas width="44" height="44"></canvas>
         <div><div class="bn">${U.esc(def.name)}</div>
         <div class="bc">${cost}</div>
-        <div class="bd">${U.esc(def.desc)}${unlocked ? '' : `<br><b style="color:var(--amber)">Unlocks day ${def.unlock}</b>`}</div></div>`;
+        <div class="bd">${U.esc(def.short || def.desc)}${unlocked ? '' : `<br><b style="color:var(--amber)">Unlocks day ${def.unlock}</b>`}</div></div>`;
       this.drawCardIcon(card, k, !unlocked);
+      for (const s of card.querySelectorAll('.cchip')) s.prepend(Art.iconEl(s.dataset.r));
+      this.holdInfo(card, `<b>${U.esc(def.name)}</b> — ${U.esc(def.desc)}${unlocked ? '' : `<br><i style="color:var(--amber)">Unlocks day ${def.unlock}.</i>`}`);
       card.onclick = () => {
         if (this._cardDragged) { this._cardDragged = false; return; } // drag just ended — not a click
+        if (this.afterPop()) return; // the release that ended a hold — not a tap
         if (!unlocked) { this.toast(`Unlocks on day ${def.unlock}.`, ''); return; }
         if (!afford) { this.toast(`Not enough resources for ${def.name}.`, 'bad'); return; }
         this.setMode({ type: 'build', key: k });
@@ -6242,17 +6400,18 @@ const UI = {
   },
 
   drawCardIcon(card, key, locked) {
-    const cv = card.querySelector('canvas') || card.firstChild;
+    const cv = card.querySelector('canvas');
     if (!(cv instanceof HTMLCanvasElement)) return;
     const x = cv.getContext('2d');
     x.imageSmoothingEnabled = false;
+    x.clearRect(0, 0, cv.width, cv.height);
     if (locked) x.globalAlpha = 0.4;
     const MAP = { farm: 'farm3', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
     let spr = Art.s[MAP[key] || key];
     if (key === '__demolish' || !spr) spr = Art.s.wallW;
-    const s = Math.min(38 / spr.width, 38 / spr.height);
+    const s = Math.min(cv.width / spr.width, cv.height / spr.height);
     const w = spr.width * s, h = spr.height * s;
-    x.drawImage(spr, (38 - w) / 2, (38 - h) / 2, w, h);
+    x.drawImage(spr, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
     x.globalAlpha = 1;
   },
 
@@ -6260,16 +6419,18 @@ const UI = {
     const wrap = document.createElement('div');
     const pop = G.villagers.length;
     const sum = JOBS.filter(j => j !== 'idle').reduce((s, j) => s + (G.jobs[j] || 0), 0);
+    const cm = Sim.contentment();
     const note = document.createElement('div');
     note.className = 'jnote';
-    const cm = Sim.contentment();
-    note.innerHTML = `Villagers: <b>${pop}</b> \u00b7 Assigned: <b>${Math.min(sum, pop)}</b> \u00b7 Resting: <b>${Math.max(0, pop - sum)}</b><br>Housing: <b>${cm.label}</b> \u00d7${cm.mult.toFixed(2)} work — beds and comfort pay off.<br>Tap <b>+</b>/<b>&minus;</b> to move people between duties. They start at once.`;
+    note.innerHTML = `Villagers <b>${pop}</b> \u00b7 Assigned <b>${Math.min(sum, pop)}</b> \u00b7 Resting <b>${Math.max(0, pop - sum)}</b> \u00b7 Housing <b>${cm.label}</b> \u00d7${cm.mult.toFixed(2)}<br>Tap <b>+</b>/<b>&minus;</b> to reassign — hold a card for the full story.`;
     wrap.appendChild(note);
-    // locked duties grey out and sink to the bottom; building the workplace
-    // returns them to the roster (stable sort keeps the roster order)
+    // compact card grid: tiny rows fit every duty on one screen; the whole
+    // story lives behind a press-and-hold
     const lockedJ = j => !!(JOB_NEEDS[j] && !Buildings.built(JOB_NEEDS[j]));
     const ordered = JOBS.filter(j => j !== 'idle');
     ordered.sort((a, b) => (lockedJ(a) ? 1 : 0) - (lockedJ(b) ? 1 : 0));
+    const grid = document.createElement('div');
+    grid.className = 'jgrid';
     for (const j of ordered) {
       const info = JOB_INFO[j];
       const locked = lockedJ(j);
@@ -6280,14 +6441,20 @@ const UI = {
       const ix = icon.getContext('2d');
       ix.imageSmoothingEnabled = false;
       ix.drawImage(Art.villager({ skin: 1, hair: 1, cloth: info.cloth, guard: j === 'guard' }, 0), 0, 0);
-      row.appendChild(icon);
-      const txt = document.createElement('div');
-      txt.style.flex = '1';
-      txt.innerHTML = `<div class="jn">${info.name}</div><div class="jd">${locked ? `Requires a built ${U.esc(BUILD[JOB_NEEDS[j]].name)}.` : info.desc}</div>`;
-      row.appendChild(txt);
+      const top = document.createElement('div');
+      top.className = 'jtop';
+      top.appendChild(icon);
+      const nm = document.createElement('div');
+      nm.className = 'jn';
+      nm.textContent = info.name;
+      top.appendChild(nm);
       const cnt = document.createElement('div');
       cnt.className = 'cnt';
       cnt.textContent = (G.jobs[j] || 0);
+      top.appendChild(cnt);
+      row.appendChild(top);
+      const btns = document.createElement('div');
+      btns.className = 'jbtns';
       const minus = document.createElement('button');
       minus.textContent = '\u2212';
       minus.onclick = () => {
@@ -6303,9 +6470,14 @@ const UI = {
         G.jobs[j] = (G.jobs[j] || 0) + 1;
         Sim.reassign(); this.openPanel('jobs'); this.updateHUD();
       };
-      row.appendChild(minus); row.appendChild(cnt); row.appendChild(plus);
-      wrap.appendChild(row);
+      btns.appendChild(minus); btns.appendChild(plus);
+      row.appendChild(btns);
+      this.holdInfo(row, locked
+        ? `<b>${info.name}</b> — needs a built ${U.esc(BUILD[JOB_NEEDS[j]].name)} first.`
+        : `<b>${info.name}</b> — ${U.esc(info.desc)}`);
+      grid.appendChild(row);
     }
+    wrap.appendChild(grid);
     return wrap;
   },
 
@@ -6767,8 +6939,14 @@ const UI = {
       G.cam.y += before.y - after.y;
     }, { passive: false });
 
-    // minimap tap/drag
+    // minimap tap/drag (on narrow screens the orb expands while in use)
     const mm = document.getElementById('minimap');
+    let mmShrinkT = null;
+    const mmBig = () => {
+      this.els.mmWrap.classList.add('big');
+      clearTimeout(mmShrinkT);
+      mmShrinkT = setTimeout(() => this.els.mmWrap.classList.remove('big'), 3500);
+    };
     const mmNav = e => {
       const r = mm.getBoundingClientRect();
       const fx = U.clamp((e.clientX - r.left) / r.width, 0, 1);
@@ -6777,8 +6955,8 @@ const UI = {
       G.cam.y = fy * World.H * 16;
       G.follow = null;
     };
-    mm.addEventListener('pointerdown', e => { try { mm.setPointerCapture(e.pointerId); } catch (err) {} mmNav(e); });
-    mm.addEventListener('pointermove', e => { if (e.buttons) mmNav(e); });
+    mm.addEventListener('pointerdown', e => { mmBig(); try { mm.setPointerCapture(e.pointerId); } catch (err) {} mmNav(e); });
+    mm.addEventListener('pointermove', e => { if (e.buttons) { mmBig(); mmNav(e); } });
 
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('visibilitychange', () => {

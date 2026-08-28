@@ -30,9 +30,8 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .hbtn.active{background:var(--amber);border-color:var(--amber2);color:#241a08}
 /* the single materials bar — chips + the Materials tab button */
 #resBar{display:flex;gap:6px;align-items:stretch;margin-top:6px;pointer-events:auto}
-#resRow{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:3px 0}
-#resRow::-webkit-scrollbar{display:none}
-#btnMats{flex:none;display:flex;align-items:center;justify-content:center;width:44px;margin:3px 0;
+#resRow{flex:1;min-width:0;display:flex;gap:6px;flex-wrap:wrap;overflow-y:hidden;scrollbar-width:none;padding:3px 0}
+#btnMats{flex:none;align-self:stretch;display:flex;align-items:center;justify-content:center;width:44px;
   background:rgba(13,15,20,.92);border:2px solid #4a5468;border-radius:9px;cursor:pointer}
 #btnMats:active,#btnMats.on{border-color:var(--amber)}
 #btnMats canvas{width:22px;height:22px}
@@ -64,7 +63,15 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .toast.good{border-left-color:var(--green)}
 .toast.magic{border-left-color:var(--purple)}
 .toast.fadeout{opacity:0;transition:opacity .6s}
+.toast .tn{color:var(--dim);font-size:11px;font-weight:800;margin-left:6px}
 @keyframes toastIn{from{transform:translateY(-8px);opacity:0}}
+
+/* hold-for-details popup (jobs, build cards) */
+#ipop{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--sab) + 84px);z-index:40;width:min(92vw,400px);
+  background:rgba(24,26,34,.97);border:2px solid var(--line);border-left:4px solid var(--amber);border-radius:10px;
+  padding:9px 12px;font-size:12.5px;line-height:1.5;box-shadow:0 6px 18px rgba(0,0,0,.55);pointer-events:none}
+#ipop b{color:var(--amber2)}
+#ipop.fadeout{opacity:0;transition:opacity .5s}
 
 /* ---------- tutorial ---------- */
 #tut{position:absolute;top:calc(var(--sat) + 66px);left:50%;transform:translateX(-50%);z-index:29;width:min(92vw,400px);
@@ -122,26 +129,33 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .bcard:active{border-color:var(--amber)}
 .bcard.sel{border-color:var(--amber);background:#33301f}
 .bcard.locked{opacity:.45}
-.bcard canvas{width:38px;height:38px;flex:none}
+.bcard.poor{opacity:.62;filter:grayscale(.5)}
+.bcard.poor.sel{filter:none;opacity:1}
+.bcard>canvas{width:44px;height:44px;flex:none}
 /* card grip — the only zone that drags a building out (touch elsewhere scrolls) */
 .bgrab{flex:none;align-self:stretch;display:flex;align-items:center;justify-content:center;width:26px;
   margin:-4px 0 -4px -4px;border-right:2px dotted #4a5468;color:var(--dim);font-size:15px;font-weight:800;touch-action:none}
 .bgrab:active{color:var(--amber2)}
 .bcard .bn{font-size:13px;font-weight:700}
-.bcard .bc{font-size:11px;color:var(--dim);margin-top:2px;display:flex;gap:8px}
+.bcard .bc{font-size:11px;color:var(--dim);margin-top:2px;display:flex;gap:7px;flex-wrap:wrap}
 .bcard .bd{font-size:10.5px;color:var(--dim);margin-top:2px;line-height:1.3}
 .bcard .costNo{color:var(--red)}
+.cchip{display:inline-flex;align-items:center;gap:3px;font-weight:800;color:var(--ink)}
+.cchip canvas{width:14px;height:14px}
+.cchip.no{color:var(--red)}
 .catTabs{display:flex;gap:6px;margin:2px 0 10px;flex-wrap:wrap}
 .catTab{border:2px solid var(--line);background:var(--panel2);color:var(--dim);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700}
 .catTab.on{color:#241a08;background:var(--amber);border-color:var(--amber2)}
 
-/* jobs rows */
-.jrow{display:flex;align-items:center;gap:10px;background:var(--panel2);border:2px solid var(--line);border-radius:11px;padding:8px 10px;margin-bottom:7px}
-.jrow canvas{width:34px;height:34px;flex:none}
-.jrow .jn{font-size:13px;font-weight:700}
-.jrow .jd{font-size:10.5px;color:var(--dim);line-height:1.3;margin-top:1px}
-.jrow .cnt{margin-left:auto;font-size:18px;font-weight:800;min-width:26px;text-align:center}
-.jrow button{width:38px;height:38px;font-size:19px;font-weight:800;border:2px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);flex:none}
+/* jobs — compact card grid; the full story pops on press-and-hold */
+.jgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:7px}
+.jrow{display:flex;flex-direction:column;gap:5px;background:var(--panel2);border:2px solid var(--line);border-radius:10px;padding:6px 7px}
+.jrow .jtop{display:flex;align-items:center;gap:7px;min-width:0}
+.jrow canvas{width:26px;height:26px;flex:none}
+.jrow .jn{flex:1;min-width:0;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jrow .cnt{font-size:15px;font-weight:800;min-width:18px;text-align:center;font-variant-numeric:tabular-nums}
+.jrow .jbtns{display:flex;gap:6px}
+.jrow button{flex:1;height:28px;font-size:15px;font-weight:800;border:2px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);cursor:pointer}
 .jrow.locked{opacity:.45;filter:grayscale(.9)}
 .jnote{font-size:11.5px;color:var(--dim);padding:6px 2px;line-height:1.4}
 
@@ -193,7 +207,7 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 /* minimap */
 #mmWrap{position:absolute;top:calc(var(--sat) + 66px);right:8px;z-index:23;border:2px solid var(--line);border-radius:8px;
   overflow:hidden;background:#0c0e14;box-shadow:0 4px 14px rgba(0,0,0,.5)}
-#minimap{width:132px;height:132px}
+#minimap{width:132px;height:132px;transition:width .15s,height .15s}
 
 /* ---------- screens ---------- */
 .screen{position:absolute;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;overflow-y:auto}
@@ -223,4 +237,22 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
 @media (orientation:landscape) and (max-height:480px){
   #titleArt{display:none} h1{font-size:30px;letter-spacing:6px;margin-top:calc(var(--sat) + 8px)}
   .titleInner{gap:6px}
+}
+/* ---------- narrow / portrait phones ----------
+   The day dial stretches tall on the left while the materials chips flow
+   beside it in the top-right (the Materials tab rides as the last chip).
+   The minimap becomes a small orb that expands while you steer it; it and
+   the speed cluster pin just below the materials block — JS keeps those
+   offsets under the bar's live height (updateHUD). */
+@media (max-width:560px){
+  #hud{display:grid;grid-template-columns:auto 1fr;gap:5px 6px;align-items:stretch}
+  #hudTop{display:contents}
+  #clockWrap{flex-direction:column;justify-content:center;gap:5px;min-width:84px}
+  #clockBar{width:100%;height:8px;flex:none}
+  #resBar{display:contents}
+  #resRow{align-content:flex-start}
+  #hudBtns{position:absolute;right:6px;top:170px;flex-direction:column}
+  #minimap{width:64px;height:64px}
+  #mmWrap.big #minimap{width:132px;height:132px}
+  #toasts{left:10px;transform:none;align-items:flex-start;width:min(72vw,420px)}
 }

@@ -17,7 +17,6 @@ const UI = {
   _pinch: null,
   _panning: false,
   _lastPhase: '',
-  _toastN: 0,
   _hudT: 0,
   _lastPlaceFail: 0,
   _chips: {},        // resource chip elements by key (order lives in G.settings.matOrder)
@@ -61,7 +60,7 @@ const UI = {
       phaseIcon: $('phaseIcon'), toasts: $('toasts'), tut: $('tut'), tutText: $('tutText'),
       selCard: $('selCard'), dock: $('dock'), panel: $('panel'), panelTitle: $('panelTitle'), panelBody: $('panelBody'),
       panelBack: $('panelBack'), modeChip: $('modeChip'), modeChipText: $('modeChipText'), mmWrap: $('mmWrap'),
-      bossBar: $('bossBar'), bossHpFill: $('bossHpFill'),
+      bossBar: $('bossBar'), bossHpFill: $('bossHpFill'), hudBtns: $('hudBtns'),
     };
     $('btnPause').onclick = () => Sim.speedSet(G.paused ? 1 : 0);
     $('btnSpd1').onclick = () => Sim.speedSet(1);
@@ -76,6 +75,7 @@ const UI = {
     $('btnHelpClose').onclick = () => { $('helpScreen').classList.add('hidden'); if (G.state === 'title') $('titleScreen').classList.remove('hidden'); };
     $('btnHelpT').onclick = () => { $('titleScreen').classList.add('hidden'); $('helpScreen').classList.remove('hidden'); };
     $('btnNew').onclick = () => { $('diffPick').classList.remove('hidden'); $('btnNew').classList.add('hidden'); };
+    $('btnDiffBack').onclick = () => { $('diffPick').classList.add('hidden'); $('btnNew').classList.remove('hidden'); };
     $('btnContinue').onclick = () => {
       let ok = SaveSys.load('auto');
       if (!ok) for (let i = 1; i <= 3; i++) if (SaveSys.has(i) && SaveSys.load(i)) { ok = true; break; }
@@ -147,6 +147,8 @@ const UI = {
     const row = this.els.resRow;
     for (const k of this.matOrder()) if (this._chips[k]) row.appendChild(this._chips[k]);
     if (this._chips.pop) row.appendChild(this._chips.pop); // population stays at the end
+    const bm = document.getElementById('btnMats');
+    if (bm) row.appendChild(bm); // the Materials tab rides at the end of its chips
   },
 
   buildResRow() {
@@ -233,6 +235,17 @@ const UI = {
     if (G.boss) this.els.bossHpFill.style.width = U.clamp(G.boss.hp / G.boss.maxHp * 100, 0, 100) + '%';
     if (!this.els.selCard.classList.contains('hidden')) this.selRender();
     if (this.open === 'materials') this.matsLive();
+    // narrow layout: the materials block's height varies with shown goods, so
+    // pin orb / speed cluster / notices just below it instead of fixed offsets
+    if (window.matchMedia('(max-width:560px)').matches) {
+      const b = Math.round(this.els.resRow.getBoundingClientRect().bottom) + 8;
+      this.els.mmWrap.style.top = b + 'px';
+      this.els.toasts.style.top = b + 'px';
+      this.els.tut.style.top = b + 'px';
+      this.els.bossBar.style.top = b + 'px';
+      const mmH = this.els.mmWrap.classList.contains('hidden') ? 0 : this.els.mmWrap.offsetHeight;
+      this.els.hudBtns.style.top = (b + mmH + 8) + 'px';
+    }
   },
 
   // stock & caps tick live while the Materials tab is open
@@ -263,14 +276,63 @@ const UI = {
 
   /* ================= toasts ================= */
   toast(msg, kind) {
+    const box = this.els.toasts;
+    const top = box.lastElementChild;
+    if (top && top._msg === msg) {
+      // same message again — fold into a ×N badge instead of stacking a copy
+      top._n = (top._n || 1) + 1;
+      let b = top.querySelector('.tn');
+      if (!b) { b = document.createElement('b'); b.className = 'tn'; top.appendChild(b); }
+      b.textContent = '\u00d7' + top._n;
+      clearTimeout(top._t1); clearTimeout(top._t2);
+      top.classList.remove('fadeout');
+      top._t1 = setTimeout(() => top.classList.add('fadeout'), 4200);
+      top._t2 = setTimeout(() => top.remove(), 4900);
+      return;
+    }
     const t = document.createElement('div');
     t.className = 'toast ' + (kind || '');
     t.innerHTML = U.esc(msg).replace(/\u26a0/g, '\u26a0\ufe0f');
-    this.els.toasts.appendChild(t);
-    this._toastN++;
-    while (this.els.toasts.children.length > 4) this.els.toasts.firstChild.remove();
-    setTimeout(() => { t.classList.add('fadeout'); setTimeout(() => t.remove(), 650); }, 4200);
+    t._msg = msg;
+    box.appendChild(t);
+    while (box.children.length > 2) box.firstChild.remove();
+    t._t1 = setTimeout(() => t.classList.add('fadeout'), 4200);
+    t._t2 = setTimeout(() => t.remove(), 4900);
   },
+
+  /* -------- hold-for-details -------- */
+  // press-and-hold on a compact card pops its full story (jobs, buildings)
+  showInfoPop(html) {
+    let p = document.getElementById('ipop');
+    if (!p) { p = document.createElement('div'); p.id = 'ipop'; document.getElementById('app').appendChild(p); }
+    p.innerHTML = html;
+    p.classList.remove('fadeout');
+    clearTimeout(this._ipopT); clearTimeout(this._ipopT2);
+    this._popT = performance.now(); // a card's click right after a hold is a release, not a tap
+    this._ipopT = setTimeout(() => p.classList.add('fadeout'), 3600);
+    this._ipopT2 = setTimeout(() => p.remove(), 4200);
+  },
+
+  holdInfo(el, html) {
+    el.addEventListener('pointerdown', e => {
+      const sx = e.clientX, sy = e.clientY;
+      let t = null;
+      const clean = () => {
+        if (t) { clearTimeout(t); t = null; }
+        el.removeEventListener('pointermove', move);
+        el.removeEventListener('pointerup', clean);
+        el.removeEventListener('pointercancel', clean);
+      };
+      const move = ev => { if (t && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 12) { clearTimeout(t); t = null; } };
+      t = setTimeout(() => { t = null; clean(); this.showInfoPop(html); }, 430);
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', clean);
+      el.addEventListener('pointercancel', clean);
+    });
+  },
+
+  // a click within 700ms of an info popup is the release that ended the hold
+  afterPop() { return performance.now() - (this._popT || 0) < 700; },
 
   /* ================= tutorial ================= */
   tutStart() { G.tut = 0; this.tutRender(); },
@@ -527,9 +589,10 @@ const UI = {
         card.className = 'bcard' + (this.mode && this.mode.type === 'demolish' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#3a2020"></canvas>
           <div><div class="bn">Demolish</div><div class="bc"><span>reclaims 50%</span></div>
-          <div class="bd">Builders tear the building down and half its cost is refunded. Tap again to cancel an order. Drag across walls.</div></div>`;
-        card.onclick = () => { this.setMode({ type: 'demolish' }); this.closePanel(); };
+          <div class="bd">Tear buildings down — half the cost comes back. Drag across walls.</div></div>`;
+        card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'demolish' }); this.closePanel(); };
         this.drawCardIcon(card, 'wallW', true);
+        this.holdInfo(card, '<b>Demolish</b> — builders tear the building down and half its cost is refunded. Tap an order again to cancel. Drag across walls to clear a whole line.');
         grid.appendChild(card);
         continue;
       }
@@ -538,9 +601,10 @@ const UI = {
         card.className = 'bcard' + (this.mode && this.mode.type === 'clear' ? ' sel' : '');
         card.innerHTML = `<canvas width="16" height="16" style="background:#2a3320"></canvas>
           <div><div class="bn">Clear Land</div><div class="bc"><span>builders</span></div>
-          <div class="bd">Mark trees, boulders, berry bushes, ruins or crystals and a Builder will clear the tile (half the yield is salvaged). Tap shore water to fill it with stone (${CONFIG.CLEAR.waterCost} stone a tile) and make new land. Tap again to cancel.</div></div>`;
-        card.onclick = () => { this.setMode({ type: 'clear' }); this.closePanel(); };
+          <div class="bd">Mark trees, rocks & ruins — or fill shore water (${CONFIG.CLEAR.waterCost} stone a tile).</div></div>`;
+        card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'clear' }); this.closePanel(); };
         this.drawCardIcon(card, 'tree0', true);
+        this.holdInfo(card, `<b>Clear Land</b> — mark trees, boulders, berry bushes, ruins or crystals and a Builder clears the tile (half the yield is salvaged). Tap shore water to fill it with stone (${CONFIG.CLEAR.waterCost} stone a tile) and make new land. Tap again to cancel.`);
         grid.appendChild(card);
         continue;
       }
@@ -548,18 +612,22 @@ const UI = {
       const unlocked = !!G.unlocks[k];
       const afford = Buildings.afford(k);
       const card = document.createElement('button');
-      card.className = 'bcard' + (unlocked ? '' : ' locked') + (this.mode && this.mode.type === 'build' && this.mode.key === k ? ' sel' : '');
+      card.className = 'bcard' + (unlocked ? '' : ' locked') + (unlocked && !afford ? ' poor' : '') + (this.mode && this.mode.type === 'build' && this.mode.key === k ? ' sel' : '');
       const cc = Buildings.costOf(def); // A5: costs shown are costs charged
       const cost = Object.entries(def.cost).map(([r]) =>
-        `<span class="${G.res[r] < cc[r] ? 'costNo' : ''}">${cc[r]} ${r}</span>`).join('');
+        `<span class="cchip${G.res[r] < cc[r] ? ' no' : ''}" data-r="${r}">${cc[r]}</span>`).join('');
       card.innerHTML = `
         <span class="bgrab" title="Drag from here to place straight onto the map">\u283f</span>
+        <canvas width="44" height="44"></canvas>
         <div><div class="bn">${U.esc(def.name)}</div>
         <div class="bc">${cost}</div>
-        <div class="bd">${U.esc(def.desc)}${unlocked ? '' : `<br><b style="color:var(--amber)">Unlocks day ${def.unlock}</b>`}</div></div>`;
+        <div class="bd">${U.esc(def.short || def.desc)}${unlocked ? '' : `<br><b style="color:var(--amber)">Unlocks day ${def.unlock}</b>`}</div></div>`;
       this.drawCardIcon(card, k, !unlocked);
+      for (const s of card.querySelectorAll('.cchip')) s.prepend(Art.iconEl(s.dataset.r));
+      this.holdInfo(card, `<b>${U.esc(def.name)}</b> — ${U.esc(def.desc)}${unlocked ? '' : `<br><i style="color:var(--amber)">Unlocks day ${def.unlock}.</i>`}`);
       card.onclick = () => {
         if (this._cardDragged) { this._cardDragged = false; return; } // drag just ended — not a click
+        if (this.afterPop()) return; // the release that ended a hold — not a tap
         if (!unlocked) { this.toast(`Unlocks on day ${def.unlock}.`, ''); return; }
         if (!afford) { this.toast(`Not enough resources for ${def.name}.`, 'bad'); return; }
         this.setMode({ type: 'build', key: k });
@@ -603,17 +671,18 @@ const UI = {
   },
 
   drawCardIcon(card, key, locked) {
-    const cv = card.querySelector('canvas') || card.firstChild;
+    const cv = card.querySelector('canvas');
     if (!(cv instanceof HTMLCanvasElement)) return;
     const x = cv.getContext('2d');
     x.imageSmoothingEnabled = false;
+    x.clearRect(0, 0, cv.width, cv.height);
     if (locked) x.globalAlpha = 0.4;
     const MAP = { farm: 'farm3', windmill: 'windmill0', torch: 'torch0', herbalistHut: 'herbalist', road: 'road0' };
     let spr = Art.s[MAP[key] || key];
     if (key === '__demolish' || !spr) spr = Art.s.wallW;
-    const s = Math.min(38 / spr.width, 38 / spr.height);
+    const s = Math.min(cv.width / spr.width, cv.height / spr.height);
     const w = spr.width * s, h = spr.height * s;
-    x.drawImage(spr, (38 - w) / 2, (38 - h) / 2, w, h);
+    x.drawImage(spr, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
     x.globalAlpha = 1;
   },
 
@@ -621,16 +690,18 @@ const UI = {
     const wrap = document.createElement('div');
     const pop = G.villagers.length;
     const sum = JOBS.filter(j => j !== 'idle').reduce((s, j) => s + (G.jobs[j] || 0), 0);
+    const cm = Sim.contentment();
     const note = document.createElement('div');
     note.className = 'jnote';
-    const cm = Sim.contentment();
-    note.innerHTML = `Villagers: <b>${pop}</b> \u00b7 Assigned: <b>${Math.min(sum, pop)}</b> \u00b7 Resting: <b>${Math.max(0, pop - sum)}</b><br>Housing: <b>${cm.label}</b> \u00d7${cm.mult.toFixed(2)} work — beds and comfort pay off.<br>Tap <b>+</b>/<b>&minus;</b> to move people between duties. They start at once.`;
+    note.innerHTML = `Villagers <b>${pop}</b> \u00b7 Assigned <b>${Math.min(sum, pop)}</b> \u00b7 Resting <b>${Math.max(0, pop - sum)}</b> \u00b7 Housing <b>${cm.label}</b> \u00d7${cm.mult.toFixed(2)}<br>Tap <b>+</b>/<b>&minus;</b> to reassign — hold a card for the full story.`;
     wrap.appendChild(note);
-    // locked duties grey out and sink to the bottom; building the workplace
-    // returns them to the roster (stable sort keeps the roster order)
+    // compact card grid: tiny rows fit every duty on one screen; the whole
+    // story lives behind a press-and-hold
     const lockedJ = j => !!(JOB_NEEDS[j] && !Buildings.built(JOB_NEEDS[j]));
     const ordered = JOBS.filter(j => j !== 'idle');
     ordered.sort((a, b) => (lockedJ(a) ? 1 : 0) - (lockedJ(b) ? 1 : 0));
+    const grid = document.createElement('div');
+    grid.className = 'jgrid';
     for (const j of ordered) {
       const info = JOB_INFO[j];
       const locked = lockedJ(j);
@@ -641,14 +712,20 @@ const UI = {
       const ix = icon.getContext('2d');
       ix.imageSmoothingEnabled = false;
       ix.drawImage(Art.villager({ skin: 1, hair: 1, cloth: info.cloth, guard: j === 'guard' }, 0), 0, 0);
-      row.appendChild(icon);
-      const txt = document.createElement('div');
-      txt.style.flex = '1';
-      txt.innerHTML = `<div class="jn">${info.name}</div><div class="jd">${locked ? `Requires a built ${U.esc(BUILD[JOB_NEEDS[j]].name)}.` : info.desc}</div>`;
-      row.appendChild(txt);
+      const top = document.createElement('div');
+      top.className = 'jtop';
+      top.appendChild(icon);
+      const nm = document.createElement('div');
+      nm.className = 'jn';
+      nm.textContent = info.name;
+      top.appendChild(nm);
       const cnt = document.createElement('div');
       cnt.className = 'cnt';
       cnt.textContent = (G.jobs[j] || 0);
+      top.appendChild(cnt);
+      row.appendChild(top);
+      const btns = document.createElement('div');
+      btns.className = 'jbtns';
       const minus = document.createElement('button');
       minus.textContent = '\u2212';
       minus.onclick = () => {
@@ -664,9 +741,14 @@ const UI = {
         G.jobs[j] = (G.jobs[j] || 0) + 1;
         Sim.reassign(); this.openPanel('jobs'); this.updateHUD();
       };
-      row.appendChild(minus); row.appendChild(cnt); row.appendChild(plus);
-      wrap.appendChild(row);
+      btns.appendChild(minus); btns.appendChild(plus);
+      row.appendChild(btns);
+      this.holdInfo(row, locked
+        ? `<b>${info.name}</b> — needs a built ${U.esc(BUILD[JOB_NEEDS[j]].name)} first.`
+        : `<b>${info.name}</b> — ${U.esc(info.desc)}`);
+      grid.appendChild(row);
     }
+    wrap.appendChild(grid);
     return wrap;
   },
 
@@ -1128,8 +1210,14 @@ const UI = {
       G.cam.y += before.y - after.y;
     }, { passive: false });
 
-    // minimap tap/drag
+    // minimap tap/drag (on narrow screens the orb expands while in use)
     const mm = document.getElementById('minimap');
+    let mmShrinkT = null;
+    const mmBig = () => {
+      this.els.mmWrap.classList.add('big');
+      clearTimeout(mmShrinkT);
+      mmShrinkT = setTimeout(() => this.els.mmWrap.classList.remove('big'), 3500);
+    };
     const mmNav = e => {
       const r = mm.getBoundingClientRect();
       const fx = U.clamp((e.clientX - r.left) / r.width, 0, 1);
@@ -1138,8 +1226,8 @@ const UI = {
       G.cam.y = fy * World.H * 16;
       G.follow = null;
     };
-    mm.addEventListener('pointerdown', e => { try { mm.setPointerCapture(e.pointerId); } catch (err) {} mmNav(e); });
-    mm.addEventListener('pointermove', e => { if (e.buttons) mmNav(e); });
+    mm.addEventListener('pointerdown', e => { mmBig(); try { mm.setPointerCapture(e.pointerId); } catch (err) {} mmNav(e); });
+    mm.addEventListener('pointermove', e => { if (e.buttons) { mmBig(); mmNav(e); } });
 
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('visibilitychange', () => {

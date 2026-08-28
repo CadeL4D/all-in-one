@@ -486,7 +486,8 @@ const Render = {
       ctx.drawImage(lc, 0, 0);
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-      // warm additive glow on top of the carved light holes
+      // warm additive glow on top of the carved light holes — torches
+      // breathe (radius wobble) so the night never sits still
       ctx.globalCompositeOperation = 'lighter';
       const warmGlow = (wx, wy, r) => {
         const s = this.worldToScreen(wx * 16, wy * 16);
@@ -501,11 +502,12 @@ const Render = {
       for (const b of G.buildings) {
         if (!b.built || !b.def.light) continue;
         const dim = b.key === 'torch' && oilDry;
-        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, b.key === 'torch' ? (dim ? 1.0 : 2.2) : b.def.light * 0.8);
+        const wob = b.key === 'torch' ? 1 + Math.sin(this._t * 9 + b.id * 1.7) * 0.09 : 1;
+        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, (b.key === 'torch' ? (dim ? 1.0 : 2.2) : b.def.light * 0.8) * wob);
       }
       if (G.beaconLit) {
         const b = G.buildings.find(bb => bb.key === 'beacon' && bb.built);
-        if (b) warmGlow(b.x + 1.5, b.y + 0.8, 11);
+        if (b) warmGlow(b.x + 1.5, b.y + 0.8, 11 + Math.sin(this._t * 5) * 0.7);
       }
       ctx.globalCompositeOperation = 'source-over';
       this.firefliesDraw();
@@ -514,9 +516,18 @@ const Render = {
       ctx.fillStyle = `rgba(160,30,40,${0.16 * dark})`;
       ctx.fillRect(0, 0, this.cw, this.ch);
     }
+    // time-of-day grade: dusk bleeds orange into violet as the dark rises;
+    // dawn washes gold instead
     if (warm > 0.02) {
-      ctx.fillStyle = `rgba(255,140,50,${warm * 0.14})`;
-      ctx.fillRect(0, 0, this.cw, this.ch);
+      if (G.phase === 'dusk') {
+        ctx.fillStyle = `rgba(255,140,50,${warm * 0.13})`;
+        ctx.fillRect(0, 0, this.cw, this.ch);
+        ctx.fillStyle = `rgba(120,60,160,${warm * 0.12 * dark})`;
+        ctx.fillRect(0, 0, this.cw, this.ch);
+      } else {
+        ctx.fillStyle = `rgba(255,196,90,${warm * 0.12})`;
+        ctx.fillRect(0, 0, this.cw, this.ch);
+      }
     }
   },
 

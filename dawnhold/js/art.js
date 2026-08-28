@@ -1109,7 +1109,12 @@ const Art = {
     ic('powers', x => { R(x, 7, 1, 2, 14, '#c9a94b'); R(x, 1, 7, 14, 2, '#c9a94b'); R(x, 4, 4, 8, 8, '#8a5cd0'); R(x, 6, 6, 4, 4, '#d0b0ff'); });
     ic('map', x => { R(x, 1, 3, 14, 10, '#d8cbb0'); R(x, 1, 3, 14, 1, '#b0a388'); R(x, 1, 8, 14, 1, '#b0a388'); R(x, 5, 5, 2, 2, '#4a8f3c'); R(x, 9, 9, 2, 2, '#3b6ea8'); R(x, 10, 4, 2, 2, '#e05555'); });
     ic('sun', x => { R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 7, 1, 2, 3, '#ffd94a'); R(x, 7, 12, 2, 3, '#ffd94a'); R(x, 1, 7, 3, 2, '#ffd94a'); R(x, 12, 7, 3, 2, '#ffd94a'); R(x, 6, 6, 2, 2, '#fff2b0'); });
-    ic('moon', x => { R(x, 4, 2, 7, 12, '#c9d4f0'); R(x, 8, 2, 6, 12, '#1e222b'); R(x, 3, 5, 2, 2, '#c9d4f0'); R(x, 2, 9, 2, 2, '#c9d4f0'); });
+    ic('moon', x => {
+      // pixel crescent opening right — thick back, tapering arms
+      R(x, 6, 1, 4, 2, '#c9d4f0'); R(x, 4, 2, 4, 2, '#c9d4f0');
+      R(x, 2, 3, 4, 10, '#c9d4f0'); R(x, 4, 12, 4, 2, '#c9d4f0');
+      R(x, 6, 13, 4, 2, '#c9d4f0');
+    });
     ic('dusk', x => { R(x, 1, 7, 14, 2, '#e8894a'); R(x, 5, 5, 6, 6, '#ffd94a'); R(x, 11, 5, 5, 6, '#1e222b'); });
     ic('arrow', x => { R(x, 12, 2, 2, 2, '#e8e0d0'); R(x, 10, 4, 2, 2, '#e8e0d0'); R(x, 3, 11, 8, 2, '#c9b47a'); R(x, 2, 12, 2, 2, '#b8b8c0'); R(x, 4, 10, 2, 2, '#cfd8e0'); R(x, 11, 1, 2, 2, '#e05555'); });
     ic('tool', x => { R(x, 6, 2, 4, 8, '#8a6a4a'); R(x, 4, 9, 8, 4, PAL.metal); R(x, 4, 9, 8, 1, PAL.metalD); R(x, 7, 3, 1, 6, '#6b4a32'); });
@@ -1193,8 +1198,16 @@ const Art = {
     // moon / sun
     if (mode === 'win') { x.fillStyle = '#fff2b0'; x.fillRect(w / 2 - 20, h * .52, 40, 40); x.fillStyle = '#ffd94a'; x.fillRect(w / 2 - 26, h * .55, 52, 40); }
     else {
-      x.fillStyle = '#e8ecf8'; x.fillRect(w * .74, h * .16, 26, 26);
-      x.fillStyle = mode === 'lose' ? '#141830' : '#1c1440'; x.fillRect(w * .74 + 10, h * .16 - 4, 26, 26);
+      // pixel crescent stamped 2x — same design as the HUD moon icon, floats
+      // clean on the gradient sky (the old offset-rectangle carve left a
+      // dark box and an L-shaped blob)
+      const u = 2, mx = w * .74, my = h * .16 - 6;
+      x.fillStyle = '#dce6f6';
+      x.fillRect(mx + 6 * u, my + 1 * u, 4 * u, 2 * u);
+      x.fillRect(mx + 4 * u, my + 2 * u, 4 * u, 2 * u);
+      x.fillRect(mx + 2 * u, my + 3 * u, 4 * u, 10 * u);
+      x.fillRect(mx + 4 * u, my + 12 * u, 4 * u, 2 * u);
+      x.fillRect(mx + 6 * u, my + 13 * u, 4 * u, 2 * u);
     }
     // ground
     x.fillStyle = mode === 'lose' ? '#0c0e18' : '#1a2416';
