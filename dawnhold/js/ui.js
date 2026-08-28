@@ -236,15 +236,13 @@ const UI = {
     if (!this.els.selCard.classList.contains('hidden')) this.selRender();
     if (this.open === 'materials') this.matsLive();
     // narrow layout: the materials block's height varies with shown goods, so
-    // pin orb / speed cluster / notices just below it instead of fixed offsets
+    // pin orb / notices just below it instead of fixed offsets
     if (window.matchMedia('(max-width:560px)').matches) {
       const b = Math.round(this.els.resRow.getBoundingClientRect().bottom) + 8;
       this.els.mmWrap.style.top = b + 'px';
       this.els.toasts.style.top = b + 'px';
       this.els.tut.style.top = b + 'px';
       this.els.bossBar.style.top = b + 'px';
-      const mmH = this.els.mmWrap.classList.contains('hidden') ? 0 : this.els.mmWrap.offsetHeight;
-      this.els.hudBtns.style.top = (b + mmH + 8) + 'px';
     }
   },
 

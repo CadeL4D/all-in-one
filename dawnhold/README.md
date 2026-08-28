@@ -8,10 +8,11 @@ in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
 > **v1.4.2 — The Pocket Update:** built for the **vertical phone screen**.
-> The **day dial stretches tall** on the left of the HUD with the materials
-> chips flowing beside it in the top-right (the Materials tab rides as the
-> last chip); the minimap shrinks to a **little orb that expands while you
-> steer it**. The build menu finally **shows every building's sprite** with
+> One control row up top — the day clock stretches while **round pause/speed
+> buttons ride the right corner** — and the materials chips run full-width
+> beneath it (the Materials tab rides as the last chip); the minimap shrinks
+> to a **little orb that expands while you steer it**. The build menu finally
+> **shows every building's sprite** with
 > icon costs, a greyed can't-afford state, and **one-line intents** — jobs
 > became a **compact card grid** — and **holding any card pops its full
 > story**. Nights are **graded by phase** — dusk bleeds orange into violet,
@@ -82,13 +83,14 @@ Great Beacon to bring back the dawn.
 ## Changelog
 
 ### v1.4.2 — The Pocket Update
-- **Portrait-first HUD:** on narrow screens the **day dial stretches tall**
-  on the left while the materials chips **flow beside it in the top-right**
-  — no more chips lost past the screen edge, no dead corner. The Materials
-  tab rides as the **last chip** of the bar it opens. The minimap becomes a
-  64px orb that **expands to full size while touched** and tucks back after
-  a moment; orb, speed cluster, toasts, tutorial and boss bar pin just
-  below the materials block (JS tracks its live height every tick).
+- **Portrait-first HUD:** on narrow screens the top collapses to **one
+  control row** — the day clock stretches to fill it while compact **round**
+  pause/speed/menu buttons ride the right corner — and the materials chips
+  run **full-width rows** beneath (no more chips lost past the screen edge;
+  the Materials tab rides as the **last chip**). The minimap becomes a 64px
+  orb that **expands to full size while touched** and tucks back after a
+  moment; the orb, toasts, tutorial and boss bar pin just below the
+  materials block (JS tracks its live height every tick).
 - **Build cards show the buildings:** each card now carries its real sprite —
   `drawCardIcon` was already called but every regular card lacked a `<canvas>`
   to paint into, so the menu was text-only. Costs render as the same 16px

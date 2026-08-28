@@ -239,19 +239,14 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
   .titleInner{gap:6px}
 }
 /* ---------- narrow / portrait phones ----------
-   The day dial stretches tall on the left while the materials chips flow
-   beside it in the top-right (the Materials tab rides as the last chip).
-   The minimap becomes a small orb that expands while you steer it; it and
-   the speed cluster pin just below the materials block — JS keeps those
-   offsets under the bar's live height (updateHUD). */
+   One control row: the day clock stretches while compact round pause/speed/
+   menu buttons ride the right corner. Materials chips run full-width beneath
+   (the Materials tab rides as the last chip), and the minimap orb — which
+   expands while you steer it — pins just below the bar (updateHUD keeps the
+   offsets under its live height). */
 @media (max-width:560px){
-  #hud{display:grid;grid-template-columns:auto 1fr;gap:5px 6px;align-items:stretch}
-  #hudTop{display:contents}
-  #clockWrap{flex-direction:column;justify-content:center;gap:5px;min-width:84px}
-  #clockBar{width:100%;height:8px;flex:none}
-  #resBar{display:contents}
-  #resRow{align-content:flex-start}
-  #hudBtns{position:absolute;right:6px;top:170px;flex-direction:column}
+  #clockWrap{flex:1;min-width:110px}
+  .hbtn{width:36px;height:36px;border-radius:50%;font-size:10px}
   #minimap{width:64px;height:64px}
   #mmWrap.big #minimap{width:132px;height:132px}
   #toasts{left:10px;transform:none;align-items:flex-start;width:min(72vw,420px)}
