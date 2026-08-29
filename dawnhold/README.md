@@ -529,91 +529,187 @@ redraws at ~3Hz.
 
 ---
 
-## Research backlog — The Restless Dark (v1.5 candidates)
+## Research backlog — Daycraft (v1.5 candidates)
 
-*(This replaces the old "running a real village" backlog: its water, oil,
-bread and schooling chains shipped in v1.3 and the difficulty levers shipped
-in v1.4. Researched August 2026 from Against the Storm's hostility & orders,
-Rise to Ruins' corruption, Kingdom Two Crowns' Greed and winters, Farthest
-Frontier's crop rotation, They Are Billions' pacing and RimWorld's
-wealth-scaled, adaptive raids — plus the oldest complaint in the genre: once
-the village stabilises, building starts to feel pointless.)*
+*(The previous backlog batch bet on timers and pressure; this one bets the
+other way. The complaint it answers: by mid-morning of any day the player is
+a spectator — jobs are assigned, the site is queued, and nothing needs you
+until dusk. These candidates make the **day itself playable**: a bench of
+original activities — fast hands-on **minigames** at the worksites and
+slower **daycraft** projects — each productive (a player who does them all
+day ends the day measurably ahead) and each optional (a player who skips
+them is comfortable, not doomed). No new economy chains: every idea spends
+wood, stone, food, herbs, essence and the jobs the village already has.)*
 
-**The diagnosis:** the first days ask nothing of the player — fat starting
-stores, a 0–3-shade night 1, towers that auto-win — and the days themselves
-are passive: assign jobs, queue a building, watch. The genre's most engaging
-games stack timers and choices into the quiet phase, so there is always
-something that needs a tap *now*. Everything below adds decision density
-without a new economy; every chain reuses existing systems.
+### The minigame bench — the guardian lends a hand
 
-### The pick — ship together as "The Restless Dark"
+*The new rule of play: villagers keep working on their own, but the guardian
+can put hands directly on any ready worksite and play a few seconds of
+touch-work for a bonus. Six **warm hands** a day (a small sun-meter by the
+dock), each session ~8 seconds, the world keeps simulating while you play,
+every payoff is a stock the village already tracks — and a player who never
+touches the bench loses nothing. Sigil-craft and the Kindling below are the
+bench's slow flagships; this is its quick menu.*
 
-- **Adaptive waves (RimWorld raid points, AtS hostility):** a flawless night
-  (no damage, nobody hurt) grows the next wave +10%, stacking to +50%; a rough
-  night (a building lost, two villagers hurt) eases it −10%. The game leans in
-  when you're cruising and lets up when you're drowning — the most direct fix
-  for "too easy," and the smallest diff: one multiplier on the wave-size
-  formula, the 30-cap untouched.
-- **Dawn orders (Against the Storm orders):** each dawn, one small timed
-  task: "escort the salvage cart back from the ruins" (send 2 guards,
-  +essence), "pilgrims reach the gate at dusk — 8 bread" (+comfort; refusal
-  dips it). Dawn becomes a decision point instead of a scoreboard; reuses the
-  day-event system, toasts and the dusk telegraphs.
-- **Blight creep (Rise to Ruins corruption):** living monoliths slowly stain
-  nearby wild tiles blighted — dimmed sprites, bushes and trees yield half,
-  and blight touching the outskirts spawns day stragglers. Raiding a lair
-  purges its stain. The map becomes a frontier that pushes back: raids stop
-  being optional and days gain geography decisions (blight rides the existing
-  biome and minimap passes).
+- **The Chop (wood):** a felled log rests at camp — tap with the axe's swing
+  rhythm; every split inside the sweet band is +1 wood, up to +6 a session.
+- **The Line (fishing):** tap the bobber's dip to hook, tap again to land; a
+  clean landing doubles the catch, and the rare dawn-silver pays 2 essence.
+- **The Fault (stone):** swipe along a boulder's glowing crack to split it
+  clean — +2 stone, and the rock holds one extra unit before it's spent.
+- **The Comb (berries):** circle a bush without catching the thorn specks;
+  +3 berries and the bush regrows about half a minute faster.
+- **The Sickle (harvest):** swipe the wheat rows in time with the wind; clean
+  swales bundle +2 grain and the plot re-seeds itself.
+- **The Knead (bread):** tap-tap-hold on the dough's bounce; the batch bakes
+  three loaves for two's flour.
+- **The Stir (meals):** keep the ladle inside the pot's slow swirl for eight
+  seconds; the same pot renders 3 meals where 2 stood.
+- **The Hammer (smith):** strike the instant the bar flares; a "true" tool
+  lasts twice as long as a forged one.
+- **The Flight (arrows):** drag feathers to shafts in the pattern shown; a
+  matched flight batches 14 arrows where 10 stood.
+- **The Brew (ale):** tap the bubbles as they crest; a watched brew pours
+  bright ale — +15% work tomorrow instead of +10%.
+- **The Dip (oil):** dip the wicks on the wave; hand-dipped torches sip half
+  oil tonight.
+- **The Suture (hospital):** trace the wound's line without crossing red;
+  the medic's next mends restore +15 hp per herb.
+- **The Spark (braziers):** the hands behind The Kindling below — strike
+  sparks on the cap until it catches; a strong kindle burns a night and a
+  half.
+- **The Effigy (muster yard):** the drill below played for real — tap the
+  shape the straw shade raises, and the +10% lands a day early.
 
-### More to tap — day-phase interaction
+### Shape the wilds — the village edits the map
 
-- **Wandering trader (Kingdom Two Crowns, Northgard caravans):** every few
-  days a trader walks a route across the map; tap him while he's in range to
-  trade surplus for scarcity (ale → stone, arrows → herbs, bread → essence).
-  Overproduction gets a use, and the catch-him-or-miss-him window is a
-  moment-to-moment interaction on its own.
-- **Named villager wants (RimWorld lite):** now and then a villager raises a
-  want bubble — "Serra wants bread," "a widower lingers at a grave." Tap to
-  fulfil it for a small permanent boost; ignore it and comfort dips. Names,
-  traits, comfort and the Chronicle already exist — this makes the attachment
-  pillar interactive.
-- **Soil wear & fallow (Farthest Frontier crop rotation):** wheat plots lose
-  ~10% yield per harvest until set fallow — a clover cycle that restores
-  them; the existing Irrigated Plots upgrade slows the wear instead. One
-  tap-level farming decision that compounds into real rotation strategy by
-  mid-game.
+- **Grovekeep (domestication):** tap a wild berry bush and order **Tend** —
+  a Forager calls on it across days: wild → *tended* (+2 yield, faster
+  regrow) → *heavy-fruiting* (double yield, an orchard bush for good).
+  Tended bushes drop **cuttings** the village can plant anywhere, so food
+  stops being strip-mining the wilds and becomes breeding your own orchards
+  — a dozen tiny long-term projects scattered across the map, each with
+  visible stages.
+- **The Nursery (forestry):** for every 2 trees felled a Lumberjack plants a
+  sapling at the nursery; saplings are dragged out and planted as groves.
+  Wood stops being purely extractive, and *where* you raise a wood becomes a
+  landscape decision — a windbreak of pines shielding the huts, a hedge of
+  oaks funnelling raiders past your towers.
+- **The Spade (dig & pond):** a dig tool carves a tile into shallow water
+  (builders haul ~6s a tile). Ponds let Fishing Docks sit inland, bank water
+  for thirsty days, and grow reeds — herbs at the margin. The water-fill
+  tool terraforms the map *up*; this terraforms it *down*.
 
-### Harder edges — early pressure, late shape
+### The guardian's hand — draw your will on the ground
 
-- **The dark hates light (Kingdom's Greed, inverted):** shades bias their
-  pathing toward lit tiles — torches comfort villagers but draw probes, so
-  lighting the outskirts is a real trade instead of a free upgrade. Nights
-  gain positional thinking with zero new monsters.
-- **Two-pulse early nights (They Are Billions pacing):** for the first ~3
-  nights the wave arrives as a small probing pack at dusk plus the main body
-  later, so nights 1–2 demand a Smite or a reposition instead of spectating.
-  Directly fixes "the beginning is free."
-- **First Frost (Oddrealm/ Kingdom winters, carried over):** a 2-day frost
-  each 10-day cycle — farm growth pauses, bush regrow halves, outdoors
-  villagers huddle by torches or take cold damage. The v1.3 oil economy
-  finally gets its season: equilibrium breaks every cycle and the village
-  re-arms. *(Its dry-spell sibling — irrigated plots drinking from the
-  cistern — still awaits a go-ahead.)*
-- **Deeds, an endless ladder (the "building becomes pointless" critique):**
-  a chain of toggleable goals past the Beacon — 30 souls, all 15 duties
-  filled, every lair raided by day 12, 100 loaves baked — each paying essence
-  and inked into the Chronicle. Mostly UI and counters; gives endless mode a
-  spine.
+- **Sigil-craft:** drag to draw a chalk circle on the ground (the wall
+  drag-paint, repurposed) — salting it costs 1 herb + 1 charcoal, and it
+  charges through the daylight hours. At dusk a **ward** sigil blooms:
+  monsters crossing it slow and take +25% damage. A **hallow** sigil instead
+  steadies villagers inside: guards +10%, and workers within won't break and
+  run. The quiet afternoon is spent *drawing where the night should bend* —
+  the drawing is the defense.
+- **The Kindling (the push of light):** braziers can be kindled during the
+  day (wood + essence) to burn all night as super-torches — and a brazier
+  planted beside a Dark Monolith slowly *cleanses* it: the lair stops
+  mending, stops defending, and finally cracks into salvageable dawn-stone
+  without a single grave. Light stops being decoration; reclaiming the map
+  from the dark becomes a slow, deliberate day campaign.
 
-### Balance guardrails
+### Projects with a finish line — check-in work
 
-Wood stays the crunch resource; the wave cap (30) and guard/tower DPS stay
-untouched — pressure comes from timers, attention and geography, never from
-bullet-sponge monsters. Every candidate keeps a bare-hands fallback (ignore
-the order, leave the blight, miss the trader, let the soil tire) so nothing
-hard-locks a build, and every new want or job is one more mouth that drinks,
-eats and gets cold, so growth keeps costing what it yields.
+- **Restoration (the ruins wake):** the ancient ruins stop being salvage and
+  become **restorations** — a Scribe deciphers for a day, Builders scaffold
+  for two, and the ruin stands again as a unique ancient building: the
+  **Aqueduct** (wells +50%, drinks on the spot within 4 tiles), the **Dawn
+  Shrine** (essence regen +50%; villagers pray there, a small daily visit),
+  the **Sky Watch** (towers +1.5 range; dusk warnings arrive a dawn early),
+  the **Root Cellar** (food cap +80; nothing spoils). Which ruin you raise
+  shapes the whole run, and getting there is a multi-day project worth
+  opening the panel for.
+- **The Muster Yard (drills):** guards drill against a straw-and-bone effigy
+  of the last monster the village killed. Pick the drill — **shields** (vs
+  runners), **pikes** (vs brutes), **scatter** (vs stalkers) — and drilled
+  guards take a permanent +10% against that type; the yard also unlocks
+  **rally**: ring the horn and off-duty guards run to it. The dusk telegraph
+  already names the attacking lair, so a quiet morning is spent drilling for
+  exactly what tonight brings.
+- **The Deep Seam (push-your-luck mining):** order **Dig Deeper** on a Mine
+  Shaft and a miner spends the day below. Each level the seam gets richer —
+  stone → double stone → flint (tools last +25%) → crystal flecks (essence)
+  — but every level risks a collapse: the tunnel seals and the miner crawls
+  out hurt. A repeatable risk dial for days when nothing else needs you.
+
+### The village is alive — moments worth tapping
+
+- **Banns & blessings:** villagers who work beside each other grow attached
+  (the Chronicle already remembers friendships); in time a pair asks leave
+  to raise a **shared hut** — bless the banns and they build it together:
+  two beds, snug comfort, a small +work aura between them, and the village
+  throws a feast (1 ale + food; +10% work the next day). Housing, comfort
+  and the Chronicle folded into one tap-worthy moment.
+- **The driven hunt:** some mornings a deer herd grazes at the map's edge.
+  Set a **hunt** and two villagers spend the day driving it — toward the
+  spike-line you laid, if you planned the ground. A clean drive is a mountain
+  of food and a Chronicle entry; a botched one scatters the herd into the
+  wilds. Map-reading, line-setting and payoff, all before lunch.
+
+### Guardrails
+
+Daycraft is *upside*: none of it may gate the night (a village that never
+tends, draws, drills or digs still holds its walls), and none of it may add
+a stock, a job or a panel — tending belongs to Foragers, saplings to
+Lumberjacks, deciphering to Scribes, drills to Guards, digs to Miners, and
+the map stays the canvas while the day becomes the brush. The bench obeys
+the same law: warm hands are capped at six a day and every minigame pays an
+existing stock.
+
+---
+
+## Balance re-look — what the numbers say (v1.5 audit)
+
+*(A pass over `CONFIG` in `js/core.js` with the complaint "too easy at the
+start, flat after" in hand. All figures are the Normal preset.)*
+
+**What holds up:** tool wear is the best-tuned sink in the game — a tool
+lasts ~125s of active work, so twenty workers eat ~20 tools a day and the
+Smithy chain (2 wood + 1 stone → one per 3.2s) never becomes background
+noise. Storage caps bite just before the Beacon (100 wood + 80 stone fits
+under the 120/120 caps with room for nothing else — hoarding is a real
+choice). Comfort multipliers are honest texture, not a fake lever.
+
+**Where the numbers betray the feel:**
+
+1. **Nights 1–3 can't bite.** Night 1 is 3 shades — 84 hp in total against
+   one guard's 10.4 dps (7.5 × 1/0.72s): eight seconds of fighting. The wave
+   curve `1.4 + 1.75 × day` doesn't clear ten monsters until day 5's blood
+   moon, by which point a tower is up and arrows are cheap. *Suggested:*
+   night-1 floor 3 → 4, shade dmg 4 → 5, curve base 1.4 → 2.0 and per
+   1.75 → 1.95 (day 3 ≈ 8, the blood moon ≈ 19), runners debut day 3 → 2.
+2. **Every food chain outruns the mouths.** A villager eats ~124 hunger a
+   day — 7 food raw, or ~2.2 food as meals. Against that: a fisher lands
+   1 food / 3.4s with no inputs, no land and no regrow (~55 a day after
+   haul walks) from a day-2 building; a farmer pushing two plots manages
+   ~30–45; and bush foraging is free. Hunger stops being a system on day 1
+   and never comes back. *Suggested:* `FISHER.rate` 3.4 → 6.0, and
+   `HUNGER.rate` 0.355 → 0.42 so mouths matter again.
+3. **Essence is a dead battery by day 4.** Start 40, passive ~22 a day,
+   +2 a kill — the 120 cap arrives around day 3–4; after that every kill
+   pays nothing and Mend/Smite are the only outlets. *Suggested:*
+   `regenDay` 0.105 → 0.075, max 120 → 100, `perKill` 2 → 3 (pay the
+   fight), and pull Stasis/Meteor unlocks in to day 3/5 so the bank has
+   somewhere to go.
+4. **The ceiling never rises.** Defense compounds — Barracks ×1.3, tower
+   II/III, schooled +12% — while waves grow linearly to a flat cap of 30
+   and hp scales +5.5%/day only from day 9. Around day 14 a maxed village
+   auto-wins every night, blood moons included, and endless mode flattens.
+   *Suggested:* `hpScale` 0.055 → 0.085, and an endless-only wave cap of
+   38 past the Beacon.
+5. **Day 1 offers ~5 buildings and no problems.** Unlocks open with
+   Granary/Storehouse, the first waves are 0–3 shades, and no system needs
+   the player before dusk — which is precisely the gap the Daycraft bench
+   above is drawn to fill. The numbers say what the hands say: the early
+   game has nothing to hold.
 
 ---
 
