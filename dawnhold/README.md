@@ -529,104 +529,91 @@ redraws at ~3Hz.
 
 ---
 
-## Research backlog — running a real village (v1.4+ candidates)
+## Research backlog — The Restless Dark (v1.5 candidates)
 
-*(v1.3 shipped four of these — the charcoal kiln & lamp oil, thirst, wells &
-Bottler, the Bakehouse & mill, and the Scribe's schoolhouse. v1.4 shipped the
-difficulty rework instead. What remains:)*
+*(This replaces the old "running a real village" backlog: its water, oil,
+bread and schooling chains shipped in v1.3 and the difficulty levers shipped
+in v1.4. Researched August 2026 from Against the Storm's hostility & orders,
+Rise to Ruins' corruption, Kingdom Two Crowns' Greed and winters, Farthest
+Frontier's crop rotation, They Are Billions' pacing and RimWorld's
+wealth-scaled, adaptive raids — plus the oldest complaint in the genre: once
+the village stabilises, building starts to feel pointless.)*
 
-Researched from the inspirations' actual systems: Rise to Ruins' water chain
-(water master → purifier → wells → bottler) and trash slimes; Banished's
-firewood economy, educated workers and sheep/wool/warm-coat tiers; Frostpunk's
-coal/steam-hub heating and Book of Laws; Timberborn's droughts and the
-irrigation-vs-drinking-water split; Kingdom Two Crowns' winter income drought
-and coin-stealing Greed; Oddrealm's winters; RimWorld's wealth-scaled, adaptive
-raids — plus how a real medieval manor ran (mill, bakehouse and brewery as
-monopolies; commons grazing; wells; tithes).
+**The diagnosis:** the first days ask nothing of the player — fat starting
+stores, a 0–3-shade night 1, towers that auto-win — and the days themselves
+are passive: assign jobs, queue a building, watch. The genre's most engaging
+games stack timers and choices into the quiet phase, so there is always
+something that needs a tap *now*. Everything below adds decision density
+without a new economy; every chain reuses existing systems.
 
-### More to manage — needs, seasons & civic life
+### The pick — ship together as "The Restless Dark"
 
-- **First Frost (Oddrealm/ Kingdom winters):** a 2-day frost hits days 7–8
-  (and each 10-day cycle in endless): farm growth pauses, bush regrow halves,
-  outdoors villagers take cold damage (0.5 hp/s) unless near a torch/hearth or
-  wearing a cloak. Banished's numbers, scaled: a heated home beats a torch, a
-  cloak beats the walk between them. Stockpile food like Kingdom, burn warmth
-  like Banished. *(Shipped as the torch-oil half in v1.3 — the frost itself is
-  still open.)*
-- **Weaver & cloaks (Banished's tailor):** a flax plot (new crop — the only
-  one that grows in frost) feeds the Weaver's loom; cloaks halve cold damage
-  and add comfort, but wear out like tools. Banished's tier trick: hide
-  cloaks (shepherd culls) for warmth, wool cloaks (shearing, no slaughter)
-  for wear-life, and a warm cloak (wool + hide) that's twice as warm — the
-  smith and weaver share the same "keep them equipped" rhythm.
-- **Dry spells (Timberborn droughts):** every ~8th day a 2-day dry spell:
-  shore tiles recede (docks idle, water-fill is off), wells slow, and farms
-  outside an irrigation trench grow at half speed. Builders dig trenches from
-  the shore (Timberborn's rule kept honest: cistern water is for drinking,
-  only channels irrigate). The water-fill tool finally has a nemesis.
-- **Shepherd & the commons (Banished pastures, real-manor commons):** a
-  pasture on grass tiles with a **Shepherd**: sheep give wool without
-  slaughter (the weaver's second input), mutton and hides on cull; herds need
-  hay — a second fodder stockpile cut from grass, and the only thing they eat
-  through frost. Grazing slowly depletes grass tiles, so paddocks rotate:
-  land itself becomes a managed resource.
-- **The Midden (RtR trash slimes, real cesspits):** a village generates
-  refuse — kiln ash, husks, spoiled food, broken tools. Idle villagers haul
-  it to the midden; three un-hauled piles in a 3×3 spawn a **rat swarm** (a
-  mini-wave that interrupts work, exactly RtR's trash slimes). A composted
-  midden turns into muck the spreader carts to farms for +25% growth — waste
-  becomes the fertilizer loop, and overproduction finally has a smell.
-- **The Moot Hall & edicts (Frostpunk's Book of Laws):** a civic building
-  that holds one standing **edict**, swapped free at dawn: Rations (−25% food
-  eaten, −10% work), Curfew (workers keep near walls after dusk, +safety,
-  −night work), Feast Day (+work speed a day, costs ale + food), Water
-  Rationing (drought relief, −comfort). Frostpunk's discontent/hope trade,
-  expressed through Dawnhold's comfort instead of a second mood meter.
+- **Adaptive waves (RimWorld raid points, AtS hostility):** a flawless night
+  (no damage, nobody hurt) grows the next wave +10%, stacking to +50%; a rough
+  night (a building lost, two villagers hurt) eases it −10%. The game leans in
+  when you're cruising and lets up when you're drowning — the most direct fix
+  for "too easy," and the smallest diff: one multiplier on the wave-size
+  formula, the 30-cap untouched.
+- **Dawn orders (Against the Storm orders):** each dawn, one small timed
+  task: "escort the salvage cart back from the ruins" (send 2 guards,
+  +essence), "pilgrims reach the gate at dusk — 8 bread" (+comfort; refusal
+  dips it). Dawn becomes a decision point instead of a scoreboard; reuses the
+  day-event system, toasts and the dusk telegraphs.
+- **Blight creep (Rise to Ruins corruption):** living monoliths slowly stain
+  nearby wild tiles blighted — dimmed sprites, bushes and trees yield half,
+  and blight touching the outskirts spawns day stragglers. Raiding a lair
+  purges its stain. The map becomes a frontier that pushes back: raids stop
+  being optional and days gain geography decisions (blight rides the existing
+  biome and minimap passes).
 
-### Harder difficulties (fair pressure, not stat inflation)
+### More to tap — day-phase interaction
 
-- **Nightmare, a fifth difficulty (RtR Nightmare/ Kingdom Cursed):** shades
-  roam from day 1, night length and wave size ×1.6, essence regen halved,
-  lairs mend twice as fast. Learn the game on Easy; prove it here.
-- **Wealth-scaled waves (RimWorld raid points):** on Hard+ the wave grows
-  +8% per 15 built buildings past your first 10 — a tall, rich village earns
-  bigger hordes (still capped at 30). Sitting on a fortress is no longer free.
-- **Adaptive pressure (RimWorld adaptation/ RtR threat bar):** a flawless
-  night (no damage, no one hurt) makes the next wave +10%, stacking to +50%;
-  a rough night (a building lost, or two villagers hurt) eases it −10%. The
-  game leans in when you're bored and lets up when you're drowning.
-- **Hollow-larder crises (Frostpunk shortages):** on Hard+, an empty food
-  store for a full day means −20% village work until 20 food is laid in; dry
-  quivers do the same to guard damage (on top of the existing ×0.75), and an
-  empty cistern during a dry spell joins the list. Buffers stop being
-  optional.
-- **The dark festers (RtR's day-15 clock):** every living lair past day 8
-  adds +4% monster HP (up to +12% with all three standing). Raids already
-  shrink the nights — now they also slow the festering, so raid timing
-  becomes a real decision instead of "whenever."
-- **Filchers in the night (Kingdom's coin-stealing Greed):** on Hard+, a few
-  filchers each night ignore the camp and slip for the stores — they steal
-  arrows, oil or food and flee home to their lair. Walls must enclose the
-  pantry, not just the campfire; guards learn interception beats standing
-  ground.
-- **Grief weighs (Frostpunk's death penalties):** on Hard+, a villager's
-  death leaves −15% village work for a day — halved if a grave stands within
-  six tiles of the mourners' homes. Burial rites stop being set dressing.
+- **Wandering trader (Kingdom Two Crowns, Northgard caravans):** every few
+  days a trader walks a route across the map; tap him while he's in range to
+  trade surplus for scarcity (ale → stone, arrows → herbs, bread → essence).
+  Overproduction gets a use, and the catch-him-or-miss-him window is a
+  moment-to-moment interaction on its own.
+- **Named villager wants (RimWorld lite):** now and then a villager raises a
+  want bubble — "Serra wants bread," "a widower lingers at a grave." Tap to
+  fulfil it for a small permanent boost; ignore it and comfort dips. Names,
+  traits, comfort and the Chronicle already exist — this makes the attachment
+  pillar interactive.
+- **Soil wear & fallow (Farthest Frontier crop rotation):** wheat plots lose
+  ~10% yield per harvest until set fallow — a clover cycle that restores
+  them; the existing Irrigated Plots upgrade slows the wear instead. One
+  tap-level farming decision that compounds into real rotation strategy by
+  mid-game.
+
+### Harder edges — early pressure, late shape
+
+- **The dark hates light (Kingdom's Greed, inverted):** shades bias their
+  pathing toward lit tiles — torches comfort villagers but draw probes, so
+  lighting the outskirts is a real trade instead of a free upgrade. Nights
+  gain positional thinking with zero new monsters.
+- **Two-pulse early nights (They Are Billions pacing):** for the first ~3
+  nights the wave arrives as a small probing pack at dusk plus the main body
+  later, so nights 1–2 demand a Smite or a reposition instead of spectating.
+  Directly fixes "the beginning is free."
+- **First Frost (Oddrealm/ Kingdom winters, carried over):** a 2-day frost
+  each 10-day cycle — farm growth pauses, bush regrow halves, outdoors
+  villagers huddle by torches or take cold damage. The v1.3 oil economy
+  finally gets its season: equilibrium breaks every cycle and the village
+  re-arms. *(Its dry-spell sibling — irrigated plots drinking from the
+  cistern — still awaits a go-ahead.)*
+- **Deeds, an endless ladder (the "building becomes pointless" critique):**
+  a chain of toggleable goals past the Beacon — 30 souls, all 15 duties
+  filled, every lair raided by day 12, 100 loaves baked — each paying essence
+  and inked into the Chronicle. Mostly UI and counters; gives endless mode a
+  spine.
 
 ### Balance guardrails
 
-Wood stays the crunch resource — arrows, tools, oil and cloak-frames fight
-over the same tree — while **water** becomes the second axis (drink, dough,
-irrigation, drought) and food gets its third tier. Frost is budgeted by
-difficulty: 1 day Easy / 2 Normal / 3 Hard, with blizzards only on Nightmare;
-a Normal player with one kiln, six cloaks and a full cistern sails through.
-Every new chain keeps a bare-hands fallback (unbottled villagers walk to the
-well, cloakless ones huddle by torches, unirrigated farms just grow slower)
-so nothing hard-locks a build. The job roster grows ~12 → 16 (Bottler,
-Shepherd, Baker, Scribe, plus the Moot Hall's keeper) — each new mouth also
-drinks, eats and gets cold, so growth keeps costing what it yields. Wave cap
-(30) and guard/tower DPS stay untouched; pressure comes from larders,
-seasons, thieves and the fester — never from bullet-sponge monsters.
+Wood stays the crunch resource; the wave cap (30) and guard/tower DPS stay
+untouched — pressure comes from timers, attention and geography, never from
+bullet-sponge monsters. Every candidate keeps a bare-hands fallback (ignore
+the order, leave the blight, miss the trader, let the soil tire) so nothing
+hard-locks a build, and every new want or job is one more mouth that drinks,
+eats and gets cold, so growth keeps costing what it yields.
 
 ---
 
@@ -637,8 +624,8 @@ down: on top of the original four knobs (wave size ×0.68 Easy / ×1.38 Hard,
 monster HP ×0.88 / ×1.22, night length ×0.88 / ×1.15, essence regen ×1.1 /
 ×0.9), every preset now sets the seventeen levers below. These tables are
 the shipped values — they live in `CONFIG.DIFF` in `js/core.js`, one edit
-per cell. The "Harder difficulties" backlog above stays separate (those are
-Hard+/Nightmare *mechanics*; these are preset *numbers*). Verified headless:
+per cell. The backlog above stays separate (v1.5 candidate *mechanics*;
+these are the shipped preset *numbers*). Verified headless:
 each lever measured per preset, 3-day soaks, and cross-preset orderings
 (wilds 887 > 841 > 798 > 725 sources; wells 16 > 13 > 12 > 11 buckets).
 
@@ -689,7 +676,5 @@ and interior guards earlier), not just more of them.
 - **Hard** starts hungry (×0.7 stores and yields), rushed (185s days),
   ambushed (×1.5 hostile events) and crowded (×0.85), with brutes and
   wraiths arriving a day early and monoliths mending ×1.5 between raids.
-- These preset numbers stack under the backlog's **Nightmare** fifth
-  difficulty if that ever ships.
 
 
