@@ -110,7 +110,11 @@ const UI = {
       else if (e.key === '1') Sim.speedSet(1);
       else if (e.key === '2') Sim.speedSet(2);
       else if (e.key === '3') Sim.speedSet(3);
-      else if (e.key === 'Escape') { if (this.open) this.closePanel(); else this.cancelMode(); }
+      else if (e.key === 'Escape') {
+        if (Bench.active || Bench.seam) Bench.close();
+        else if (this.open) this.closePanel();
+        else this.cancelMode();
+      }
       else if (e.key === 'l' || e.key === 'L') { if (window.DBG && DBG.lairs) DBG.lairs(); }
     });
     // continue button availability
@@ -233,6 +237,7 @@ const UI = {
     this.els.clockBar.classList.toggle('night', isNightLike());
     if (this._lastPhase !== G.phase) { this._lastPhase = G.phase; this.drawPhaseIcon(); }
     if (G.boss) this.els.bossHpFill.style.width = U.clamp(G.boss.hp / G.boss.maxHp * 100, 0, 100) + '%';
+    Bench.drawMeter();
     if (!this.els.selCard.classList.contains('hidden')) this.selRender();
     if (this.open === 'materials') this.matsLive();
     // narrow layout: the materials block's height varies with shown goods, so
@@ -415,6 +420,27 @@ const UI = {
         <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(m.hp / m.maxHp * 100, 0, 100)}%;background:#e05555"></div></div></div>
         <div class="selActs"><button id="selClose">Close</button></div>`;
       document.getElementById('selClose').onclick = () => this.selHide();
+    } else if (s.kind === 'o') {
+      // a wild worksite — tree, boulder or bush the bench can play at
+      const t = s.ref;
+      const nm = { [OBJ.TREE]: 'Tree', [OBJ.PINE]: 'Pine', [OBJ.BIRCH]: 'Birch', [OBJ.ROCK]: 'Boulder', [OBJ.BUSH]: 'Berry Bush' }[t.o] || 'Wilds';
+      const amt = World.amtAt(t.tx, t.ty);
+      const of = Bench.siteObj(t.tx, t.ty);
+      const sub = t.o === OBJ.BUSH
+        ? (amt > 0 ? 'Heavy with berries.' : 'Picked clean — it will regrow.')
+        : t.o === OBJ.ROCK ? `${amt} stone left in it.` : `${amt} wood left in it.`;
+      el.innerHTML = `
+        <h3>${U.esc(nm)}</h3>
+        <div class="sub">${U.esc(sub)}${of ? '' : ' The bench needs the right duty assigned to lend a hand here.'}</div>
+        <div class="selActs">
+          ${of ? `<button id="selObjBench">\u270b ${U.esc(Bench.GAMES.find(g => g.id === of.id).name)}${Bench.handsLeft() > 0 ? '' : ' (no hands)'}</button>` : ''}
+          <button id="selClose">Close</button>
+        </div>`;
+      const ob = document.getElementById('selObjBench');
+      if (ob) ob.onclick = () => {
+        if (!Bench.start(of.id, { tx: t.tx, ty: t.ty, o: t.o })) this.selRender();
+      };
+      document.getElementById('selClose').onclick = () => this.selHide();
     } else if (s.kind === 'b') {
       const b = s.ref;
       if (!G.buildings.includes(b)) return this.selHide();
@@ -461,13 +487,63 @@ const UI = {
       const upC = nd ? Buildings.costOf(nd) : null;
       const upCost = nd ? `${upC.wood || 0} wood${upC.stone ? ' \u00b7 ' + upC.stone + ' stone' : ''}` : '';
       const oldName = b.def.name;
+      // ---- Daycraft: the guardian lends a hand at a ready worksite ----
+      let benchActs = '', benchNote = '';
+      if (b.built && !b.demo) {
+        const of = Bench.site(b);
+        if (of) {
+          const gm = Bench.GAMES.find(g => g.id === of.id);
+          const hands = Bench.handsLeft();
+          benchActs += `<button id="selBench">\u270b ${U.esc(gm.name)}${hands > 0 ? '' : ' (no hands)'}</button>`;
+          if (hands <= 0) benchNote = 'No warm hands left today — they refill at dawn.';
+        }
+        if (b.key === 'mine' && !Bench.seam) benchActs += `<button id="selSeam">\u2b07 Dig Deeper</button>`;
+        if (b.key === 'brazier' && !b.lit) {
+          const can = G.res.wood >= CONFIG.BRAZIER.kindleWood && G.res.essence >= CONFIG.BRAZIER.kindleEss;
+          benchActs += `<button id="selKindle" ${can ? '' : 'style="opacity:.55"'}>Kindle${Bench.handsLeft() > 0 ? ' \u270b' : ''}</button>`;
+          if (!can) benchNote = `Kindling needs ${CONFIG.BRAZIER.kindleWood} wood + ${CONFIG.BRAZIER.kindleEss} essence in store.`;
+        }
+        if (b.key === 'muster') {
+          const types = [['runner', 'shields'], ['brute', 'pikes'], ['stalker', 'scatter']];
+          benchNote = 'Pick the drill — guards near the yard drill it in about a minute. Stacks to +30%.';
+          for (const [t, nm] of types) {
+            const cur = (G.drill[t] || 0), capped = cur >= CONFIG.MUSTER.bonusCap;
+            benchActs += `<button id="selDrill_${t}" style="${capped ? 'opacity:.5;' : ''}${b.drillType === t ? 'border-color:var(--amber);color:var(--amber2)' : ''}">${nm}${capped ? ' \u2713' : ''} +${Math.round(cur * 100)}%</button>`;
+          }
+          benchActs += `<button id="selRally">\ud83d\udd14 Rally</button>`;
+        }
+      }
       el.innerHTML = `
         <h3>${U.esc(b.def.name)}</h3>
         <div class="sub">${U.esc(b.def.desc || '')}</div>
         <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(b.hp / b.maxHp * 100, 0, 100)}%"></div></div></div>
         ${extra}
+        ${b.built && b.key === 'brazier' && b.lit ? `<div class="sub" style="color:var(--amber2)">Burning — ${Math.max(0, Math.ceil(b.fuel || 0))}s of fuel left.</div>` : ''}
+        ${b.built && b.key === 'muster' && b.drillType ? `<div class="sub">Drilling <b style="color:var(--amber2)">${{ runner: 'shields', brute: 'pikes', stalker: 'scatter' }[b.drillType]}</b> — ${(100 * U.clamp((b.drillT || 0) / CONFIG.MUSTER.drillT, 0, 1)).toFixed(0)}% done</div>` : ''}
+        ${b.built && b.key === 'mine' ? `<div class="sub">Seam depth ${b.seamDepth || 0}${b.seamDay === G.day ? ' — dug out today' : ''}</div>` : ''}
         ${nd ? `<div class="sub" style="color:var(--amber2)">Upgrade in place: ${U.esc(nd.name)} — ${upCost}</div>` : ''}
-        <div class="selActs">${up}${dem}<button id="selClose">Close</button></div>`;
+        ${benchNote ? `<div class="sub" style="color:var(--amber)">${U.esc(benchNote)}</div>` : ''}
+        <div class="selActs">${benchActs}${up}${dem}<button id="selClose">Close</button></div>`;
+      const sb = document.getElementById('selBench');
+      if (sb) sb.onclick = () => {
+        const of = Bench.site(b);
+        if (!of) { this.toast('The worksite has changed — nothing to lend a hand at.', ''); this.selRender(); return; }
+        if (!Bench.start(of.id, { b })) this.selRender();
+      };
+      const ss = document.getElementById('selSeam');
+      if (ss) ss.onclick = () => { Seam.start(b); };
+      const sk = document.getElementById('selKindle');
+      if (sk) sk.onclick = () => {
+        if (Bench.handsLeft() > 0 && isDayLike()) { Bench.start('spark', { b }); return; }
+        if (Sim.kindle(b, false)) this.updateHUD();
+        else this.toast(`Kindling needs ${CONFIG.BRAZIER.kindleWood} wood + ${CONFIG.BRAZIER.kindleEss} essence.`, 'bad');
+      };
+      for (const t of ['runner', 'brute', 'stalker']) {
+        const db = document.getElementById('selDrill_' + t);
+        if (db) db.onclick = () => { b.drillType = t; b.drillT = 0; this.toast(`The yard drills ${ { runner: 'shields', brute: 'pikes', stalker: 'scatter' }[t]}.`, ''); this.selRender(); };
+      }
+      const sr = document.getElementById('selRally');
+      if (sr) sr.onclick = () => { Sim.rally(b); };
       if (up) document.getElementById('selUp').onclick = () => {
         if (Buildings.upgrade(b)) {
           this.toast(`${nd.name} raised in place of the old ${oldName}.`, 'good');
@@ -934,22 +1010,28 @@ const UI = {
     btn('Settings', 'Effects & autosave', () => this.openPanel('settings'));
     btn('Quit to Title', 'Progress is autosaved at dawn', () => {
       if (G.settings.autosave) SaveSys.autosave();
+      if (Bench.seam) Seam.finishSession();
+      if (Bench.active) Bench.close();
       G.state = 'title';
       this.closePanel();
       document.getElementById('titleScreen').classList.remove('hidden');
       this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden');
       this.els.mmWrap.classList.add('hidden');
+      document.getElementById('handsWrap').classList.add('hidden');
       this.selHide(); this.cancelMode();
       document.getElementById('btnContinue').classList.remove('hidden');
     });
     btn('Abandon & New Game', 'Start over on a fresh map', () => {
       if (!confirm('Abandon this village and start a new game?')) return;
+      if (Bench.seam) Seam.finishSession();
+      if (Bench.active) Bench.close();
       this.closePanel();
       G.state = 'title';
       document.getElementById('titleScreen').classList.remove('hidden');
       document.getElementById('diffPick').classList.remove('hidden');
       document.getElementById('btnNew').classList.add('hidden');
       this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden'); this.els.mmWrap.classList.add('hidden');
+      document.getElementById('handsWrap').classList.add('hidden');
     }, true);
     return wrap;
   },
@@ -1280,6 +1362,12 @@ const UI = {
       }
       if (b) best = { kind: 'b', ref: b };
     }
+    // nothing standing — a wild worksite the bench can play at?
+    if (!best) {
+      const tx = wx | 0, ty = wy | 0;
+      const o = World.objAt(tx, ty);
+      if (Bench.siteObj(tx, ty)) best = { kind: 'o', ref: { tx, ty, o } };
+    }
     if (best) { this.select(best.kind, best.ref); G.follow = null; }
     else this.selHide();
   },
@@ -1289,6 +1377,7 @@ const UI = {
     this.els.hud.classList.remove('hidden');
     this.els.dock.classList.remove('hidden');
     this.els.mmWrap.classList.remove('hidden');
+    document.getElementById('handsWrap').classList.remove('hidden');
     this.syncSpeedBtns();
     this.updateHUD();
   },
@@ -1299,9 +1388,12 @@ const UI = {
   },
 
   endScreen(kind) {
+    if (Bench.seam) Seam.finishSession();
+    if (Bench.active) Bench.close();
     this.closePanel(); this.cancelMode(); this.selHide();
     this.els.hud.classList.add('hidden'); this.els.dock.classList.add('hidden');
     this.els.mmWrap.classList.add('hidden');
+    document.getElementById('handsWrap').classList.add('hidden');
     this.els.tut.classList.add('hidden');
     const scr = document.getElementById('endScreen');
     const c = document.getElementById('endContent');
@@ -1323,7 +1415,7 @@ const UI = {
         <button class="bigbtn" id="endContinue">Keep Playing (Endless)</button>
         <button class="bigbtn ghost" id="endNew">New Game</button>`;
       document.getElementById('endContinue').onclick = () => {
-        G.state = 'playing'; G.finalNight = false;
+        G.state = 'playing'; G.finalNight = false; G.endless = true;
         scr.classList.add('hidden');
         this.showGameUI();
         this.toast('Endless mode — the nights keep coming. How long can Dawnhold stand?', 'magic');
@@ -1377,7 +1469,7 @@ const UI = {
       <ul>
         <li><b>Forager</b> — berries. Fast early food; bushes regrow daily.</li>
         <li><b>Lumberjack</b> — wood for tents, palisades, towers.</li>
-        <li><b>Miner</b> — stone from boulders; salvages ancient ruins; cracks crystal lodes for essence; works Mine Shafts when lodes run dry.</li>
+        <li><b>Miner</b> — stone from boulders; salvages ancient ruins; cracks crystal lodes for essence; works Mine Shafts when lodes run dry — and descends into <b>the Deep Seam</b> if you order it.</li>
         <li><b>Farmer</b> — tends wheat plots. A Windmill nearby grows them 35% faster.</li>
         <li><b>Fisher</b> — works a Fishing Dock on the shore. Steady food, no farmland.</li>
         <li><b>Medic</b> — gathers herbs to stock the Hospital, which mends the wounded nearby. Needs a built Hospital (day 2).</li>
@@ -1386,8 +1478,14 @@ const UI = {
         <li><b>Cook</b> — simmers berries into proper meals at the Kitchen (3 food + 1 wood \u2192 2 meals).</li>
         <li><b>Brewer</b> — brews ale at the Tavern (food + herbs); a dusk drink speeds the whole village tomorrow.</li>
         <li><b>Builder</b> — raises construction, repairs damage (costs materials), clears marked wild tiles and <b>fills shore water with stone</b> to make new land.</li>
-        <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage.</li>
+        <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage; the Muster Yard drills +10% per monster type.</li>
       </ul>
+      <h2>The Bench — lend a hand</h2>
+      <p>You are no spectator by day. Six <b>warm hands</b> a day (the little hand-meter by the dock) buy a few seconds of touch-work at any ready worksite — tap a tree, boulder, berry bush or a built workplace and press the <b>\u270b</b> button. Every game pays a real stock: split logs on the swing\u2019s sweet band, hook the bobber\u2019s dip, trace a boulder\u2019s glowing fault, circle a berry bush past its thorns, swipe wheat with the wind, knead and stir on the bounce, strike when the forge bar flares, match feather patterns, tap cresting brew-bubbles, dip wicks on the wave, suture without crossing the red, strike sparks until a brazier catches, call the straw effigy\u2019s drill-shape. A player who never touches the bench loses nothing — but busy hands end the day ahead.</p>
+      <h2>The Kindling & the Muster Yard</h2>
+      <p>A <b>Brazier</b> kindled with wood and essence burns all night as a great light — and set beside a Dark Monolith it slowly <b>cleanses</b> it: no mending, no defenders, until the stone cracks into salvageable dawn-stone. No raid, no graves. The <b>Muster Yard</b> drills your guards against a straw effigy: pick shields (runners), pikes (brutes) or scatter (stalkers) for a permanent +10% damage per drill (stacks to +30%), ring the horn to rally off-duty guards — or play the drill for real and the bonus lands a day early.</p>
+      <h2>The Deep Seam</h2>
+      <p>Order <b>Dig Deeper</b> on a Mine Shaft and a miner spends the day below while you watch the wheel. Each level the seam gets richer — stone, double stone, flint (tools last +25% for days), then crystal flecks of essence — but every level spins the wheel: <b>okay, injured, or dead</b>. Injured miners crawl out hurt and the tunnel seals; dead ones are lost to the dark. If the worst happens you get one chance at the <b>rescue</b>: steer the ropeline through falling rock, and the injured walk away clean while the dead come up hurt but alive. Climb out any time to bank the haul.</p>
       <h2>Supply Lines</h2>
       <ul>
         <li><b>Arrows are ammunition</b> — every tower shot spends 1 (ballistae 2), and raids pack quivers (5). Dry quivers: towers hold fire, guards hit at 75%. Build a Fletcher Hut before your towers go up.</li>
@@ -1403,7 +1501,7 @@ const UI = {
         <li><b>Watchtowers</b> (day 3) shoot automatically; <b>Ballistae</b> (day 7) out-range everything.</li>
         <li><b>Runners</b> are fast and fragile; <b>Brutes</b> (day 6) smash walls; <b>Bonecasters</b> (day 7) lob bones from range; <b>Stalkers</b> (day 9) hunt villagers; <b>Wraiths</b> drift <i>through</i> walls — keep guards inside; <b>Colossi</b> (day 15, endless) are walking sieges.</li>
         <li><b>Spike Traps</b> wound and slow whatever steps on them; lay rows before your gates.</li>
-        <li><b>Powers</b>: Mend heals, Smite erases shades, Stasis (day 5) freezes a circle for 5s, Meteor (day 6) wipes waves. Essence flows from time, kills and Shrines.</li>
+        <li><b>Powers</b>: Mend heals, Smite erases shades, Stasis (day 3) freezes a circle for 5s, Meteor (day 5) wipes waves. Essence flows from time, kills and Shrines.</li>
         <li>The dead are buried where they fall — little graves remember them.</li>
       </ul>
       <h2>People</h2>

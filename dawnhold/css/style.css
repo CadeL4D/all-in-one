@@ -204,6 +204,24 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
 .eyeBtn{flex:none;width:56px;border:2px solid var(--line);background:var(--panel);color:var(--ink);
   border-radius:8px;padding:6px 0;font-size:11px;font-weight:700}
 
+/* ---------- warm hands + Daycraft bench overlay ---------- */
+#handsWrap{position:absolute;right:8px;bottom:calc(var(--sab) + 78px);z-index:24;
+  background:rgba(13,15,20,.9);border:2px solid #4a5468;border-radius:9px;padding:5px 8px;pointer-events:none}
+#handsWrap canvas{width:96px;height:16px}
+#mgWrap{position:absolute;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;background:rgba(8,9,14,.45)}
+#mgCard{width:min(94vw,380px);background:rgba(24,26,34,.97);border:2px solid var(--amber);border-radius:14px;
+  padding:8px;box-shadow:0 8px 26px rgba(0,0,0,.6)}
+#mgHead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+#mgTitle{font-weight:800;font-size:14px;color:var(--amber2);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mgHands{font-size:10.5px;color:var(--dim);white-space:nowrap}
+#mgX{width:32px;height:32px;border:2px solid var(--line);border-radius:50%;background:var(--panel2);color:var(--ink);font-size:13px;font-weight:800;flex:none}
+#mgCv{width:100%;aspect-ratio:4/3;background:#14161c;border:2px solid var(--line);border-radius:9px;touch-action:none;display:block}
+#mgHint{font-size:11.5px;color:var(--dim);line-height:1.4;margin-top:6px;min-height:16px}
+#mgBtns{display:flex;gap:7px;margin-top:7px;flex-wrap:wrap}
+#mgBtns button{flex:1;min-width:110px;border:2px solid var(--amber);background:#33301f;color:var(--amber2);
+  border-radius:9px;padding:9px 10px;font-size:12.5px;font-weight:800}
+#mgBtns button.warn{border-color:#7c3030;color:#ff9a9a;background:#2c1a1a}
+
 /* minimap */
 #mmWrap{position:absolute;top:calc(var(--sat) + 66px);right:8px;z-index:23;border:2px solid var(--line);border-radius:8px;
   overflow:hidden;background:#0c0e14;box-shadow:0 4px 14px rgba(0,0,0,.5)}

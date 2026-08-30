@@ -16,14 +16,14 @@ const CONFIG = {
   VIL_START: 6,
 
   // --- hunger / food / thirst ---
-  HUNGER: { rate: 0.355, mealAt: 66, mealRestore: 54, mealCost: 3, starveDps: 0.9 },
+  HUNGER: { rate: 0.42, mealAt: 66, mealRestore: 54, mealCost: 3, starveDps: 0.9 },
   THIRST: { rate: 0.4, drinkAt: 65, restore: 70, parchedAt: 90, workMult: 0.7, walkMult: 0.85, parchDps: 0.45 },
 
   // --- work ---
   CARRY: 8,                       // units hauled per trip
   WORK_T: { forager: 0.78, lumber: 0.85, miner: 1.0, medic: 0.8 },
   CLEAR: { time: 1.3, waterTime: 4, waterCost: 2 }, // secs/tile (half yield salvaged); water fill is slower and costs stone
-  FARM: { grow: 95, yield: 15, tendBoost: 1.2 },
+  FARM: { grow: 95, yield: 15, tendBoost: 1.2, replant: 0.06 },
   REPAIR: { rate: 22, cost: 24 }, // hp/s while repairing, hp per 1 resource
 
   // --- supply lines (v1.2): crafting jobs, ammo, tools, meals, ale, storage ---
@@ -64,20 +64,20 @@ const CONFIG = {
   BALLISTA: { dmg: 27, rate: 2.3, range: 7.5 },
 
   // --- essence / powers ---
-  ESSENCE: { max: 120, regenDay: 0.105, regenNight: 0.05, perKill: 2 },
+  ESSENCE: { max: 100, regenDay: 0.075, regenNight: 0.05, perKill: 3 },
   POWERS: {
     mend:    { cost: 12, heal: 45, cd: 1.0 },
     smite:   { cost: 22, dmg: 32, r: 1.7, cd: 1.2 },
-    stasis:  { cost: 30, dur: 5, r: 2.2, cd: 2.0, unlockDay: 5 },
-    meteor:  { cost: 65, dmg: 130, r: 2.8, cd: 3.0, unlockDay: 6 },
+    stasis:  { cost: 30, dur: 5, r: 2.2, cd: 2.0, unlockDay: 3 },
+    meteor:  { cost: 65, dmg: 130, r: 2.8, cd: 3.0, unlockDay: 5 },
   },
 
   // --- waves ---
-  WAVE: { base: 1.4, per: 1.75, cap: 30, spawnWindow: 30, hpScaleDay: 9, hpScale: 0.055, final: 2.1, bloodEvery: 5, bloodMult: 1.5, noLairMult: 0.75 },
+  WAVE: { base: 2.0, per: 1.95, cap: 30, capEndless: 38, spawnWindow: 30, hpScaleDay: 9, hpScale: 0.085, final: 2.1, bloodEvery: 5, bloodMult: 1.5, noLairMult: 0.75 },
 
   MONS: {
-    shade:   { name: 'Shade',   hp: 28,  dmg: 4,  spd: 1.75, atkT: 0.9,  ess: 2, r: 0.5 },
-    runner:  { name: 'Runner',  hp: 17,  dmg: 3,  spd: 2.9,  atkT: 0.65, ess: 2, from: 3, w: 0.22 },
+    shade:   { name: 'Shade',   hp: 28,  dmg: 5,  spd: 1.75, atkT: 0.9,  ess: 2, r: 0.5 },
+    runner:  { name: 'Runner',  hp: 17,  dmg: 3,  spd: 2.9,  atkT: 0.65, ess: 2, from: 2, w: 0.22 },
     brute:   { name: 'Brute',   hp: 95,  dmg: 12, spd: 1.15, atkT: 1.4,  ess: 5, from: 6, w: 0.15, bld: 2.4 },
     stalker: { name: 'Stalker', hp: 34,  dmg: 7,  spd: 2.45, atkT: 0.8,  ess: 3, from: 9, w: 0.16 },
     boner:   { name: 'Bonecaster', hp: 42, dmg: 6, spd: 1.3, atkT: 2.2, ess: 4, from: 7, w: 0.14, bld: 1.6, range: 4.5 },
@@ -93,7 +93,7 @@ const CONFIG = {
   // --- herb / healing economy ---
   HERB: { amt: 5, regrow: 210, healRate: 6, herbPerHeal: 5 },
   MINE: { rate: 2.8 },
-  FISHER: { rate: 3.4, carry: 6 },
+  FISHER: { rate: 6.0, carry: 6 },
   TRAP: { dmg: 15, hpCost: 40, slow: 1.0 },
   BARRACKS: { dmgMult: 1.3 },
   RUIN: { stone: 14 },
@@ -127,7 +127,7 @@ const CONFIG = {
     normal: {
       wave: 1, hp: 1, night: 1, regen: 1, label: 'Normal',
       startMul: 1, yieldMul: 0.85, regrowMul: 1, densityMul: 0.9, costMul: 1,
-      spdMul: 1, debutShift: 0, bloodMult: 1.5, lairRegenMul: 1, night1: 3, essMul: 1,
+      spdMul: 1, debutShift: 0, bloodMult: 1.5, lairRegenMul: 1, night1: 4, essMul: 1,
       dayLen: 210, arrive: 0.65, eventHostile: 1,
       comfort: { snug: 1.05, crowd: 0.95, packed: 0.88 },
       wellMul: 1, wearMul: 1,
@@ -144,6 +144,41 @@ const CONFIG = {
 
   ZOOM: { min: 1.35, max: 4.2, start: 2.6 },
   SAVE_V: 1,
+
+  // --- Daycraft (v1.5): the guardian lends a hand ---
+  // The bench: 6 warm hands a day, each session a few seconds of touch-work
+  // at a ready worksite. Every payoff is a stock the village already tracks,
+  // and a player who never touches the bench loses nothing.
+  BENCH: {
+    handsPerDay: 6,
+    sessionT: 8,        // seconds a session may run (real time; the world keeps simulating)
+    chopMax: 6,         // wood cap per Chop session
+  },
+  BRAZIER: {            // The Kindling: a lit brazier burns all night as a
+    kindleWood: 4, kindleEss: 8,   // super-torch — and beside a monolith it
+    light: 5.2,          // slowly cleanses it: no mending, no defenders,
+    cleanseDps: 4,       // until it cracks into dawn-stone
+    cleanseR: 3.5, dawnStone: 30, dawnEss: 12,
+  },
+  MUSTER: { drillT: 60, bonus: 0.10, bonusCap: 0.30 }, // one drill = +10% vs a monster type, capped
+  SEAM: {   // The Deep Seam: push-your-luck mining below a Mine Shaft
+    // per-level pay (stone, and essence at the crystal flecks);
+    // level 3 also yields flint (tools last +25% for 3 days)
+    pay: [
+      { stone: 3, ess: 0 },
+      { stone: 6, ess: 0 },
+      { stone: 6, ess: 0, flint: true },
+      { stone: 8, ess: 6 },
+      { stone: 10, ess: 10 },
+    ],
+    deepPay: { stone: 12, ess: 12 },   // level 6+
+    okBase: 0.90, okDrop: 0.07,        // OK share shrinks ~7% a level,
+    injBase: 0.08, injRise: 0.04,      // injury & death grow apace
+    deadMax: 0.30, okMin: 0.40,
+    hurtHp: 0.30,         // an injured miner crawls out at 30% health
+    flintDays: 3,
+    rescueRocks: 5, rescueHits: 2, rescueT: 7,  // the rescue skill game
+  },
 };
 
 // ---- terrain tile ids ----
@@ -236,6 +271,10 @@ const G = {
   finalNight: false, beaconLit: false, boss: null, bloodMoon: false,
   raidTarget: null,        // lair building the guards are ordered to raid
   dryWarned: false,        // one "towers are dry" notice per night
+  handsUsed: 0,            // warm hands spent today (Bench.handsPerDay resets at dawn)
+  buffs: {},               // daycraft day-scopes: brightAle, handDip, suture, trueTools, flintDays
+  drill: { runner: 0, brute: 0, stalker: 0 }, // muster-yard drills: +dmg vs each monster type
+  endless: false,          // set after the Beacon victory — waves may cap at 38
   tut: 0, tutOn: true,
   shake: 0,
   cam: { x: 0, y: 0, z: CONFIG.ZOOM.start },

@@ -936,6 +936,57 @@ const Art = {
       R(x, 6, 19, 4, 4, '#2c2c34'); R(x, 21, 19, 4, 4, '#2c2c34');
       S.barracks = c;
     }
+    // --- brazier (The Kindling): stone bowl on legs; 2 lit frames ---
+    {
+      const { c, x } = mkc(16, 20);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 18, 10, 2);
+      R(x, 4, 13, 2, 5, PAL.stoneD); R(x, 10, 13, 2, 5, PAL.stoneD);   // legs
+      R(x, 2, 9, 12, 4, PAL.stoneB); R(x, 2, 9, 12, 1, PAL.stoneL); R(x, 2, 12, 12, 1, PAL.stoneD); // bowl
+      R(x, 3, 8, 10, 1, '#4c4c56');
+      R(x, 4, 7, 8, 1, '#3a3a44');                                     // cold coals
+      S.brazier = c;
+    }
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 20);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 18, 10, 2);
+      R(x, 4, 13, 2, 5, PAL.stoneD); R(x, 10, 13, 2, 5, PAL.stoneD);
+      R(x, 2, 9, 12, 4, PAL.stoneB); R(x, 2, 9, 12, 1, PAL.stoneL); R(x, 2, 12, 12, 1, PAL.stoneD);
+      R(x, 3, 8, 10, 1, '#6e3418');
+      R(x, 4, 7, 8, 1, '#ff7a2e');                                     // hot coals
+      // tall flame, two flicker frames
+      const fy = f ? 0 : 1;
+      R(x, 6, 2 + fy, 4, 6, '#ff9a2e'); R(x, 5, 4 + fy, 6, 4, '#ffce56'); R(x, 6, 5 + fy, 4, 2, '#fff2b0');
+      if (f) { R(x, 4, 5 + fy, 1, 2, '#ff9a2e'); R(x, 11, 3 + fy, 1, 3, '#ff9a2e'); }
+      else { R(x, 3, 4 + fy, 1, 3, '#ff9a2e'); R(x, 12, 5 + fy, 1, 2, '#ffce56'); }
+      S['brazierOn' + f] = c;
+    }
+    // --- muster yard 2x2: fenced drill yard, straw-shade effigy, horn post ---
+    {
+      const { c, x } = mkc(32, 30);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 27, 24, 2);
+      // trampled dirt ring
+      R(x, 3, 12, 26, 14, '#8a6d4e'); R(x, 3, 12, 26, 1, '#9a7d5c');
+      R(x, 5, 14, 22, 10, '#7c5f42');
+      for (let i = 0; i < 5; i++) R(x, 6 + i * 4, 15 + (i % 3) * 3, 2, 1, '#6e5136');
+      // fence posts around
+      for (const p of [[2, 10], [9, 8], [20, 8], [28, 10], [2, 22], [28, 22]]) {
+        R(x, p[0], p[1], 2, 6, PAL.woodD); R(x, p[0], p[1], 2, 1, PAL.woodL);
+      }
+      R(x, 2, 12, 6, 1, PAL.wood); R(x, 24, 12, 6, 1, PAL.wood);
+      R(x, 4, 16, 24, 1, PAL.woodD);
+      // straw-shade effigy: little straw blob with purple-button eyes on a pole
+      R(x, 14, 20, 3, 6, '#6b4a2b');
+      R(x, 10, 12, 11, 8, '#c9a94b'); R(x, 9, 14, 13, 4, '#c9a94b');
+      R(x, 10, 12, 11, 1, '#e0c46a');
+      R(x, 8, 15, 2, 4, '#b8942e'); R(x, 21, 13, 2, 5, '#b8942e');     // straw arms
+      R(x, 12, 14, 2, 2, '#7a4ec0'); R(x, 17, 14, 2, 2, '#7a4ec0');    // button eyes
+      R(x, 14, 17, 3, 1, '#8a6a1e');
+      R(x, 11, 10, 9, 2, '#e0c46a'); R(x, 12, 9, 7, 1, '#e0c46a');     // straw hat brim
+      // horn post + weapon rack
+      R(x, 26, 14, 2, 12, '#6b4a26'); R(x, 24, 14, 6, 2, '#8a5f37'); R(x, 25, 13, 2, 2, '#c9a94b');
+      R(x, 5, 24, 7, 2, PAL.wood); R(x, 6, 21, 1, 3, PAL.metalD); R(x, 9, 21, 1, 3, PAL.metal);
+      S.muster = c;
+    }
   },
 
   /* ================= MONSTERS ================= */
@@ -1127,6 +1178,12 @@ const Art = {
     ic('mats', x => { R(x, 2, 2, 12, 3, '#7a5a34'); R(x, 2, 4, 12, 1, '#5c4226'); R(x, 2, 6, 12, 3, '#7a7f8c'); R(x, 2, 8, 12, 1, '#5f6470'); R(x, 2, 10, 12, 3, '#c9a94b'); R(x, 2, 12, 12, 1, '#a3873a'); R(x, 12, 3, 1, 1, '#e8d0a0'); R(x, 12, 7, 1, 1, '#aab0be'); });
     ic('charcoal', x => { R(x, 3, 9, 5, 4, '#26262e'); R(x, 8, 7, 5, 5, '#33333c'); R(x, 5, 5, 4, 4, '#1d1d24'); R(x, 9, 8, 2, 1, '#4a4a56'); R(x, 4, 10, 2, 1, '#4a4a56'); });
     ic('flour', x => { R(x, 5, 2, 6, 2, '#d8c8a8'); R(x, 6, 1, 4, 1, '#b09a70'); R(x, 4, 4, 8, 10, '#e8dcc0'); R(x, 3, 6, 1, 6, '#d8c8a8'); R(x, 12, 6, 1, 6, '#d8c8a8'); R(x, 6, 8, 4, 1, '#b09a70'); });
+    ic('hands', x => { // the guardian's warm hands — an open palm
+      R(x, 4, 6, 8, 6, '#f0c8a0'); R(x, 4, 11, 8, 2, '#d9a06c');
+      R(x, 3, 7, 1, 4, '#f0c8a0'); R(x, 12, 7, 1, 4, '#f0c8a0');
+      R(x, 4, 2, 1, 4, '#f0c8a0'); R(x, 6, 1, 1, 5, '#f0c8a0'); R(x, 8, 1, 1, 5, '#f0c8a0'); R(x, 10, 2, 1, 4, '#f0c8a0');
+      R(x, 5, 3, 5, 2, '#ffd977');
+    });
   },
 
   /* -------- villager sprites (per unique look) -------- */

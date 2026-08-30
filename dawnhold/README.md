@@ -7,6 +7,26 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
+> **v1.5.0 — The Daycraft Update:** the day itself becomes playable. The
+**bench** gives the guardian **six warm hands a day** (a little hand-meter by
+the dock) to spend on ~8-second touch-work at any ready worksite — **fourteen
+minigames**, each painted and playable, each paying a stock the village
+already tracks: split logs on the swing's sweet band, hook the bobber's dip,
+trace a boulder's glowing fault, circle a berry bush past its thorns, swipe
+wheat with the wind, knead and stir to the bounce, strike when the forge bar
+flares, match feather patterns, tap cresting brew-bubbles, dip wicks on the
+wave, suture without crossing the red, strike sparks until a brazier catches,
+call the straw effigy's drill-shape. Braziers (**The Kindling**) burn all
+night as great lights — and beside a monolith they slowly **cleanse** it into
+salvageable dawn-stone, no raid and no graves. The **Muster Yard** drills
+guards for a permanent +10% per monster type. And **the Deep Seam** below a
+Mine Shaft is push-your-luck mining: a **spinning wheel** rules every level
+deeper — **okay, injured, dead** — and an injured or dead miner gets one
+chance at the **rescue skill game**: injured becomes okay, dead becomes
+injured. The v1.5 balance audit ships with it: earlier, hungrier nights, a
+real essence bank, and a ceiling that rises in endless mode. Rebuild the
+portable file anytime with `node rebake.js`.
+
 > **v1.4.2 — The Pocket Update:** built for the **vertical phone screen**.
 > One control row up top — the day clock stretches while **round pause/speed
 > buttons ride the right corner** — and the materials chips run full-width
@@ -81,6 +101,77 @@ Great Beacon to bring back the dawn.
 ---
 
 ## Changelog
+
+### v1.5.0 — The Daycraft Update
+- **The bench — six warm hands a day.** A small hand-meter by the dock
+  refills at dawn; each session spends one hand and runs ~8 real seconds
+  while **the world keeps simulating**. Every worksite advertises its game on
+  the selection card (**✋ The ...**); wild trees, boulders and berry bushes
+  get their own little cards. Hands run out → the games grey out and a
+  player who never touches the bench loses nothing — the guardrail stands:
+  no new stocks, jobs or panels, and six sessions can't gate the night.
+- **The fourteen games, each with its own painted scene:** the **Chop**
+  (split logs inside the swing's amber band, +1 wood a split, 6 a session);
+  the **Line** (hook the bobber's dip, land the fish in the ring — a clean
+  landing doubles the catch, the rare dawn-silver pays essence); the
+  **Fault** (trace a boulder's glowing crack without slipping: +2 stone and
+  the rock holds one extra unit); the **Comb** (circle the bush, dodge the
+  thorns: +3 berries and the bush regrows ~30s sooner); the **Sickle**
+  (swipe the rows with the wind: +2 grain, the plot re-seeds itself); the
+  **Knead** (tap-tap-HOLD on the dough's bounce: three loaves for two's
+  flour); the **Stir** (keep the ladle in the swirl: 3 meals where 2 stood);
+  the **Hammer** (strike the flare in the hot zone: a dead-center blow forges
+  a **true tool** that lasts twice as long); the **Flight** (match the
+  feather pattern: 14 arrows where 10 stood); the **Brew** (tap bubbles as
+  they crest: the pour at dusk is **bright ale**, +15% work instead of
+  +10%); the **Dip** (dip the wicks on the wave: torches sip half oil
+  tonight); the **Suture** (trace the wound without crossing red: the
+  medic's herbs mend +15 hp each for the day); the **Spark** (rapid-tap the
+  striker until the brazier catches — a fast kindle is a **strong kindle**,
+  a night and a half of burn); the **Effigy** (tap the shape the straw shade
+  raises: the yard's +10% drill lands a day early).
+- **The Kindling — braziers:** buildable (day 3, mystic), kindled for 4
+  wood + 8 essence. A lit brazier is a super-torch (great warm light), burns
+  fuel only through the dark, and gutters at dawn — or mid-night if you
+  skimped the spark. Planted beside a **Dark Monolith** it **cleanses** it:
+  no mending, no defenders for the raid-less, 4 damage a tick around the
+  clock until the stone cracks into **dawn-stone** (+30 stone, +12 essence)
+  without a single grave. A slow day-campaign; three braziers' worth of
+  nights reclaim a lair.
+- **The Muster Yard:** buildable (day 5, defense, one only). Pick the drill
+  — **shields** (vs runners), **pikes** (vs brutes), **scatter** (vs
+  stalkers) — and guards near the yard drill it in about a minute of
+  daywork for a **permanent +10% damage** against that type (stacks to
+  +30%). **Ring the horn** to rally off-duty guards to the yard. Raid
+  orders pause the drilling.
+- **The Deep Seam — push-your-luck mining:** order **Dig Deeper** on a Mine
+  Shaft (once a shaft a day) and the nearest free miner descends — off the
+  map, beyond the dark's reach. Each level is another spin of the **wheel**,
+  three sectors sized by depth: **okay, injured, dead** (day 1: 90/8/2 — by
+  depth 6 it reads 55/28/17). Okay pays on the spot: stone, double stone,
+  **flint** at depth 3 (tools last +25% for three days), then **crystal
+  flecks** of essence; climb out any time to keep it. A collapse seals the
+  tunnel back to depth 0 — and an **injured** miner crawls out at 30%
+  health, while a **dead** one is gone. Injured or dead, you get one chance
+  at the **rescue**: steer the ropeline through falling rock — win, and
+  **injured becomes okay, dead becomes injured**; lose, and the outcome
+  stands. The chronicle remembers every descent.
+- **The balance re-look ships** (Normal figures): nights bite from the
+  start — wave curve `2.0 + 1.95 × day` (day 3 ≈ 8, the blood moon ≈ 18),
+  night-1 floor 4, shade damage 5, runners debut day 2. Mouths matter:
+  hunger rate 0.42, fishers land a fish per 6.0s. Essence is a bank again:
+  cap 100, passive 0.075/s, every kill pays at least **3** (perKill is now
+  live as a floor), Stasis at day 3 and Meteor at day 5 give it somewhere to
+  go. The ceiling rises: monster HP scales **+8.5%/day** past day 9, and
+  endless-mode waves cap at **38** past the Beacon. Full table still in
+  `CONFIG`; `js/core.js` is the one edit per cell.
+- **Fixed:** harvested wheat plots were being handed `CONFIG.FARM.replant`,
+  which had never been defined — `growth` went `NaN` and farmers never
+  worked a plot again after its first harvest. The replant height now
+  exists (0.06), so plots cycle forever.
+- Old saves keep working: hands, buffs, drills, lit braziers, seam depths
+  and muster drills all round-trip; a save from v1.4 loads with the bench
+  untouched and full hands.
 
 ### v1.4.2 — The Pocket Update
 - **Portrait-first HUD:** on narrow screens the top collapses to **one
@@ -383,7 +474,10 @@ Guard) and they work autonomously. They also **drink** — a well and a Bottler
 keep them at their posts.
 
 - **Day (~3.5 min):** gather berries/wood/stone/herbs, build, farm, fish,
-  craft arrows/tools/meals/ale, repair.
+  craft arrows/tools/meals/ale, repair — and **lend a hand**: six **warm
+  hands** a day buy a few seconds of touch-work at any ready worksite (tap a
+  tree, boulder, bush or workplace and press **✋**). Optional, but busy
+  hands end the day ahead.
 - **Dusk:** you're told how many monsters are coming **and from which lair**.
   Every 5th night is a **blood moon** (+50% horde, double essence from kills).
 - **Night (~1.5 min):** the horde crawls out of its **Dark Monoliths** (pink
@@ -444,27 +538,31 @@ This game was designed from a review-driven audit of its inspirations.
 
 ## Balance model (see `js/core.js` → `CONFIG`)
 
-- **Food:** villager eats ~2 meals/day (~4.3 food). Bush yields 7 (regrows
-  ~3 min); wheat plot yields 15 per ~95s of sun (farmer +20%, windmill within
-  6 tiles +35%); fishing dock ~1 food / 3.4s per fisher. Starting food covers
-  ~2 days.
-- **Waves (Normal):** `round(1.4 + 1.75 × day)` capped at 30, ×0.68 Easy,
-  ×1.38 Hard, 0 Peaceful; night-1 waves floor at 2/3/5 (Easy/Normal/Hard);
-  blood moons every 5th night at ×1.2/×1.35/×1.5/×1.75 by difficulty; no
-  lairs left → ×0.75 from the wilds. Composition: shades always; runners 22%
-  d3; brutes 15% d6; bonecasters 14% d7 (range 4.5); stalkers 16% d9;
-  wraiths 18% d11 (phase through walls); colossi 10% d15 (endless) — debut
-  days shift −1 on Hard, +1 Easy, +3 Peaceful. HP +5.5%/day past day 9.
-- **Defense math:** shade 28hp/4dmg vs guard 7.5dmg/0.72s (+30% with
-  Barracks), tower 8dmg/1.1s (range 5.5), ballista 27dmg/2.3s (range 7.5 —
-  out-ranges bonecasters). Palisade 220hp/2w, stone wall 520hp/4s. Spike traps
-  15 dmg + slow per step, wear out after ~3 monsters. Lair 1100hp, mends
-  0.6%/s when not struck for 8s, and spawns day-scaled defenders (up to 5
-  alive, every ~7s) while raided — a 3-guard raid is a rolling fight, not a
-  20-second teardown.
-- **Essence:** starts 40, cap 120, ~0.1/s day · 0.05/s night (×difficulty),
-  +2 per kill (double on blood moons; lairs +25, crystals +8, boss +40),
-  shrines +0.06/s. Mend 12, Smite 22, Stasis 30 (day 5), Meteor 65 (day 6).
+- **Food:** a villager eats ~2.2 times a day (~6.5 food raw, or ~1.7 hot
+  meals). Bush yields 7 (regrows ~3 min); wheat plot yields 15 per ~95s of
+  sun (farmer +20%, windmill within 6 tiles +35%); fishing dock ~1 food /
+  6s per fisher. Starting food covers ~2 days.
+- **Waves (Normal):** `round(2.0 + 1.95 × day)` capped at 30 (38 in
+  endless, past the Beacon), ×0.68 Easy, ×1.38 Hard, 0 Peaceful; night-1
+  waves floor at 2/4/5 (Easy/Normal/Hard); blood moons every 5th night at
+  ×1.2/×1.35/×1.5/×1.75 by difficulty; no lairs left → ×0.75 from the
+  wilds. Composition: shades always; runners 22% d2; brutes 15% d6;
+  bonecasters 14% d7 (range 4.5); stalkers 16% d9; wraiths 18% d11 (phase
+  through walls); colossi 10% d15 (endless) — debut days shift −1 on Hard,
+  +1 Easy, +3 Peaceful. HP +8.5%/day past day 9.
+- **Defense math:** shade 28hp/5dmg vs guard 7.5dmg/0.72s (+30% with
+  Barracks, +10%/drill from the Muster Yard), tower 8dmg/1.1s (range 5.5),
+  ballista 27dmg/2.3s (range 7.5 — out-ranges bonecasters). Palisade
+  220hp/2w, stone wall 520hp/4s. Spike traps 15 dmg + slow per step, wear
+  out after ~3 monsters. Lair 1100hp, mends 0.6%/s when not struck for 8s,
+  and spawns day-scaled defenders (up to 5 alive, every ~7s) while raided —
+  a 3-guard raid is a rolling fight, not a 20-second teardown. A lit
+  brazier beside a lair ends both: no mend, no defenders, 4 cleanse-dps
+  until the stone cracks.
+- **Essence:** starts 40, cap 100, ~0.075/s day · 0.05/s night
+  (×difficulty), every kill pays at least 3 (more from brutes, colossi and
+  the boss; double on blood moons; lairs +25, crystals +8, boss +40),
+  shrines +0.06/s. Mend 12, Smite 22, Stasis 30 (day 3), Meteor 65 (day 5).
 - **Herbs:** bush yields 5 (regrows ~3.5 min); the Hospital heals 6 hp/s nearby,
   1 herb per 5 hp mended.
 - **Growth:** wanderer at dawn if food ≥ 14 and beds free (65% chance);
@@ -491,6 +589,20 @@ This game was designed from a review-driven audit of its inspirations.
   School: 40 teaching-seconds per villager → +12% work forever. Caps: water
   60, oil 40, bottles 30, charcoal 24, flour 30, bread 16.
 
+- **The bench (v1.5):** six warm hands a day; a session is ~8s of touch-work
+  for a capped bonus — Chop ≤ +6 wood, Line ×2 catches (+essence for the
+  dawn-silver), Fault +2 stone & +1 hidden yield, Comb +3 food & ~30s sooner
+  regrow, Sickle +2 food & a re-seeded plot, Knead 3 bread for 2 flour,
+  Stir 3 meals for a normal batch, Hammer true tools (2× wear life), Flight
+  14 arrows per batch, Brew bright ale (+15% at the next pour), Dip half oil
+  tonight, Suture +15 hp per herb today, Spark a kindle (strong = 1.5
+  nights), Effigy a drill landed early. Braziers: 4 wood + 8 essence a
+  kindle; cleanse 4 dps beside a lair → +30 dawn-stone, +12 essence. Muster
+  drills: +10% a type in ~60s of daywork, cap +30%. The Deep Seam: pay
+  3/6/6(+flint)/8+6ess/10+10ess a level, then 12+12; odds 90/8/2 at depth 1
+  → 55/28/17 at depth 6, floor 40/30/30; the rescue turns injured→okay and
+  dead→injured.
+
 Every knob is one edit in `CONFIG` — tune freely.
 
 ## Architecture
@@ -507,7 +619,9 @@ js/path.js          A* (binary heap, 8-dir); monsters path through walls
 js/buildings.js     BUILD defs; placement/construction/farms/towers/repair
 js/entities.js      villager & monster factories, names, traits
 js/game.js          simulation, day cycle, jobs, waves, combat, events
-js/powers.js        Mend / Smite / Meteor
+js/powers.js        Mend / Smite / Stasis / Meteor
+js/daycraft.js      the bench: 14 minigames, warm hands, braziers'
+                    kindling/cleansing, muster drills, the Deep Seam
 js/save.js          localStorage autosave and three slots
 js/render.js        camera, y-sorted draw, lighting, minimap, effects
 js/ui.js            touch/mouse input, panels, selection, tutorial, screens
@@ -530,6 +644,12 @@ redraws at ~3Hz.
 ---
 
 ## Research backlog — Daycraft (v1.5 candidates)
+
+*(Shipped in v1.5.0: the whole minigame bench below, The Kindling's
+braziers, The Muster Yard's drills and The Deep Seam — with the seam
+reworked into a spinning wheel of okay/injured/dead and a rescue skill game.
+The wilds-shaping, sigil-craft, restoration, banns and driven-hunt ideas
+further down remain candidates.)*
 
 *(The previous backlog batch bet on timers and pressure; this one bets the
 other way. The complaint it answers: by mid-morning of any day the player is
@@ -666,10 +786,12 @@ existing stock.
 
 ---
 
-## Balance re-look — what the numbers say (v1.5 audit)
+## Balance re-look — what the numbers say (v1.5 audit — SHIPPED)
 
 *(A pass over `CONFIG` in `js/core.js` with the complaint "too easy at the
-start, flat after" in hand. All figures are the Normal preset.)*
+start, flat after" in hand. All figures are the Normal preset. **Every
+suggested change below shipped in v1.5.0** — the audit text is kept as the
+rationale.)*
 
 **What holds up:** tool wear is the best-tuned sink in the game — a tool
 lasts ~125s of active work, so twenty workers eat ~20 tools a day and the
@@ -720,8 +842,8 @@ down: on top of the original four knobs (wave size ×0.68 Easy / ×1.38 Hard,
 monster HP ×0.88 / ×1.22, night length ×0.88 / ×1.15, essence regen ×1.1 /
 ×0.9), every preset now sets the seventeen levers below. These tables are
 the shipped values — they live in `CONFIG.DIFF` in `js/core.js`, one edit
-per cell. The backlog above stays separate (v1.5 candidate *mechanics*;
-these are the shipped preset *numbers*). Verified headless:
+per cell. The v1.5 Daycraft mechanics shipped from the backlog above; the
+remaining wilds-shaping ideas stay candidates. Verified headless:
 each lever measured per preset, 3-day soaks, and cross-preset orderings
 (wilds 887 > 841 > 798 > 725 sources; wells 16 > 13 > 12 > 11 buckets).
 
@@ -747,7 +869,7 @@ mid-game without touching combat.
 | B2 | Debut days (runners/brutes/stalkers/wraiths) | +3 | +1 | today | −1 |
 | B3 | Blood-moon horde multiplier | ×1.2 | ×1.35 | ×1.5 | ×1.75 |
 | B4 | Monolith mend rate while unraided | ×0.5 | ×0.75 | ×1 | ×1.5 |
-| B5 | Night-1 wave size | 0 | 2 | 3 | 5 |
+| B5 | Night-1 wave size | 0 | 2 | 4 | 5 |
 | B6 | Essence payout per kill | ×1.25 | ×1.1 | ×1 | ×0.9 |
 
 B2 on Hard means brutes at day 5 and wraiths at day 10 — the *composition*

@@ -40,6 +40,19 @@
   <!-- boss bar -->
   <div id="bossBar" class="hidden"><div id="bossName">Night Lord</div><div id="bossHp"><div id="bossHpFill"></div></div></div>
 
+  <!-- warm hands: the bench's daily meter -->
+  <div id="handsWrap" class="hidden"><canvas id="handsCv" width="96" height="16"></canvas></div>
+
+  <!-- Daycraft bench: the guardian lends a hand -->
+  <div id="mgWrap" class="hidden">
+    <div id="mgCard">
+      <div id="mgHead"><span id="mgTitle"></span><span id="mgHands"></span><button id="mgX">&#10005;</button></div>
+      <canvas id="mgCv" width="320" height="240"></canvas>
+      <div id="mgHint"></div>
+      <div id="mgBtns"></div>
+    </div>
+  </div>
+
   <!-- toasts + chronicle ticker -->
   <div id="toasts"></div>
   <div id="tut" class="hidden">
@@ -85,7 +98,7 @@
         <button class="bigbtn diff" data-diff="hard"><b>Hard</b><span>Scant stores, hungry dark, short days.</span></button>
         <button id="btnDiffBack" class="bigbtn ghost">Back</button>
       </div>
-      <div class="verText">v1.4.2 &middot; The Pocket Update &middot; saves in this browser</div>
+      <div class="verText">v1.5.0 &middot; The Daycraft Update &middot; saves in this browser</div>
     </div>
   </div>
 
@@ -107,6 +120,7 @@
 <script src="js/entities.js"></script>
 <script src="js/game.js"></script>
 <script src="js/powers.js"></script>
+<script src="js/daycraft.js"></script>
 <script src="js/save.js"></script>
 <script src="js/render.js"></script>
 <script src="js/ui.js"></script>

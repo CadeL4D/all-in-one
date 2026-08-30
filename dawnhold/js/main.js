@@ -9,6 +9,7 @@
   Art.init();
   Render.init();
   UI.init();
+  Bench.initDom(); // the Daycraft bench overlay (canvas + pointer routing)
 
   // title screen vignette
   const tcv = document.getElementById('titleArt');
@@ -29,9 +30,14 @@
       const total = dt * G.speed;
       const steps = Math.max(1, Math.ceil(total / 0.05));
       for (let i = 0; i < steps && G.state === 'playing'; i++) Sim.tick(total / steps);
+      // a bench session runs in real seconds while the world keeps simulating
+      Bench.tick(dt);
     }
 
-    if (G.state !== 'title') Render.frame(dt);
+    if (G.state !== 'title') {
+      Render.frame(dt);
+      Bench.renderFrame();
+    }
 
     hudT -= dt;
     if (hudT <= 0) { hudT = 0.2; UI.updateHUD(); }

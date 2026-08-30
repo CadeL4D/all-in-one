@@ -71,7 +71,7 @@ const Entities = {
     let s = 1;
     if (v.trait && v.trait.key === 'diligent') s *= 1.12;
     if (v.schooled) s *= 1.12;                      // the schoolhouse pays off
-    if (v.buzzed) s *= 1 + CONFIG.ALE.buzz;        // last night's ale
+    if (v.buzzed) s *= v.buzzMult || (1 + CONFIG.ALE.buzz); // last night's ale (bright ale pours +15%)
     if (v.toolCond <= 0) s *= CONFIG.TOOL.dryMult; // working bare-handed
     if (v.thirst > CONFIG.THIRST.parchedAt) s *= CONFIG.THIRST.workMult; // a dry throat slows the hands
     s *= Sim.contentment().mult;                   // beds & breathing room
