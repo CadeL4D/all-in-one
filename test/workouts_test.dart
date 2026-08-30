@@ -63,10 +63,10 @@ void main() {
       days: 7,
     );
     expect(upperLower.map((PlannedWorkout w) => w.focus).toList(), <String>[
-      'upper',
-      'lower',
-      'upper',
-      'lower',
+      'upper_a',
+      'lower_a',
+      'upper_b',
+      'lower_b',
     ]);
 
     final List<PlannedWorkout> ppl = WorkoutEngine.generateSchedule(
@@ -85,12 +85,217 @@ void main() {
       days: 7,
     );
     expect(ppl.map((PlannedWorkout w) => w.focus).toList(), <String>[
-      'push',
-      'pull',
-      'legs',
-      'push',
-      'pull',
+      'push_a',
+      'pull_a',
+      'legs_a',
+      'push_b',
+      'pull_b',
     ]);
+  });
+
+  test('sessions rotate through different exercise variants', () {
+    final DateTime monday = DateTime(2026, 8, 17);
+    final WorkoutProfile profile = _profile(
+      days: <int>{DateTime.monday, DateTime.wednesday},
+      maxes: <String, double>{'bench_press': 150},
+    );
+    final List<PlannedWorkout> first = WorkoutEngine.generateSchedule(
+      profile: profile,
+      resolve: 1000,
+      now: monday,
+      days: 14,
+    );
+    final Set<String> chestPicks = first
+        .expand(
+          (PlannedWorkout workout) => workout.exercises.where(
+            (PlannedExercise exercise) => exercise.pattern == 'Horizontal push',
+          ),
+        )
+        .map((PlannedExercise exercise) => exercise.exerciseId)
+        .toSet();
+    expect(chestPicks.length, greaterThanOrEqualTo(2));
+
+    // The rotation is deterministic: regenerating yields the same sessions.
+    final List<PlannedWorkout> second = WorkoutEngine.generateSchedule(
+      profile: profile,
+      resolve: 1000,
+      now: monday,
+      days: 14,
+    );
+    expect(
+      second
+          .expand((PlannedWorkout workout) => workout.exercises)
+          .map((PlannedExercise exercise) => exercise.exerciseId)
+          .toList(),
+      first
+          .expand((PlannedWorkout workout) => workout.exercises)
+          .map((PlannedExercise exercise) => exercise.exerciseId)
+          .toList(),
+    );
+  });
+
+  test('remembered swaps steer future plans and stay location-scoped', () {
+    final DateTime monday = DateTime(2026, 8, 17);
+    final WorkoutProfile profile = _profile(
+      days: <int>{DateTime.monday, DateTime.wednesday},
+      maxes: <String, double>{'bench_press': 150},
+    );
+    profile.exercisePreferences['gym:Horizontal push'] = 'incline_bench_press';
+
+    final List<PlannedWorkout> plan = WorkoutEngine.generateSchedule(
+      profile: profile,
+      resolve: 1000,
+      now: monday,
+      days: 14,
+    );
+    final List<String> gymChest = plan
+        .expand(
+          (PlannedWorkout workout) => workout.exercises.where(
+            (PlannedExercise exercise) => exercise.pattern == 'Horizontal push',
+          ),
+        )
+        .map((PlannedExercise exercise) => exercise.exerciseId)
+        .toList();
+    expect(gymChest, everyElement('incline_bench_press'));
+
+    // The home version ignores gym preferences.
+    WorkoutEngine.relocateSession(plan.first, profile, WorkoutLocation.home);
+    final List<String> homeChest = plan.first.exercises
+        .where(
+          (PlannedExercise exercise) => exercise.pattern == 'Horizontal push',
+        )
+        .map((PlannedExercise exercise) => exercise.exerciseId)
+        .toList();
+    expect(homeChest, everyElement('push_up'));
+  });
+
+  test('bodyweight sessions add reps, then graduate to harder variations', () {
+    final PlannedWorkout done = PlannedWorkout(
+      id: 'done',
+      date: DateTime(2026, 8, 17),
+      title: 'Home session',
+      pressure: 1000,
+      exercises: <PlannedExercise>[
+        PlannedExercise(
+          exerciseId: 'push_up',
+          name: 'Push-up',
+          pattern: 'Horizontal push',
+          sets: 3,
+          targetReps: 20,
+          repRangeMax: 20,
+          targetRir: 2,
+          weight: null,
+          instructions: 'Test',
+        ),
+      ],
+    );
+    for (final WorkoutSetLog set in done.exercises.single.logs) {
+      set
+        ..completed = true
+        ..actualReps = 20
+        ..rir = 2;
+    }
+    final PlannedWorkout future = PlannedWorkout(
+      id: 'future',
+      date: DateTime(2026, 8, 19),
+      title: 'Next home session',
+      pressure: 1000,
+      exercises: <PlannedExercise>[
+        PlannedExercise(
+          exerciseId: 'push_up',
+          name: 'Push-up',
+          pattern: 'Horizontal push',
+          sets: 3,
+          targetReps: 20,
+          repRangeMax: 20,
+          targetRir: 2,
+          weight: null,
+          instructions: 'Test',
+        ),
+      ],
+    );
+    final WorkoutState state = WorkoutState(
+      profile: _profile(days: <int>{DateTime.monday, DateTime.wednesday}),
+      resolve: 1000,
+      ratedWorkouts: 0,
+      workouts: <PlannedWorkout>[done, future],
+    );
+    WorkoutEngine.completeWorkout(state, done);
+    expect(future.exercises.single.exerciseId, 'decline_push_up');
+    // A graduated variation starts easier than its usual baseline
+    // (HPush baseline is 12, so the fresh variation opens at 8).
+    expect(future.exercises.single.targetReps, 8);
+  });
+
+  test('muscle tags cover the library and secondaries count half a set', () {
+    for (final WorkoutExerciseDefinition exercise in WorkoutEngine.exercises) {
+      expect(exercise.primary, isA<WorkoutMuscle>());
+      if (exercise.harder != null) {
+        expect(
+          WorkoutEngine.definitionFor(exercise.harder!),
+          isNotNull,
+          reason: '${exercise.id} chains to a missing variation',
+        );
+      }
+    }
+    final PlannedExercise bench = PlannedExercise(
+      exerciseId: 'bench_press',
+      name: 'Bench press',
+      pattern: 'Horizontal push',
+      sets: 3,
+      targetReps: 6,
+      repRangeMax: 8,
+      targetRir: 2,
+      weight: null,
+      instructions: 'Test',
+    );
+    final Map<WorkoutMuscle, double> sets = WorkoutEngine.setsByMuscle(<
+      PlannedExercise
+    >[bench]);
+    expect(sets[WorkoutMuscle.chest], 3);
+    expect(sets[WorkoutMuscle.triceps], closeTo(1.5, 0.001));
+    expect(sets[WorkoutMuscle.shoulders], closeTo(1.5, 0.001));
+  });
+
+  test('home sessions scale sets by goal and respect the pull-up gate', () {
+    final WorkoutExerciseDefinition pushUp = WorkoutEngine.definitionFor(
+      'push_up',
+    )!;
+    final WorkoutProfile scaled = WorkoutProfile(
+      goal: WorkoutGoal.muscle,
+      experience: WorkoutExperience.experienced,
+      split: WorkoutSplit.fullBody,
+      trainingDays: <int>{DateTime.monday},
+      sessionMinutes: 45,
+      equipment: <WorkoutEquipment>{
+        WorkoutEquipment.bodyweight,
+        WorkoutEquipment.bands,
+      },
+      unit: WorkoutUnit.pounds,
+      reminderMinutes: 18 * 60,
+      notificationsEnabled: true,
+      estimatedMaxes: const <String, double>{},
+    );
+    expect(
+      WorkoutEngine.planExerciseFor(scaled, pushUp, WorkoutLocation.home).sets,
+      4,
+    );
+
+    final WorkoutProfile noBar = _profile(
+      days: <int>{DateTime.monday},
+      equipment: <WorkoutEquipment>{
+        WorkoutEquipment.bodyweight,
+        WorkoutEquipment.bands,
+      },
+    );
+    expect(
+      WorkoutEngine.alternativesFor(
+        'Vertical pull',
+        noBar,
+        WorkoutLocation.home,
+      ).map((WorkoutExerciseDefinition item) => item.id),
+      <String>['band_pulldown'],
+    );
   });
 
   test('relocating a session to home swaps in bodyweight work', () {
@@ -269,16 +474,26 @@ void main() {
       gymOptions.map((WorkoutExerciseDefinition item) => item.id),
       containsAll(<String>['lat_pulldown', 'pull_up']),
     );
+    // Best picks come first: the rank-1 machine lat pulldown leads.
+    expect(gymOptions.first.id, 'lat_pulldown');
 
-    final List<WorkoutExerciseDefinition> homeOptions =
-        WorkoutEngine.alternativesFor(
-          'Vertical pull',
-          gymProfile,
-          WorkoutLocation.home,
-        );
+    // At home, bar exercises are gated until the profile says there is a bar.
     expect(
-      homeOptions.map((WorkoutExerciseDefinition item) => item.id),
-      <String>['pull_up'],
+      WorkoutEngine.alternativesFor(
+        'Vertical pull',
+        gymProfile,
+        WorkoutLocation.home,
+      ),
+      isEmpty,
+    );
+    gymProfile.homePullUpBar = true;
+    expect(
+      WorkoutEngine.alternativesFor(
+        'Vertical pull',
+        gymProfile,
+        WorkoutLocation.home,
+      ).map((WorkoutExerciseDefinition item) => item.id),
+      <String>['pull_up', 'chin_up'],
     );
   });
 
@@ -289,7 +504,9 @@ void main() {
     profile
       ..notificationsEnabled = false
       ..reminderMinutes = 7 * 60
-      ..reminderMinutesByDay[DateTime.wednesday] = 12 * 60;
+      ..reminderMinutesByDay[DateTime.wednesday] = 12 * 60
+      ..homePullUpBar = true;
+    profile.exercisePreferences['gym:Horizontal push'] = 'incline_bench_press';
     final Map<String, dynamic> saved = WorkoutState(
       profile: profile,
       resolve: 1010,
@@ -302,6 +519,11 @@ void main() {
     expect(restored.profile.notificationsEnabled, isFalse);
     expect(restored.profile.reminderMinutesFor(DateTime.monday), 7 * 60);
     expect(restored.profile.reminderMinutesFor(DateTime.wednesday), 12 * 60);
+    expect(restored.profile.homePullUpBar, isTrue);
+    expect(
+      restored.profile.exercisePreferences['gym:Horizontal push'],
+      'incline_bench_press',
+    );
   });
 
   test('pre-split saves from schema v1 load with defaults', () {
@@ -352,6 +574,18 @@ void main() {
     expect(WorkoutCoach.recommendedSplit(4), WorkoutSplit.upperLower);
     expect(WorkoutCoach.recommendedSplit(6), WorkoutSplit.pushPullLegs);
     expect(WorkoutCoach.splitAdvice(4), contains('Upper / Lower'));
+  });
+
+  test('coach best picks cover every muscle group in order', () {
+    final List<(WorkoutMuscle, List<String>)> picks = WorkoutCoach
+        .bestPicksByMuscle();
+    expect(
+      picks.map(((WorkoutMuscle, List<String>) pick) => pick.$1).toList(),
+      WorkoutMuscle.values.toList(),
+    );
+    for (final (WorkoutMuscle, List<String>) pick in picks) {
+      expect(pick.$2, hasLength(2));
+    }
   });
 
   testWidgets('Workouts onboarding starts with safety and no age gate', (
@@ -478,20 +712,17 @@ void main() {
 
     await tester.pumpWidget(const MaterialApp(home: WorkoutsApp()));
     await tester.pumpAndSettle();
+    expect(find.text('Bench press'), findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('workouts-toggle-location')),
-    );
+    // The Gym ⇄ Home segmented toggle sits in the card header.
+    await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
+    expect(find.text('Push-up'), findsOneWidget);
+    expect(find.text('Bench press'), findsNothing);
 
-    expect(find.text('HOME'), findsOneWidget);
-    expect(find.text('Back to the gym version'), findsOneWidget);
-
-    await tester.tap(
-      find.byKey(const ValueKey<String>('workouts-toggle-location')),
-    );
+    await tester.tap(find.text('Gym'));
     await tester.pumpAndSettle();
-    expect(find.text('Train at home instead'), findsOneWidget);
+    expect(find.text('Bench press'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

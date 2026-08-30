@@ -6,6 +6,34 @@ enum WorkoutEquipment { bodyweight, dumbbells, barbell, machines, bands }
 
 enum WorkoutUnit { pounds, kilograms }
 
+enum WorkoutMuscle {
+  chest,
+  back,
+  shoulders,
+  biceps,
+  triceps,
+  quads,
+  hamstrings,
+  glutes,
+  calves,
+  core,
+}
+
+extension WorkoutMuscleLabel on WorkoutMuscle {
+  String get label => switch (this) {
+    WorkoutMuscle.chest => 'Chest',
+    WorkoutMuscle.back => 'Back',
+    WorkoutMuscle.shoulders => 'Shoulders',
+    WorkoutMuscle.biceps => 'Biceps',
+    WorkoutMuscle.triceps => 'Triceps',
+    WorkoutMuscle.quads => 'Quads',
+    WorkoutMuscle.hamstrings => 'Hamstrings',
+    WorkoutMuscle.glutes => 'Glutes',
+    WorkoutMuscle.calves => 'Calves',
+    WorkoutMuscle.core => 'Core',
+  };
+}
+
 enum WorkoutStatus { scheduled, inProgress, completed, missed, recovery }
 
 enum WorkoutSplit { fullBody, upperLower, pushPullLegs }
@@ -93,7 +121,10 @@ class WorkoutProfile {
     required this.notificationsEnabled,
     required this.estimatedMaxes,
     Map<int, int>? reminderMinutesByDay,
-  }) : reminderMinutesByDay = reminderMinutesByDay ?? <int, int>{};
+    Map<String, String>? exercisePreferences,
+    this.homePullUpBar = false,
+  }) : reminderMinutesByDay = reminderMinutesByDay ?? <int, int>{},
+       exercisePreferences = exercisePreferences ?? <String, String>{};
 
   factory WorkoutProfile.fromJson(Map<String, dynamic> json) {
     return WorkoutProfile(
@@ -134,6 +165,14 @@ class WorkoutProfile {
                 (String key, dynamic value) =>
                     MapEntry<int, int>(int.parse(key), (value as num).toInt()),
               ),
+      exercisePreferences:
+          (json['exercisePreferences'] as Map<String, dynamic>? ??
+                  <String, dynamic>{})
+              .map(
+                (String key, dynamic value) =>
+                    MapEntry<String, String>(key, value as String),
+              ),
+      homePullUpBar: json['homePullUpBar'] as bool? ?? false,
     );
   }
 
@@ -148,6 +187,15 @@ class WorkoutProfile {
   bool notificationsEnabled;
   final Map<int, int> reminderMinutesByDay;
   final Map<String, double> estimatedMaxes;
+
+  /// Remembered exercise swaps, keyed `'$location:$pattern'` → exercise id.
+  /// The planner uses these instead of its rotation, so the coach adopts the
+  /// user's picks for future sessions.
+  final Map<String, String> exercisePreferences;
+
+  /// Whether a pull-up bar is available at home; gates bar exercises out of
+  /// home sessions when false.
+  bool homePullUpBar;
 
   int reminderMinutesFor(int weekday) =>
       reminderMinutesByDay[weekday] ?? reminderMinutes;
@@ -166,6 +214,8 @@ class WorkoutProfile {
       (int key, int value) => MapEntry<String, int>(key.toString(), value),
     ),
     'estimatedMaxes': estimatedMaxes,
+    'exercisePreferences': exercisePreferences,
+    'homePullUpBar': homePullUpBar,
   };
 }
 
@@ -381,7 +431,7 @@ class WorkoutState {
   final List<PlannedWorkout> workouts;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'schemaVersion': 2,
+    'schemaVersion': 3,
     'profile': profile.toJson(),
     'resolve': resolve,
     'ratedWorkouts': ratedWorkouts,

@@ -270,13 +270,16 @@ class _WorkoutsAppState extends State<WorkoutsApp> with WidgetsBindingObserver {
               ),
               SizedBox(height: 12),
               Text(
-                'Your split is chosen to fit your training days so every movement pattern is trained at least twice a week, with weekly volume in the evidence-backed 10–20 sets per muscle range.',
+                'Sessions come in labeled varieties—A, B, C—that rotate real exercise variants week to week, so every muscle is trained at least twice weekly while volume stays in the evidence-backed 10–20 sets per muscle range. The Week tab shows your muscle balance against that range.',
               ),
               SizedBox(height: 12),
               Text(
-                'Loads come from a conservative estimate of a recent 1–10 rep set, prescribed as a goal-specific percentage. Beating the top of a rep range with reps to spare raises future loads automatically.',
+                'Loads come from a conservative estimate of a recent 1–10 rep set, prescribed as a goal-specific percentage. Beating the top of a rep range with reps to spare raises future loads automatically—at home, bodyweight exercises add reps and then graduate to harder variations.',
               ),
               SizedBox(height: 12),
+              Text(
+                'Swap any exercise before you start. Leave “Remember my picks” on and the coach plans around your swaps in future sessions.',
+              ),
               Text(
                 'Resolve follows the rep total. Beat the planned reps and Resolve rises—more when the workout outranked you. Fall short and it dips slightly. Recovery days are free.',
               ),
@@ -905,7 +908,7 @@ class _TodayPageState extends State<_TodayPage> {
     await widget.onChanged();
   }
 
-  Future<void> _pickExercises(PlannedWorkout workout) async {
+  Future<void> _openEditorAt(PlannedWorkout workout, int? index) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -914,11 +917,19 @@ class _TodayPageState extends State<_TodayPage> {
         state: widget.state,
         workout: workout,
         onChanged: widget.onChanged,
+        focusIndex: index,
       ),
     );
     if (mounted) {
       setState(() {});
     }
+  }
+
+  /// Rest day, but the user wants to train: pull the next scheduled session
+  /// to today.
+  Future<void> _pullForward(PlannedWorkout workout) async {
+    setState(() => workout.date = WorkoutEngine.dateOnly(DateTime.now()));
+    await widget.onChanged();
   }
 
   @override
@@ -991,7 +1002,12 @@ class _TodayPageState extends State<_TodayPage> {
         Text('Today', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 10),
         if (today == null)
-          _RestDayCard(next: _next)
+          _RestDayCard(
+            next: _next,
+            onTrainNow: _next == null
+                ? null
+                : () => _pullForward(_next!),
+          )
         else
           _WorkoutOpponentCard(
             workout: today,
@@ -1011,8 +1027,8 @@ class _TodayPageState extends State<_TodayPage> {
             onToggleLocation: today.status == WorkoutStatus.scheduled
                 ? () => _toggleLocation(today)
                 : null,
-            onPickExercises: today.status == WorkoutStatus.scheduled
-                ? () => _pickExercises(today)
+            onEditExercise: today.status == WorkoutStatus.scheduled
+                ? (int? index) => _openEditorAt(today, index)
                 : null,
           ),
         const SizedBox(height: 18),
@@ -1077,7 +1093,7 @@ class _WorkoutOpponentCard extends StatelessWidget {
     required this.onReschedule,
     required this.onRecovery,
     required this.onToggleLocation,
-    required this.onPickExercises,
+    required this.onEditExercise,
   });
 
   final PlannedWorkout workout;
@@ -1087,7 +1103,7 @@ class _WorkoutOpponentCard extends StatelessWidget {
   final VoidCallback? onReschedule;
   final VoidCallback? onRecovery;
   final VoidCallback? onToggleLocation;
-  final VoidCallback? onPickExercises;
+  final ValueChanged<int?>? onEditExercise;
 
   @override
   Widget build(BuildContext context) {
@@ -1098,6 +1114,7 @@ class _WorkoutOpponentCard extends StatelessWidget {
       WorkoutStatus.missed => 'MISSED · ${_signed(workout.resolveDelta)}',
       WorkoutStatus.recovery => 'RECOVERY',
     };
+    final bool editable = onEditExercise != null;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -1125,37 +1142,63 @@ class _WorkoutOpponentCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (workout.location == WorkoutLocation.home) ...<Widget>[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _workoutAmber.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'HOME',
-                      style: TextStyle(
-                        color: Color(0xFFB45309),
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.7,
-                      ),
-                    ),
-                  ),
-                ],
                 const Spacer(),
-                Text(
-                  '${workout.totalSets} sets · ${workout.targetTotalReps} reps',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                if (onToggleLocation != null)
+                  SegmentedButton<WorkoutLocation>(
+                    key: const ValueKey<String>('workouts-toggle-location'),
+                    showSelectedIcon: false,
+                    style: const ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    segments: const <ButtonSegment<WorkoutLocation>>[
+                      ButtonSegment<WorkoutLocation>(
+                        value: WorkoutLocation.gym,
+                        icon: Icon(Icons.fitness_center_rounded, size: 16),
+                        label: Text('Gym'),
+                      ),
+                      ButtonSegment<WorkoutLocation>(
+                        value: WorkoutLocation.home,
+                        icon: Icon(Icons.home_rounded, size: 16),
+                        label: Text('Home'),
+                      ),
+                    ],
+                    selected: <WorkoutLocation>{workout.location},
+                    onSelectionChanged: onToggleLocation == null
+                        ? null
+                        : (Set<WorkoutLocation> _) => onToggleLocation!(),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
             Text(workout.title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: <Widget>[
+                for (final WorkoutMuscle muscle in WorkoutEngine.sessionMuscles(
+                  workout.exercises,
+                ))
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _workoutNavy.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      muscle.label,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(14),
@@ -1194,35 +1237,18 @@ class _WorkoutOpponentCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            ...workout.exercises
-                .take(4)
-                .map(
-                  (PlannedExercise exercise) => Padding(
-                    padding: const EdgeInsets.only(bottom: 7),
-                    child: Row(
-                      children: <Widget>[
-                        const Icon(Icons.arrow_right_rounded, size: 18),
-                        Expanded(
-                          child: Text(
-                            exercise.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          exercise.weight == null
-                              ? '${exercise.sets} × ${exercise.targetReps}'
-                              : '${exercise.sets} × ${exercise.targetReps} · ${_weight(exercise.weight!, unit)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            if (workout.exercises.length > 4)
-              Text(
-                '+ ${workout.exercises.length - 4} more',
-                style: Theme.of(context).textTheme.bodySmall,
+            for (
+              int index = 0;
+              index < workout.exercises.length;
+              index++
+            )
+              _ExerciseRow(
+                exercise: workout.exercises[index],
+                unit: unit,
+                editable: editable,
+                onTap: editable
+                    ? () => onEditExercise!(index)
+                    : null,
               ),
             if (onStart != null) ...<Widget>[
               const SizedBox(height: 16),
@@ -1239,33 +1265,15 @@ class _WorkoutOpponentCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (onToggleLocation != null)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    key: const ValueKey<String>('workouts-toggle-location'),
-                    onPressed: onToggleLocation,
-                    icon: Icon(
-                      workout.location == WorkoutLocation.home
-                          ? Icons.fitness_center_rounded
-                          : Icons.home_rounded,
-                    ),
-                    label: Text(
-                      workout.location == WorkoutLocation.home
-                          ? 'Back to the gym version'
-                          : 'Train at home instead',
-                    ),
-                  ),
-                ),
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: 6,
                 runSpacing: 2,
                 children: <Widget>[
-                  if (onPickExercises != null)
+                  if (editable)
                     TextButton(
-                      onPressed: onPickExercises,
-                      child: const Text('Change exercises'),
+                      onPressed: () => onEditExercise!(null),
+                      child: const Text('Edit exercises'),
                     ),
                   if (onReschedule != null)
                     TextButton(
@@ -1287,82 +1295,187 @@ class _WorkoutOpponentCard extends StatelessWidget {
   }
 }
 
-/// Lets the user swap any planned exercise for an alternative that matches
-/// the same movement pattern and available equipment, with a suggested load.
+class _ExerciseRow extends StatelessWidget {
+  const _ExerciseRow({
+    required this.exercise,
+    required this.unit,
+    required this.editable,
+    required this.onTap,
+  });
+
+  final PlannedExercise exercise;
+  final WorkoutUnit unit;
+  final bool editable;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final WorkoutExerciseDefinition? definition = WorkoutEngine.definitionFor(
+      exercise.exerciseId,
+    );
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.arrow_right_rounded, size: 18),
+            Expanded(
+              child: Text(
+                exercise.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              exercise.weight == null
+                  ? '${exercise.sets} × ${exercise.targetReps}'
+                  : '${exercise.sets} × ${exercise.targetReps} · ${_weight(exercise.weight!, unit)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (editable) ...<Widget>[
+              const SizedBox(width: 6),
+              Tooltip(
+                message: definition == null
+                    ? 'Swap exercise'
+                    : 'Swap · trains ${definition.primary.label.toLowerCase()}',
+                child: Icon(
+                  Icons.tune_rounded,
+                  size: 17,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Session editor: swap any slot for a ranked alternative, pick any exercise
+/// from the muscle-group catalog, add or remove slots, and optionally let the
+/// coach remember picks for future sessions.
 class _ExercisePickerSheet extends StatefulWidget {
   const _ExercisePickerSheet({
     required this.state,
     required this.workout,
     required this.onChanged,
+    this.focusIndex,
   });
 
   final WorkoutState state;
   final PlannedWorkout workout;
   final Future<void> Function() onChanged;
+  final int? focusIndex;
 
   @override
   State<_ExercisePickerSheet> createState() => _ExercisePickerSheetState();
 }
 
 class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
-  void _select(int index, WorkoutExerciseDefinition definition) {
+  bool _remember = true;
+
+  WorkoutProfile get profile => widget.state.profile;
+
+  WorkoutLocation get location => widget.workout.location;
+
+  void _replace(int index, WorkoutExerciseDefinition definition) {
+    final String slotPattern = widget.workout.exercises[index].pattern;
     setState(() {
       widget.workout.exercises[index] = WorkoutEngine.planExerciseFor(
-        widget.state.profile,
+        profile,
         definition,
-        widget.workout.location,
+        location,
       );
     });
+    // Only same-pattern swaps are remembered, so a one-off odd pick never
+    // leaks into unrelated slots of future sessions.
+    if (_remember && definition.pattern == slotPattern) {
+      profile.exercisePreferences['${location.name}:$slotPattern'] =
+          definition.id;
+    }
     widget.onChanged();
-    Navigator.pop(context);
+  }
+
+  void _remove(int index) {
+    setState(() => widget.workout.exercises.removeAt(index));
+    widget.onChanged();
+  }
+
+  void _append(WorkoutExerciseDefinition definition) {
+    setState(
+      () => widget.workout.exercises.add(
+        WorkoutEngine.planExerciseFor(profile, definition, location),
+      ),
+    );
+    widget.onChanged();
+  }
+
+  void _restoreCoachPick(int index) {
+    final PlannedExercise current = widget.workout.exercises[index];
+    final List<WorkoutExerciseDefinition> options = WorkoutEngine
+        .alternativesFor(current.pattern, profile, location);
+    if (options.isEmpty) {
+      return;
+    }
+    _replace(index, options.first);
   }
 
   @override
   Widget build(BuildContext context) {
-    final WorkoutProfile profile = widget.state.profile;
     return DraggableScrollableSheet(
       expand: false,
-      maxChildSize: 0.85,
-      initialChildSize: 0.6,
+      maxChildSize: 0.92,
+      initialChildSize: 0.75,
       builder: (BuildContext context, ScrollController scrollController) {
         return ListView(
           controller: scrollController,
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           children: <Widget>[
-            Text(
-              'Pick your exercises',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text('Build this session', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 4),
             Text(
-              'Swaps keep the same movement pattern, sets, and target reps. Suggested weights come from your logged lifts.',
+              'Tap an exercise to swap it. ★ marks the coach’s top pick for the slot, and swaps keep the sets and target reps.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _remember,
+              onChanged: (bool value) => setState(() => _remember = value),
+              title: const Text('Remember my picks'),
+              subtitle: const Text(
+                'Future sessions plan around your swaps instead of the rotation.',
+              ),
+            ),
+            const SizedBox(height: 4),
             for (
               int index = 0;
               index < widget.workout.exercises.length;
               index++
             )
-              _slot(index, profile),
+              _slot(index),
+            const SizedBox(height: 8),
+            _addExerciseTile(),
           ],
         );
       },
     );
   }
 
-  Widget _slot(int index, WorkoutProfile profile) {
+  Widget _slot(int index) {
     final PlannedExercise current = widget.workout.exercises[index];
     final List<WorkoutExerciseDefinition> alternatives =
-        WorkoutEngine.alternativesFor(
-          current.pattern,
-          profile,
-          widget.workout.location,
-        );
+        WorkoutEngine.alternativesFor(current.pattern, profile, location);
+    final String? coachPickId = alternatives.isEmpty
+        ? null
+        : alternatives.first.id;
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ExpansionTile(
         key: ValueKey<String>('workout-slot-$index'),
+        initiallyExpanded: index == widget.focusIndex,
         tilePadding: const EdgeInsets.symmetric(horizontal: 14),
         childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
         title: Text(current.name),
@@ -1370,50 +1483,113 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
           '${current.pattern} · ${current.sets} × ${current.targetReps}',
         ),
         children: <Widget>[
-          RadioGroup<String>(
-            groupValue: current.exerciseId,
-            onChanged: (String? value) => _select(
-              index,
-              alternatives.firstWhere(
-                (WorkoutExerciseDefinition item) => item.id == value,
-              ),
+          for (final WorkoutExerciseDefinition definition in alternatives)
+            _optionTile(index, current, definition),
+          if (coachPickId != null && current.exerciseId != coachPickId)
+            TextButton.icon(
+              onPressed: () => _restoreCoachPick(index),
+              icon: const Icon(Icons.auto_awesome_rounded, size: 15),
+              label: Text('Restore ${alternatives.first.name}'),
             ),
-            child: Column(
-              children: <Widget>[
-                for (final WorkoutExerciseDefinition definition in alternatives)
-                  RadioListTile<String>(
-                    value: definition.id,
-                    title: Text(definition.name),
-                    subtitle: Text(
-                      _alternativeSubtitle(definition, profile),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    dense: true,
-                  ),
-              ],
+          if (widget.workout.exercises.length > 3)
+            TextButton.icon(
+              onPressed: () => _remove(index),
+              icon: const Icon(Icons.remove_circle_outline_rounded, size: 15),
+              label: const Text('Remove from session'),
             ),
-          ),
         ],
       ),
     );
   }
 
-  String _alternativeSubtitle(
+  Widget _optionTile(
+    int index,
+    PlannedExercise current,
     WorkoutExerciseDefinition definition,
-    WorkoutProfile profile,
   ) {
+    final bool isCurrent = definition.id == current.exerciseId;
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+      leading: definition.rank == 1
+          ? const Icon(Icons.star_rounded, size: 18, color: _workoutAmber)
+          : const SizedBox(width: 18),
+      title: Text(definition.name),
+      subtitle: Text(
+        _optionSubtitle(definition),
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      trailing: isCurrent
+          ? const Icon(Icons.check_rounded, size: 18)
+          : null,
+      onTap: isCurrent ? null : () => _replace(index, definition),
+    );
+  }
+
+  Widget _addExerciseTile() {
+    final Map<WorkoutMuscle, List<WorkoutExerciseDefinition>> catalog =
+        WorkoutEngine.catalogByMuscle(profile, location);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+        title: const Text('Add an exercise'),
+        subtitle: const Text('Browse by muscle group'),
+        children: <Widget>[
+          for (
+            final MapEntry<WorkoutMuscle, List<WorkoutExerciseDefinition>> group
+            in catalog.entries
+          ) ...<Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  group.key.label.toUpperCase(),
+                  style: _eyebrowStyle.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+            for (final WorkoutExerciseDefinition definition in group.value)
+              ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                leading: definition.rank == 1
+                    ? const Icon(
+                        Icons.star_rounded,
+                        size: 18,
+                        color: _workoutAmber,
+                      )
+                    : const SizedBox(width: 18),
+                title: Text(definition.name),
+                subtitle: Text(
+                  _optionSubtitle(definition),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                onTap: () => _append(definition),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _optionSubtitle(WorkoutExerciseDefinition definition) {
+    final String kind = definition.compound ? 'compound' : 'accessory';
     if (definition.equipment == WorkoutEquipment.bodyweight) {
-      return 'Bodyweight · ${definition.compound ? 'compound' : 'accessory'}';
+      return 'Bodyweight · $kind';
     }
     final double? max = WorkoutEngine.estimatedMaxFor(profile, definition.id);
     if (max == null) {
-      return '${definition.equipment.label} · set weight when logging';
+      return '${definition.equipment.label} · $kind · set weight when logging';
     }
-    final String tag =
-        WorkoutEngine.estimateIsApproximate(profile, definition.id)
+    final String tag = WorkoutEngine.estimateIsApproximate(profile, definition.id)
         ? ' (est.)'
         : '';
-    return '${definition.equipment.label} · around ${_weight(max, profile.unit)} max$tag';
+    return '${definition.equipment.label} · $kind · around ${_weight(max, profile.unit)} max$tag';
   }
 }
 
@@ -1795,6 +1971,17 @@ class _WeekPage extends StatelessWidget {
   final WorkoutState state;
   final Future<void> Function() onChanged;
 
+  void _flipLocation(PlannedWorkout workout) {
+    WorkoutEngine.relocateSession(
+      workout,
+      state.profile,
+      workout.location == WorkoutLocation.gym
+          ? WorkoutLocation.home
+          : WorkoutLocation.gym,
+    );
+    onChanged();
+  }
+
   @override
   Widget build(BuildContext context) {
     final DateTime today = WorkoutEngine.dateOnly(DateTime.now());
@@ -1810,6 +1997,9 @@ class _WeekPage extends StatelessWidget {
           ..sort(
             (PlannedWorkout a, PlannedWorkout b) => a.date.compareTo(b.date),
           );
+    final Map<WorkoutMuscle, double> sets = WorkoutEngine.setsByMuscle(
+      week.expand((PlannedWorkout workout) => workout.exercises),
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
       children: <Widget>[
@@ -1819,9 +2009,16 @@ class _WeekPage extends StatelessWidget {
           '${week.length} planned sessions · ${week.fold<int>(0, (int total, PlannedWorkout item) => total + item.totalSets)} working sets',
         ),
         const SizedBox(height: 16),
+        _MuscleBalanceCard(sets: sets),
+        const SizedBox(height: 14),
         ...week.map(
-          (PlannedWorkout workout) =>
-              _WeekWorkoutTile(workout: workout, unit: state.profile.unit),
+          (PlannedWorkout workout) => _WeekWorkoutTile(
+            workout: workout,
+            unit: state.profile.unit,
+            onFlipLocation: workout.status == WorkoutStatus.scheduled
+                ? () => _flipLocation(workout)
+                : null,
+          ),
         ),
         if (week.isEmpty)
           const _NoticeCard(
@@ -1831,6 +2028,78 @@ class _WeekPage extends StatelessWidget {
             body: 'Your next generated week will appear here.',
           ),
       ],
+    );
+  }
+}
+
+/// Planned sets per muscle versus the evidence-backed 10–20 weekly band.
+class _MuscleBalanceCard extends StatelessWidget {
+  const _MuscleBalanceCard({required this.sets});
+
+  final Map<WorkoutMuscle, double> sets;
+
+  @override
+  Widget build(BuildContext context) {
+    if (sets.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final List<WorkoutMuscle> trained =
+        WorkoutMuscle.values
+            .where((WorkoutMuscle muscle) => (sets[muscle] ?? 0) >= 1)
+            .toList();
+    final List<WorkoutMuscle> light = trained
+        .where((WorkoutMuscle muscle) => (sets[muscle] ?? 0) < 10)
+        .toList();
+    final String nudge = light.isEmpty
+        ? 'Every trained muscle is inside the 10–20 set range.'
+        : '${light.first.label} is light this week (${(sets[light.first] ?? 0).round()} sets)—one or two more sets brings it into range.';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'MUSCLE BALANCE',
+              style: _eyebrowStyle.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: <Widget>[
+                for (final WorkoutMuscle muscle in trained)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (sets[muscle] ?? 0) < 10
+                          ? _workoutAmber.withValues(alpha: 0.14)
+                          : _workoutMint.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${muscle.label} ${(sets[muscle] ?? 0).round()}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: (sets[muscle] ?? 0) < 10
+                            ? const Color(0xFFB45309)
+                            : const Color(0xFF059669),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(nudge, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1942,6 +2211,34 @@ class _CoachPageState extends State<_CoachPage> {
           title: 'Your split: ${profile.split.label}',
           body:
               '${profile.split.description} ${WorkoutCoach.splitAdvice(profile.trainingDays.length)}',
+        ),
+        const SizedBox(height: 14),
+        Card(
+          margin: const EdgeInsets.only(bottom: 14),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+            childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            title: const Text(
+              'Best exercises by muscle group',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: const Text('The coach’s top two picks for each muscle'),
+            children: <Widget>[
+              for (
+                final (WorkoutMuscle muscle, List<String> picks)
+                in WorkoutCoach.bestPicksByMuscle()
+              )
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    muscle.label,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(picks.join(' · ')),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
         if (entries.isEmpty)
@@ -2146,6 +2443,41 @@ class _ProfilePageState extends State<_ProfilePage> {
           ),
         ),
         const SizedBox(height: 14),
+        Text('HOME TRAINING', style: _eyebrowStyle),
+        const SizedBox(height: 8),
+        Card(
+          child: Column(
+            children: <Widget>[
+              SwitchListTile(
+                value: profile.homePullUpBar,
+                onChanged: (bool value) {
+                  setState(() => profile.homePullUpBar = value);
+                  widget.onChanged();
+                },
+                title: const Text('Pull-up bar at home'),
+                subtitle: const Text(
+                  'Unlocks pull-ups and chin-ups in home sessions.',
+                ),
+              ),
+              if (profile.exercisePreferences.isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.swap_horiz_rounded),
+                  title: const Text('Remembered exercise swaps'),
+                  subtitle: const Text(
+                    'The coach plans around your past picks.',
+                  ),
+                  trailing: TextButton(
+                    onPressed: () {
+                      setState(() => profile.exercisePreferences.clear());
+                      widget.onChanged();
+                    },
+                    child: const Text('Forget'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
         const _NoticeCard(
           color: _workoutMint,
           icon: Icons.lock_rounded,
@@ -2314,8 +2646,9 @@ class _MatchScore extends StatelessWidget {
 }
 
 class _RestDayCard extends StatelessWidget {
-  const _RestDayCard({required this.next});
+  const _RestDayCard({required this.next, this.onTrainNow});
   final PlannedWorkout? next;
+  final VoidCallback? onTrainNow;
   @override
   Widget build(BuildContext context) => _NoticeCard(
     color: _workoutMint,
@@ -2324,6 +2657,13 @@ class _RestDayCard extends StatelessWidget {
     body: next == null
         ? 'There is no workout scheduled today.'
         : 'Next: ${_weekday(next!.date)} · ${next!.title}',
+    footer: onTrainNow == null
+        ? null
+        : TextButton.icon(
+            onPressed: onTrainNow,
+            icon: const Icon(Icons.bolt_rounded, size: 16),
+            label: const Text('Train today instead'),
+          ),
   );
 }
 
@@ -2339,9 +2679,14 @@ class _MiniPrincipleCard extends StatelessWidget {
 }
 
 class _WeekWorkoutTile extends StatelessWidget {
-  const _WeekWorkoutTile({required this.workout, required this.unit});
+  const _WeekWorkoutTile({
+    required this.workout,
+    required this.unit,
+    this.onFlipLocation,
+  });
   final PlannedWorkout workout;
   final WorkoutUnit unit;
+  final VoidCallback? onFlipLocation;
   @override
   Widget build(BuildContext context) => Card(
     margin: const EdgeInsets.only(bottom: 10),
@@ -2352,12 +2697,30 @@ class _WeekWorkoutTile extends StatelessWidget {
         '${_weekday(workout.date)} · ${workout.totalSets} sets · Pressure ${workout.pressure}'
         '${workout.location == WorkoutLocation.home ? ' · Home' : ''}',
       ),
-      trailing: Text(switch (workout.status) {
-        WorkoutStatus.completed ||
-        WorkoutStatus.missed => _signed(workout.resolveDelta),
-        WorkoutStatus.recovery => 'REST',
-        _ => 'OPEN',
-      }, style: const TextStyle(fontWeight: FontWeight.w900)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (onFlipLocation != null)
+            IconButton(
+              tooltip: workout.location == WorkoutLocation.gym
+                  ? 'Switch this day to the home version'
+                  : 'Switch this day back to the gym version',
+              icon: Icon(
+                workout.location == WorkoutLocation.gym
+                    ? Icons.home_outlined
+                    : Icons.fitness_center_rounded,
+                size: 20,
+              ),
+              onPressed: onFlipLocation,
+            ),
+          Text(switch (workout.status) {
+            WorkoutStatus.completed ||
+            WorkoutStatus.missed => _signed(workout.resolveDelta),
+            WorkoutStatus.recovery => 'REST',
+            _ => 'OPEN',
+          }, style: const TextStyle(fontWeight: FontWeight.w900)),
+        ],
+      ),
     ),
   );
 }

@@ -1,3 +1,4 @@
+import 'workout_engine.dart';
 import 'workout_models.dart';
 
 class CoachEntry {
@@ -156,5 +157,32 @@ abstract final class WorkoutCoach {
       return WorkoutSplit.upperLower;
     }
     return WorkoutSplit.pushPullLegs;
+  }
+
+  /// The coach's two top lifts for every muscle group, for the Coach tab's
+  /// reference section.
+  static List<(WorkoutMuscle, List<String>)> bestPicksByMuscle() {
+    final List<(WorkoutMuscle, List<String>)> result =
+        <(WorkoutMuscle, List<String>)>[];
+    for (final WorkoutMuscle muscle in WorkoutMuscle.values) {
+      final List<WorkoutExerciseDefinition> pool =
+          WorkoutEngine.exercises
+              .where(
+                (WorkoutExerciseDefinition exercise) =>
+                    exercise.primary == muscle,
+              )
+              .toList()
+            ..sort((WorkoutExerciseDefinition a, WorkoutExerciseDefinition b) {
+              final int byRank = a.rank.compareTo(b.rank);
+              return byRank != 0 ? byRank : a.name.compareTo(b.name);
+            });
+      if (pool.isNotEmpty) {
+        result.add((
+          muscle,
+          pool.take(2).map((WorkoutExerciseDefinition e) => e.name).toList(),
+        ));
+      }
+    }
+    return result;
   }
 }
