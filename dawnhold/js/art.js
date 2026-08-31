@@ -48,6 +48,7 @@ const Art = {
     this.terrain();
     this.objects();
     this.buildings();
+    this.wilds();
     this.monsters();
     this.fx();
     this.icons();
@@ -989,6 +990,163 @@ const Art = {
     }
   },
 
+  /* ================= WILDCRAFT (v1.6) ================= */
+  wilds() {
+    const S = this.s;
+    // --- tree nursery 2x2: seedbeds, sapling pots, shaded bench ---
+    {
+      const { c, x } = mkc(32, 38);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 35, 24, 2);
+      // tilled seedbeds
+      for (let r = 0; r < 3; r++) {
+        R(x, 3, 24 + r * 4, 26, 3, r % 2 ? PAL.soilD : PAL.soil);
+      }
+      // rows of tiny saplings in the beds
+      for (let r = 0; r < 3; r++) for (let i = 0; i < 6; i++) {
+        const px = 5 + i * 4, py = 23 + r * 4;
+        R(x, px, py - 2, 1, 2, PAL.trunk); R(x, px - 1, py - 4, 3, 2, PAL.sprout);
+      }
+      // back bench + pots
+      R(x, 2, 14, 28, 3, PAL.plank); R(x, 2, 14, 28, 1, PAL.woodL);
+      for (let i = 0; i < 4; i++) {
+        const px = 4 + i * 7;
+        R(x, px, 9, 4, 5, '#8a5f37'); R(x, px, 9, 4, 1, PAL.woodL);
+        R(x, px + 1, 6, 2, 3, '#4f9a52'); R(x, px + 1, 5, 2, 1, '#6fb7d9');
+      }
+      // corner posts + shade cloth
+      R(x, 1, 4, 2, 24, PAL.woodD); R(x, 29, 4, 2, 24, PAL.woodD);
+      R(x, 1, 4, 30, 2, '#c9b47a'); R(x, 3, 6, 26, 1, '#b8942e');
+      S.nursery = c;
+    }
+    // --- shared hut 2x2: a snug wedded cottage, flower boxes, twin chimney ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 4, 16, 24, 12, PAL.plank);
+      R(x, 4, 16, 24, 1, PAL.woodL);
+      for (let i = 0; i < 3; i++) R(x, 4, 20 + i * 3, 24, 1, PAL.plankD);
+      // warm thatch roof with a ridge garland
+      for (let i = 0; i < 9; i++) {
+        const w = 4 + i * 3, sx = 16 - (w >> 1);
+        R(x, sx, 3 + i, w, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      }
+      R(x, 2, 12, 28, 1, PAL.thatchD);
+      for (let i = 0; i < 5; i++) R(x, 8 + i * 4, 11, 2, 1, i % 2 ? '#e88bd0' : '#f0f0f0'); // garland
+      R(x, 7, 1, 3, 7, PAL.stoneB); R(x, 22, 2, 3, 6, PAL.stoneB); // twin chimney pots
+      // heart over the door
+      R(x, 13, 22, 6, 6, PAL.door); R(x, 13, 22, 6, 1, '#7a5a34');
+      R(x, 15, 23, 2, 1, '#e88bd0'); R(x, 14, 24, 1, 1, '#e88bd0'); R(x, 17, 24, 1, 1, '#e88bd0'); R(x, 15, 25, 2, 1, '#e88bd0');
+      R(x, 6, 20, 4, 4, '#ffdf9a'); R(x, 22, 20, 4, 4, '#ffdf9a');
+      // flower boxes under the windows
+      R(x, 5, 24, 6, 2, PAL.wood); R(x, 21, 24, 6, 2, PAL.wood);
+      R(x, 6, 23, 1, 1, '#e88bd0'); R(x, 8, 23, 1, 1, '#f0f0f0'); R(x, 22, 23, 1, 1, '#f0f0f0'); R(x, 24, 23, 1, 1, '#e88bd0');
+      S.sharedhut = c;
+    }
+    // --- aqueduct 1x1: old stone arch with still-flowing channel ---
+    {
+      const { c, x } = mkc(16, 30);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 27, 10, 2);
+      // pier + arch
+      R(x, 2, 16, 4, 12, PAL.stoneB); R(x, 10, 16, 4, 12, PAL.stoneB);
+      R(x, 6, 20, 4, 8, '#4c4c56'); // arch opening
+      R(x, 1, 15, 14, 2, PAL.stoneD);
+      // the channel on top, water still in it
+      R(x, 1, 11, 14, 4, PAL.stoneB); R(x, 1, 11, 14, 1, PAL.stoneL);
+      R(x, 2, 12, 12, 2, '#3b6ea8'); R(x, 3, 12, 3, 1, '#a8cbe8'); R(x, 9, 13, 3, 1, '#a8cbe8');
+      // spout drip
+      R(x, 7, 28, 2, 1, '#6fb7d9');
+      // moss of ages
+      R(x, 2, 15, 2, 1, '#5a7a4a'); R(x, 12, 26, 2, 1, '#5a7a4a');
+      S.aqueduct = c;
+    }
+    // --- dawn shrine 1x1: dawn-carved altar, sun disc, kneeling step ---
+    {
+      const { c, x } = mkc(16, 26);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(3, 23, 10, 2);
+      R(x, 3, 21, 10, 2, PAL.stoneD);              // step
+      R(x, 2, 13, 12, 8, PAL.stoneB);              // altar block
+      R(x, 2, 13, 12, 1, PAL.stoneL);
+      R(x, 4, 16, 8, 1, PAL.stoneD); R(x, 4, 19, 8, 1, PAL.stoneD);
+      // sun disc relief
+      R(x, 6, 15, 4, 3, '#e8a94b'); R(x, 7, 14, 2, 1, '#ffd94a'); R(x, 7, 15, 2, 1, '#fff2b0');
+      // two dawn-pillars
+      R(x, 3, 6, 2, 7, PAL.stoneB); R(x, 11, 6, 2, 7, PAL.stoneB);
+      R(x, 3, 6, 2, 1, PAL.stoneL); R(x, 11, 6, 2, 1, PAL.stoneL);
+      R(x, 2, 4, 4, 2, PAL.stoneD); R(x, 10, 4, 4, 2, PAL.stoneD);
+      // a thin ray
+      R(x, 7, 2, 2, 4, 'rgba(255,217,74,.75)');
+      S.dawnshrine = c;
+    }
+    // --- sky watch 1x1: leaning watch-spire with a bronze optic ---
+    {
+      const { c, x } = mkc(16, 36);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 33, 10, 2);
+      // leaning stack
+      R(x, 5, 12, 6, 22, PAL.stoneB);
+      R(x, 5, 12, 1, 22, PAL.stoneL); R(x, 10, 12, 1, 22, PAL.stoneD);
+      R(x, 4, 20, 8, 1, PAL.stoneD); R(x, 4, 27, 8, 1, PAL.stoneD);
+      R(x, 4, 32, 8, 2, PAL.stoneD);               // splayed base
+      R(x, 3, 34, 10, 1, '#4c4c56');
+      // top platform + rail
+      R(x, 3, 9, 10, 3, PAL.stoneD); R(x, 3, 9, 10, 1, PAL.stoneL);
+      R(x, 2, 6, 1, 3, PAL.metalD); R(x, 13, 6, 1, 3, PAL.metalD); R(x, 2, 6, 12, 1, PAL.metal);
+      // the bronze optic, tilted at the sky
+      R(x, 5, 3, 6, 3, '#c9a94b'); R(x, 5, 3, 6, 1, '#e8c46a');
+      R(x, 9, 2, 3, 2, '#8a6f2e'); R(x, 11, 1, 2, 2, '#6fe0e8');
+      // banner
+      R(x, 7, 0, 1, 3, '#6b4a26');
+      S.skywatch = c;
+    }
+    // --- root cellar 1x1: turf-roofed half-buried mound, big door ---
+    {
+      const { c, x } = mkc(16, 16);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(3, 14, 10, 2);
+      // stone face
+      R(x, 3, 8, 10, 6, PAL.stoneB);
+      R(x, 3, 8, 10, 1, PAL.stoneL); R(x, 3, 13, 10, 1, PAL.stoneD);
+      R(x, 5, 9, 1, 5, PAL.stoneD); R(x, 10, 9, 1, 5, PAL.stoneD);
+      // turf roof
+      for (let i = 0; i < 4; i++) R(x, 3 + i, 6 - i, 10 - i * 2, 2, i % 2 ? '#4e7a40' : '#5a8a4a');
+      R(x, 6, 3, 4, 1, '#659355');
+      // round door + lantern
+      R(x, 6, 9, 4, 5, PAL.door); R(x, 6, 9, 4, 1, '#7a5a34'); R(x, 7, 10, 2, 2, '#4a3018');
+      R(x, 12, 10, 1, 2, '#ffd94a');
+      S.cellar = c;
+    }
+    // --- deer (the driven hunt): two trot frames ---
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 16);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(4, 14, 8, 1);
+      // body
+      R(x, 4, 6, 8, 4, '#a5713f'); R(x, 4, 6, 8, 1, '#c08d54');
+      R(x, 3, 7, 1, 2, '#a5713f');                 // tail
+      // neck + head, browsing or alert by frame
+      if (f) { R(x, 11, 3, 2, 4, '#a5713f'); R(x, 12, 2, 3, 2, '#a5713f'); R(x, 14, 2, 1, 1, '#4a3018'); }
+      else { R(x, 11, 4, 2, 4, '#a5713f'); R(x, 12, 6, 3, 2, '#a5713f'); R(x, 14, 7, 1, 1, '#4a3018'); }
+      // antlers
+      R(x, 12, 0, 1, 2, '#e8dcc0'); R(x, 14, 1, 1, 1, '#e8dcc0');
+      // legs — trot alternates
+      if (f) { R(x, 4, 10, 1, 4, '#7c5230'); R(x, 6, 10, 1, 3, '#7c5230'); R(x, 9, 10, 1, 4, '#7c5230'); R(x, 11, 10, 1, 3, '#7c5230'); }
+      else { R(x, 5, 10, 1, 4, '#7c5230'); R(x, 7, 10, 1, 3, '#7c5230'); R(x, 8, 10, 1, 4, '#7c5230'); R(x, 10, 10, 1, 3, '#7c5230'); }
+      // flank spot
+      R(x, 6, 7, 1, 1, '#e8dcc0');
+      S['deer' + f] = c;
+    }
+    // --- pond reeds: full / cut (herbs at the margin) ---
+    {
+      const mk = full => {
+        const { c, x } = mkc(16, 24);
+        for (let i = 0; i < 4; i++) {
+          const bx = 4 + i * 3;
+          const h = full ? 9 + ((i * 5) % 4) : 3;
+          R(x, bx, 21 - h, 1, h, i % 2 ? '#6a9a4c' : '#578040');
+          if (full) { R(x, bx - 1, 21 - h - 2, 3, 2, '#8a6d3e'); R(x, bx, 21 - h - 3, 1, 1, '#a5854c'); } // seed heads
+        }
+        return c;
+      };
+      S.reedF = mk(true); S.reedE = mk(false);
+    }
+  },
+
   /* ================= MONSTERS ================= */
   monsters() {
     const S = this.s;
@@ -1183,6 +1341,18 @@ const Art = {
       R(x, 3, 7, 1, 4, '#f0c8a0'); R(x, 12, 7, 1, 4, '#f0c8a0');
       R(x, 4, 2, 1, 4, '#f0c8a0'); R(x, 6, 1, 1, 5, '#f0c8a0'); R(x, 8, 1, 1, 5, '#f0c8a0'); R(x, 10, 2, 1, 4, '#f0c8a0');
       R(x, 5, 3, 5, 2, '#ffd977');
+    });
+    ic('ward', x => { // a chalked ward sigil — amber rune ring
+      x.strokeStyle = '#ffb057'; x.lineWidth = 1;
+      x.beginPath(); x.arc(8, 8, 5.5, 0, Math.PI * 2); x.stroke();
+      R(x, 7, 4, 2, 8, '#ffb057'); R(x, 4, 7, 8, 2, '#ffb057');
+      R(x, 7, 7, 2, 2, '#ffe9a0');
+    });
+    ic('hallow', x => { // a chalked hallow sigil — teal ring of steadying
+      x.strokeStyle = '#7de0d4'; x.lineWidth = 1;
+      x.beginPath(); x.arc(8, 8, 5.5, 0, Math.PI * 2); x.stroke();
+      R(x, 7, 3, 2, 2, '#7de0d4'); R(x, 7, 11, 2, 2, '#7de0d4'); R(x, 3, 7, 2, 2, '#7de0d4'); R(x, 11, 7, 2, 2, '#7de0d4');
+      R(x, 7, 7, 2, 2, '#cfeee8');
     });
   },
 

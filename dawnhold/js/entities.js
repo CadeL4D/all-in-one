@@ -35,6 +35,7 @@ const Entities = {
       atkCd: 0, fearT: 0, stuckT: 0, lastD: 1e9, aiT: Math.random() * 0.5,
       ate: false, starveWarned: false,
       toolCond: CONFIG.TOOL.cond, buzzed: false,
+      partner: null, bondId: null, bondSc: 0,   // banns & blessings (v1.6)
     };
     if (v.trait && v.trait.key === 'hardy') { v.maxHp += 20; v.hp = v.maxHp; }
     return v;
@@ -72,6 +73,11 @@ const Entities = {
     if (v.trait && v.trait.key === 'diligent') s *= 1.12;
     if (v.schooled) s *= 1.12;                      // the schoolhouse pays off
     if (v.buzzed) s *= v.buzzMult || (1 + CONFIG.ALE.buzz); // last night's ale (bright ale pours +15%)
+    if (G.buffs.feast) s *= 1.10;                   // yesterday's wedding feast
+    if (v.partner != null) {                        // the couple's little aura
+      const p = G.villagers.find(o => o.id === v.partner);
+      if (p && !p.below && U.dst2(v.x, v.y, p.x, p.y) <= CONFIG.BANNS.auraR * CONFIG.BANNS.auraR) s *= CONFIG.BANNS.aura;
+    }
     if (v.toolCond <= 0) s *= CONFIG.TOOL.dryMult; // working bare-handed
     if (v.thirst > CONFIG.THIRST.parchedAt) s *= CONFIG.THIRST.workMult; // a dry throat slows the hands
     s *= Sim.contentment().mult;                   // beds & breathing room

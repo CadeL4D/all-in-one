@@ -179,16 +179,60 @@ const CONFIG = {
     flintDays: 3,
     rescueRocks: 5, rescueHits: 2, rescueT: 7,  // the rescue skill game
   },
+
+  // --- Wildcraft (v1.6): the village edits the map, the guardian draws on it ---
+  GROVE: {   // Grovekeep: wild bushes → tended (+2 yield, faster regrow) → heavy-fruiting
+    stageWork: 10,     // seconds of a forager's tending per stage
+    yieldBonus: 2,     // extra berries once tended
+    regrowMul: 1.35,   // tended bushes regrow this much faster (heavy stacks it)
+    cuttingChance: 0.6,// a tended+ harvest may spare a cutting the village can plant
+  },
+  NURSERY: { // the Nursery: every 2nd felled tree becomes a sapling to plant as groves
+    fellsPerSapling: 2,
+    growT: 110,        // planted sapling → tree, seconds
+  },
+  SPADE: {   // the Spade: builders carve tiles into ponds; reeds grow at the margin
+    digTime: 6,        // builder-seconds a tile
+    reedChance: 0.35,  // chance a fresh pond edge sprouts reeds (herbs)
+  },
+  SIGIL: {   // sigil-craft: chalk circles salted with herb + charcoal
+    max: 6,            // active sigils (the oldest chalk washes away)
+    wardAmp: 1.25,     // monsters crossing a ward take +25% damage…
+    wardSlow: 0.45,    // …and crawl at half speed
+    hallowGuard: 1.10, // guards inside a hallow strike +10%
+    radius: 1.15,      // how close a body must stand to the chalk
+  },
+  BANNS: {   // banns & blessings: co-workers bond, ask leave, raise a shared hut
+    bondT: 150,        // seconds worked side by side before a pair asks leave
+    feastFood: 6, feastAle: 1,   // the blessing feast
+    aura: 1.10, auraR: 4,        // the couple works +10% while together
+  },
+  HUNT: {    // the driven hunt: a deer herd grazes in at dawn some mornings
+    dawnChance: 0.45, minDay: 2,
+    herdMin: 4, herdMax: 6,
+    perDeer: 14,       // food per deer driven into the spike-line
+    drivers: 2,        // foragers who spend the day driving
+    spookR: 5.5,       // deer bolt when a driver comes this close
+    trapPull: 6,       // a spike-line within this range bends the flee line
+  },
+  RESTORE: { // restoration: a ruin becomes one unique ancient building
+    decipherT: 60,     // scribe-seconds to decipher the ruin
+    skyRange: 1.5,     // Sky Watch: tower range bonus
+    wellMul: 1.5,      // Aqueduct: wells draw 50% faster
+    shrineMul: 1.5,    // Dawn Shrine: essence regen +50%
+    cellarFood: 80,    // Root Cellar: food cap bonus
+    aqueductR: 4,      // Aqueduct: drink-on-the-spot radius
+  },
 };
 
 // ---- terrain tile ids ----
 const T = { GRASS: 0, DIRT: 1, WATER: 2, ROAD: 3, SAND: 4 };
 
 // ---- map object ids (things standing on terrain) ----
-const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7, MUSH: 8, TGRASS: 9, HERB: 10, RUIN: 11, CRYSTAL: 12, DEADTREE: 13, BIRCH: 14, GRAVE: 15 };
+const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7, MUSH: 8, TGRASS: 9, HERB: 10, RUIN: 11, CRYSTAL: 12, DEADTREE: 13, BIRCH: 14, GRAVE: 15, REED: 16 };
 
 // object yields (units per full source), scaled by difficulty scarcity
-const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4 };
+const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4, 16: 3 };
 // yield units for a wild source under the current difficulty (A2)
 function amtOf(o) {
   const base = OBJ_AMT[o] || 0;
@@ -275,6 +319,17 @@ const G = {
   buffs: {},               // daycraft day-scopes: brightAle, handDip, suture, trueTools, flintDays
   drill: { runner: 0, brute: 0, stalker: 0 }, // muster-yard drills: +dmg vs each monster type
   endless: false,          // set after the Beacon victory — waves may cap at 38
+  // --- wildcraft (v1.6) ---
+  tend: new Map(),         // tileIdx -> {stage 0|1, work} — Grovekeep bush stages
+  cuttings: 0,             // bush cuttings the village can plant anywhere
+  sigils: [],              // chalked sigils {kind:'ward'|'hallow', tiles, day, bloomed}
+  sigilDraft: null,        // sigil being drawn {kind, tiles}
+  digJobs: [],             // spade orders {x, y} — builders carve ponds
+  dug: 0,                  // tiles dug into water, all time
+  fellCount: 0,            // trees felled toward the next nursery sapling
+  herd: null,              // the deer herd {deer:[...], day, hunt, drivers:[ids], caught}
+  banns: [],               // pending betrothals {a, b} (villager ids)
+  feastPending: false,     // a blessed bann throws tomorrow's feast
   tut: 0, tutOn: true,
   shake: 0,
   cam: { x: 0, y: 0, z: CONFIG.ZOOM.start },

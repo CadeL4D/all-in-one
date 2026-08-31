@@ -370,7 +370,7 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
         <button class="bigbtn diff" data-diff="hard"><b>Hard</b><span>Scant stores, hungry dark, short days.</span></button>
         <button id="btnDiffBack" class="bigbtn ghost">Back</button>
       </div>
-      <div class="verText">v1.5.0 &middot; The Daycraft Update &middot; saves in this browser</div>
+      <div class="verText">v1.6.0 &middot; The Wildcraft Update &middot; saves in this browser</div>
     </div>
   </div>
 
@@ -567,16 +567,60 @@ const CONFIG = {
     flintDays: 3,
     rescueRocks: 5, rescueHits: 2, rescueT: 7,  // the rescue skill game
   },
+
+  // --- Wildcraft (v1.6): the village edits the map, the guardian draws on it ---
+  GROVE: {   // Grovekeep: wild bushes → tended (+2 yield, faster regrow) → heavy-fruiting
+    stageWork: 10,     // seconds of a forager's tending per stage
+    yieldBonus: 2,     // extra berries once tended
+    regrowMul: 1.35,   // tended bushes regrow this much faster (heavy stacks it)
+    cuttingChance: 0.6,// a tended+ harvest may spare a cutting the village can plant
+  },
+  NURSERY: { // the Nursery: every 2nd felled tree becomes a sapling to plant as groves
+    fellsPerSapling: 2,
+    growT: 110,        // planted sapling → tree, seconds
+  },
+  SPADE: {   // the Spade: builders carve tiles into ponds; reeds grow at the margin
+    digTime: 6,        // builder-seconds a tile
+    reedChance: 0.35,  // chance a fresh pond edge sprouts reeds (herbs)
+  },
+  SIGIL: {   // sigil-craft: chalk circles salted with herb + charcoal
+    max: 6,            // active sigils (the oldest chalk washes away)
+    wardAmp: 1.25,     // monsters crossing a ward take +25% damage…
+    wardSlow: 0.45,    // …and crawl at half speed
+    hallowGuard: 1.10, // guards inside a hallow strike +10%
+    radius: 1.15,      // how close a body must stand to the chalk
+  },
+  BANNS: {   // banns & blessings: co-workers bond, ask leave, raise a shared hut
+    bondT: 150,        // seconds worked side by side before a pair asks leave
+    feastFood: 6, feastAle: 1,   // the blessing feast
+    aura: 1.10, auraR: 4,        // the couple works +10% while together
+  },
+  HUNT: {    // the driven hunt: a deer herd grazes in at dawn some mornings
+    dawnChance: 0.45, minDay: 2,
+    herdMin: 4, herdMax: 6,
+    perDeer: 14,       // food per deer driven into the spike-line
+    drivers: 2,        // foragers who spend the day driving
+    spookR: 5.5,       // deer bolt when a driver comes this close
+    trapPull: 6,       // a spike-line within this range bends the flee line
+  },
+  RESTORE: { // restoration: a ruin becomes one unique ancient building
+    decipherT: 60,     // scribe-seconds to decipher the ruin
+    skyRange: 1.5,     // Sky Watch: tower range bonus
+    wellMul: 1.5,      // Aqueduct: wells draw 50% faster
+    shrineMul: 1.5,    // Dawn Shrine: essence regen +50%
+    cellarFood: 80,    // Root Cellar: food cap bonus
+    aqueductR: 4,      // Aqueduct: drink-on-the-spot radius
+  },
 };
 
 // ---- terrain tile ids ----
 const T = { GRASS: 0, DIRT: 1, WATER: 2, ROAD: 3, SAND: 4 };
 
 // ---- map object ids (things standing on terrain) ----
-const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7, MUSH: 8, TGRASS: 9, HERB: 10, RUIN: 11, CRYSTAL: 12, DEADTREE: 13, BIRCH: 14, GRAVE: 15 };
+const OBJ = { NONE: 0, TREE: 1, PINE: 2, BUSH: 3, ROCK: 4, STUMP: 5, SAPLING: 6, FLOWER: 7, MUSH: 8, TGRASS: 9, HERB: 10, RUIN: 11, CRYSTAL: 12, DEADTREE: 13, BIRCH: 14, GRAVE: 15, REED: 16 };
 
 // object yields (units per full source), scaled by difficulty scarcity
-const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4 };
+const OBJ_AMT = { 1: 9, 2: 9, 3: 7, 4: 10, 10: 5, 11: 14, 12: 6, 13: 4, 16: 3 };
 // yield units for a wild source under the current difficulty (A2)
 function amtOf(o) {
   const base = OBJ_AMT[o] || 0;
@@ -663,6 +707,17 @@ const G = {
   buffs: {},               // daycraft day-scopes: brightAle, handDip, suture, trueTools, flintDays
   drill: { runner: 0, brute: 0, stalker: 0 }, // muster-yard drills: +dmg vs each monster type
   endless: false,          // set after the Beacon victory — waves may cap at 38
+  // --- wildcraft (v1.6) ---
+  tend: new Map(),         // tileIdx -> {stage 0|1, work} — Grovekeep bush stages
+  cuttings: 0,             // bush cuttings the village can plant anywhere
+  sigils: [],              // chalked sigils {kind:'ward'|'hallow', tiles, day, bloomed}
+  sigilDraft: null,        // sigil being drawn {kind, tiles}
+  digJobs: [],             // spade orders {x, y} — builders carve ponds
+  dug: 0,                  // tiles dug into water, all time
+  fellCount: 0,            // trees felled toward the next nursery sapling
+  herd: null,              // the deer herd {deer:[...], day, hunt, drivers:[ids], caught}
+  banns: [],               // pending betrothals {a, b} (villager ids)
+  feastPending: false,     // a blessed bann throws tomorrow's feast
   tut: 0, tutOn: true,
   shake: 0,
   cam: { x: 0, y: 0, z: CONFIG.ZOOM.start },
@@ -743,6 +798,7 @@ const Art = {
     this.terrain();
     this.objects();
     this.buildings();
+    this.wilds();
     this.monsters();
     this.fx();
     this.icons();
@@ -1684,6 +1740,163 @@ const Art = {
     }
   },
 
+  /* ================= WILDCRAFT (v1.6) ================= */
+  wilds() {
+    const S = this.s;
+    // --- tree nursery 2x2: seedbeds, sapling pots, shaded bench ---
+    {
+      const { c, x } = mkc(32, 38);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 35, 24, 2);
+      // tilled seedbeds
+      for (let r = 0; r < 3; r++) {
+        R(x, 3, 24 + r * 4, 26, 3, r % 2 ? PAL.soilD : PAL.soil);
+      }
+      // rows of tiny saplings in the beds
+      for (let r = 0; r < 3; r++) for (let i = 0; i < 6; i++) {
+        const px = 5 + i * 4, py = 23 + r * 4;
+        R(x, px, py - 2, 1, 2, PAL.trunk); R(x, px - 1, py - 4, 3, 2, PAL.sprout);
+      }
+      // back bench + pots
+      R(x, 2, 14, 28, 3, PAL.plank); R(x, 2, 14, 28, 1, PAL.woodL);
+      for (let i = 0; i < 4; i++) {
+        const px = 4 + i * 7;
+        R(x, px, 9, 4, 5, '#8a5f37'); R(x, px, 9, 4, 1, PAL.woodL);
+        R(x, px + 1, 6, 2, 3, '#4f9a52'); R(x, px + 1, 5, 2, 1, '#6fb7d9');
+      }
+      // corner posts + shade cloth
+      R(x, 1, 4, 2, 24, PAL.woodD); R(x, 29, 4, 2, 24, PAL.woodD);
+      R(x, 1, 4, 30, 2, '#c9b47a'); R(x, 3, 6, 26, 1, '#b8942e');
+      S.nursery = c;
+    }
+    // --- shared hut 2x2: a snug wedded cottage, flower boxes, twin chimney ---
+    {
+      const { c, x } = mkc(32, 32);
+      R(x, 4, 16, 24, 12, PAL.plank);
+      R(x, 4, 16, 24, 1, PAL.woodL);
+      for (let i = 0; i < 3; i++) R(x, 4, 20 + i * 3, 24, 1, PAL.plankD);
+      // warm thatch roof with a ridge garland
+      for (let i = 0; i < 9; i++) {
+        const w = 4 + i * 3, sx = 16 - (w >> 1);
+        R(x, sx, 3 + i, w, 1, i % 2 ? PAL.thatchD : PAL.thatch);
+      }
+      R(x, 2, 12, 28, 1, PAL.thatchD);
+      for (let i = 0; i < 5; i++) R(x, 8 + i * 4, 11, 2, 1, i % 2 ? '#e88bd0' : '#f0f0f0'); // garland
+      R(x, 7, 1, 3, 7, PAL.stoneB); R(x, 22, 2, 3, 6, PAL.stoneB); // twin chimney pots
+      // heart over the door
+      R(x, 13, 22, 6, 6, PAL.door); R(x, 13, 22, 6, 1, '#7a5a34');
+      R(x, 15, 23, 2, 1, '#e88bd0'); R(x, 14, 24, 1, 1, '#e88bd0'); R(x, 17, 24, 1, 1, '#e88bd0'); R(x, 15, 25, 2, 1, '#e88bd0');
+      R(x, 6, 20, 4, 4, '#ffdf9a'); R(x, 22, 20, 4, 4, '#ffdf9a');
+      // flower boxes under the windows
+      R(x, 5, 24, 6, 2, PAL.wood); R(x, 21, 24, 6, 2, PAL.wood);
+      R(x, 6, 23, 1, 1, '#e88bd0'); R(x, 8, 23, 1, 1, '#f0f0f0'); R(x, 22, 23, 1, 1, '#f0f0f0'); R(x, 24, 23, 1, 1, '#e88bd0');
+      S.sharedhut = c;
+    }
+    // --- aqueduct 1x1: old stone arch with still-flowing channel ---
+    {
+      const { c, x } = mkc(16, 30);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 27, 10, 2);
+      // pier + arch
+      R(x, 2, 16, 4, 12, PAL.stoneB); R(x, 10, 16, 4, 12, PAL.stoneB);
+      R(x, 6, 20, 4, 8, '#4c4c56'); // arch opening
+      R(x, 1, 15, 14, 2, PAL.stoneD);
+      // the channel on top, water still in it
+      R(x, 1, 11, 14, 4, PAL.stoneB); R(x, 1, 11, 14, 1, PAL.stoneL);
+      R(x, 2, 12, 12, 2, '#3b6ea8'); R(x, 3, 12, 3, 1, '#a8cbe8'); R(x, 9, 13, 3, 1, '#a8cbe8');
+      // spout drip
+      R(x, 7, 28, 2, 1, '#6fb7d9');
+      // moss of ages
+      R(x, 2, 15, 2, 1, '#5a7a4a'); R(x, 12, 26, 2, 1, '#5a7a4a');
+      S.aqueduct = c;
+    }
+    // --- dawn shrine 1x1: dawn-carved altar, sun disc, kneeling step ---
+    {
+      const { c, x } = mkc(16, 26);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(3, 23, 10, 2);
+      R(x, 3, 21, 10, 2, PAL.stoneD);              // step
+      R(x, 2, 13, 12, 8, PAL.stoneB);              // altar block
+      R(x, 2, 13, 12, 1, PAL.stoneL);
+      R(x, 4, 16, 8, 1, PAL.stoneD); R(x, 4, 19, 8, 1, PAL.stoneD);
+      // sun disc relief
+      R(x, 6, 15, 4, 3, '#e8a94b'); R(x, 7, 14, 2, 1, '#ffd94a'); R(x, 7, 15, 2, 1, '#fff2b0');
+      // two dawn-pillars
+      R(x, 3, 6, 2, 7, PAL.stoneB); R(x, 11, 6, 2, 7, PAL.stoneB);
+      R(x, 3, 6, 2, 1, PAL.stoneL); R(x, 11, 6, 2, 1, PAL.stoneL);
+      R(x, 2, 4, 4, 2, PAL.stoneD); R(x, 10, 4, 4, 2, PAL.stoneD);
+      // a thin ray
+      R(x, 7, 2, 2, 4, 'rgba(255,217,74,.75)');
+      S.dawnshrine = c;
+    }
+    // --- sky watch 1x1: leaning watch-spire with a bronze optic ---
+    {
+      const { c, x } = mkc(16, 36);
+      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 33, 10, 2);
+      // leaning stack
+      R(x, 5, 12, 6, 22, PAL.stoneB);
+      R(x, 5, 12, 1, 22, PAL.stoneL); R(x, 10, 12, 1, 22, PAL.stoneD);
+      R(x, 4, 20, 8, 1, PAL.stoneD); R(x, 4, 27, 8, 1, PAL.stoneD);
+      R(x, 4, 32, 8, 2, PAL.stoneD);               // splayed base
+      R(x, 3, 34, 10, 1, '#4c4c56');
+      // top platform + rail
+      R(x, 3, 9, 10, 3, PAL.stoneD); R(x, 3, 9, 10, 1, PAL.stoneL);
+      R(x, 2, 6, 1, 3, PAL.metalD); R(x, 13, 6, 1, 3, PAL.metalD); R(x, 2, 6, 12, 1, PAL.metal);
+      // the bronze optic, tilted at the sky
+      R(x, 5, 3, 6, 3, '#c9a94b'); R(x, 5, 3, 6, 1, '#e8c46a');
+      R(x, 9, 2, 3, 2, '#8a6f2e'); R(x, 11, 1, 2, 2, '#6fe0e8');
+      // banner
+      R(x, 7, 0, 1, 3, '#6b4a26');
+      S.skywatch = c;
+    }
+    // --- root cellar 1x1: turf-roofed half-buried mound, big door ---
+    {
+      const { c, x } = mkc(16, 16);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(3, 14, 10, 2);
+      // stone face
+      R(x, 3, 8, 10, 6, PAL.stoneB);
+      R(x, 3, 8, 10, 1, PAL.stoneL); R(x, 3, 13, 10, 1, PAL.stoneD);
+      R(x, 5, 9, 1, 5, PAL.stoneD); R(x, 10, 9, 1, 5, PAL.stoneD);
+      // turf roof
+      for (let i = 0; i < 4; i++) R(x, 3 + i, 6 - i, 10 - i * 2, 2, i % 2 ? '#4e7a40' : '#5a8a4a');
+      R(x, 6, 3, 4, 1, '#659355');
+      // round door + lantern
+      R(x, 6, 9, 4, 5, PAL.door); R(x, 6, 9, 4, 1, '#7a5a34'); R(x, 7, 10, 2, 2, '#4a3018');
+      R(x, 12, 10, 1, 2, '#ffd94a');
+      S.cellar = c;
+    }
+    // --- deer (the driven hunt): two trot frames ---
+    for (let f = 0; f < 2; f++) {
+      const { c, x } = mkc(16, 16);
+      x.fillStyle = 'rgba(0,0,0,.2)'; x.fillRect(4, 14, 8, 1);
+      // body
+      R(x, 4, 6, 8, 4, '#a5713f'); R(x, 4, 6, 8, 1, '#c08d54');
+      R(x, 3, 7, 1, 2, '#a5713f');                 // tail
+      // neck + head, browsing or alert by frame
+      if (f) { R(x, 11, 3, 2, 4, '#a5713f'); R(x, 12, 2, 3, 2, '#a5713f'); R(x, 14, 2, 1, 1, '#4a3018'); }
+      else { R(x, 11, 4, 2, 4, '#a5713f'); R(x, 12, 6, 3, 2, '#a5713f'); R(x, 14, 7, 1, 1, '#4a3018'); }
+      // antlers
+      R(x, 12, 0, 1, 2, '#e8dcc0'); R(x, 14, 1, 1, 1, '#e8dcc0');
+      // legs — trot alternates
+      if (f) { R(x, 4, 10, 1, 4, '#7c5230'); R(x, 6, 10, 1, 3, '#7c5230'); R(x, 9, 10, 1, 4, '#7c5230'); R(x, 11, 10, 1, 3, '#7c5230'); }
+      else { R(x, 5, 10, 1, 4, '#7c5230'); R(x, 7, 10, 1, 3, '#7c5230'); R(x, 8, 10, 1, 4, '#7c5230'); R(x, 10, 10, 1, 3, '#7c5230'); }
+      // flank spot
+      R(x, 6, 7, 1, 1, '#e8dcc0');
+      S['deer' + f] = c;
+    }
+    // --- pond reeds: full / cut (herbs at the margin) ---
+    {
+      const mk = full => {
+        const { c, x } = mkc(16, 24);
+        for (let i = 0; i < 4; i++) {
+          const bx = 4 + i * 3;
+          const h = full ? 9 + ((i * 5) % 4) : 3;
+          R(x, bx, 21 - h, 1, h, i % 2 ? '#6a9a4c' : '#578040');
+          if (full) { R(x, bx - 1, 21 - h - 2, 3, 2, '#8a6d3e'); R(x, bx, 21 - h - 3, 1, 1, '#a5854c'); } // seed heads
+        }
+        return c;
+      };
+      S.reedF = mk(true); S.reedE = mk(false);
+    }
+  },
+
   /* ================= MONSTERS ================= */
   monsters() {
     const S = this.s;
@@ -1878,6 +2091,18 @@ const Art = {
       R(x, 3, 7, 1, 4, '#f0c8a0'); R(x, 12, 7, 1, 4, '#f0c8a0');
       R(x, 4, 2, 1, 4, '#f0c8a0'); R(x, 6, 1, 1, 5, '#f0c8a0'); R(x, 8, 1, 1, 5, '#f0c8a0'); R(x, 10, 2, 1, 4, '#f0c8a0');
       R(x, 5, 3, 5, 2, '#ffd977');
+    });
+    ic('ward', x => { // a chalked ward sigil — amber rune ring
+      x.strokeStyle = '#ffb057'; x.lineWidth = 1;
+      x.beginPath(); x.arc(8, 8, 5.5, 0, Math.PI * 2); x.stroke();
+      R(x, 7, 4, 2, 8, '#ffb057'); R(x, 4, 7, 8, 2, '#ffb057');
+      R(x, 7, 7, 2, 2, '#ffe9a0');
+    });
+    ic('hallow', x => { // a chalked hallow sigil — teal ring of steadying
+      x.strokeStyle = '#7de0d4'; x.lineWidth = 1;
+      x.beginPath(); x.arc(8, 8, 5.5, 0, Math.PI * 2); x.stroke();
+      R(x, 7, 3, 2, 2, '#7de0d4'); R(x, 7, 11, 2, 2, '#7de0d4'); R(x, 3, 7, 2, 2, '#7de0d4'); R(x, 11, 7, 2, 2, '#7de0d4');
+      R(x, 7, 7, 2, 2, '#cfeee8');
     });
   },
 
@@ -2300,9 +2525,10 @@ const World = {
       this.obj[i] = OBJ.STUMP;
       G.regrow.set(i, { t: (150 + Math.random() * 60) / rm, kind: o });   // stump → sapling → tree
     } else if (o === OBJ.BUSH) {
-      G.regrow.set(i, { t: (170 + Math.random() * 50) / rm, kind: OBJ.BUSH });
-    } else if (o === OBJ.HERB) {
-      G.regrow.set(i, { t: CONFIG.HERB.regrow / rm, kind: OBJ.HERB });
+      // tended bushes (Grovekeep) regrow faster still
+      G.regrow.set(i, { t: (170 + Math.random() * 50) / (rm * (Wilds.tendMul(i) || 1)), kind: OBJ.BUSH });
+    } else if (o === OBJ.HERB || o === OBJ.REED) {
+      G.regrow.set(i, { t: CONFIG.HERB.regrow / rm, kind: o });
     } else if (o === OBJ.CRYSTAL) {
       this.obj[i] = OBJ.NONE;
       bonus = 'crystal';
@@ -2372,7 +2598,7 @@ const World = {
           const i = this.idx(x, y);
           const o = this.obj[i];
           if (types.includes(o)) {
-            const needsAmt = o === OBJ.BUSH || o === OBJ.HERB;
+            const needsAmt = o === OBJ.BUSH || o === OBJ.HERB || o === OBJ.REED;
             if (needsAmt && this.amt[i] <= 0) continue;
             cands.push({ x, y, i, d: r });
           }
@@ -2769,6 +2995,43 @@ const BUILD = {
     short: 'Drill guards vs a monster type: +10% damage. Rally horn.',
     desc: 'Guards drill against a straw-and-bone effigy. Pick the drill — shields (vs runners), pikes (vs brutes), scatter (vs stalkers) — and drilled guards strike +10% harder against that type (stacks to +30%). Ring the horn and off-duty guards run to the yard.',
   },
+  nursery: {
+    name: 'Tree Nursery', cat: 'basics', w: 2, h: 2, hp: 280, cost: { wood: 14, stone: 4 }, time: 30,
+    kind: 'nursery', capOne: true, light: 1.4, tall: 6, unlock: 4,
+    short: 'Every 2 felled trees root a sapling — plant groves.',
+    desc: `Seedbeds and sapling pots. Every ${CONFIG.NURSERY.fellsPerSapling} trees the Lumberjacks fell, a sapling is potted here; carry them out and plant groves anywhere — wood stops being strip-mining and becomes forestry. Only one may stand.`,
+  },
+  sharedhut: { // raised by a blessed couple — never built from the menu
+    name: 'Shared Hut', cat: null, w: 2, h: 2, hp: 340, cost: {}, time: 26,
+    housing: 2, comfort: 2, light: 2.4, kind: 'house', unlock: 99,
+    short: 'A wedded pair\u2019s home: two beds, snug comfort.',
+    desc: 'Two beds under one roof, raised by the couple themselves. Snug comfort, and the two of them work +10% while side by side.',
+  },
+  // ---- the ancient buildings: a ruin restores into exactly one of these ----
+  aqueduct: {
+    name: 'Aqueduct', cat: null, w: 1, h: 1, hp: 380, cost: { wood: 8, stone: 16 }, time: 65,
+    kind: 'aqueduct', light: 1.5, tall: 14, unlock: 99,
+    short: 'Ancient: wells +50%; folk drink on the spot nearby.',
+    desc: 'Old stone channels wake and run sweet. Wells draw half again as fast, and anyone working within 4 tiles drinks straight from the spout — no walk, no bottle.',
+  },
+  dawnshrine: {
+    name: 'Dawn Shrine', cat: null, w: 1, h: 1, hp: 300, cost: { stone: 12 }, time: 55,
+    kind: 'dawnshrine', light: 3.2, tall: 10, essence: true, unlock: 99,
+    short: 'Ancient: essence regenerates +50%.',
+    desc: 'A dawn-carved altar that still remembers the light. Essence seeps back half again as fast while it stands; villagers pause to pray there.',
+  },
+  skywatch: {
+    name: 'Sky Watch', cat: null, w: 1, h: 1, hp: 360, cost: { wood: 10, stone: 12 }, time: 60,
+    kind: 'skywatch', light: 2.0, tall: 20, unlock: 99,
+    short: 'Ancient: towers +1.5 range; dusk warnings a dawn early.',
+    desc: 'A leaning watch-spire, its optics still true. Towers reach 1.5 tiles further, and the watchers read tonight\u2019s attack direction at dawn — a full day\u2019s warning.',
+  },
+  cellar: {
+    name: 'Root Cellar', cat: null, w: 1, h: 1, hp: 320, cost: { wood: 14, stone: 6 }, time: 50,
+    kind: 'cellar', light: 1.0, unlock: 99,
+    short: 'Ancient: food cap +80; nothing spoils.',
+    desc: 'Cool, dry, older than the village above it. The food store deepens by 80 — and what goes in keeps: no more dawn rot.',
+  },
   beacon: {
     name: 'The Beacon', cat: 'mystic', w: 3, h: 3, hp: 900, cost: { wood: 100, stone: 80 }, time: 110,
     kind: 'beacon', light: 0, tall: 40, unlock: 10,
@@ -2993,6 +3256,7 @@ const Buildings = {
     if (type === 'food' || type === 'meals' || type === 'ale' || type === 'herbs') {
       const gran = G.buildings.filter(b => b.built && b.key === 'granary').length;
       cap += gran * (type === 'herbs' ? 10 : S.perGranary);
+      if (type === 'food') cap += G.buildings.filter(b => b.built && b.key === 'cellar').length * CONFIG.RESTORE.cellarFood;
     }
     if (type === 'wood' || type === 'stone') {
       const sto = G.buildings.filter(b => b.built && b.key === 'storehouse').length;
@@ -3027,6 +3291,8 @@ const Buildings = {
     const night = isNightLike();
     const hasBarracks = G.buildings.some(b => b.built && b.key === 'barracks');
     const hasBakery = G.buildings.some(b => b.built && b.key === 'bakery');
+    const hasSky = G.buildings.some(b => b.built && b.key === 'skywatch'); // towers reach further
+    const wellBoost = G.buildings.some(b => b.built && b.key === 'aqueduct') ? CONFIG.RESTORE.wellMul : 1;
     const windmills = [];
     for (const b of G.buildings) if (b.built && b.key === 'windmill') windmills.push(b);
     for (const b of G.buildings) {
@@ -3061,10 +3327,10 @@ const Buildings = {
         }
       }
       // wells draw a bucket at a time into the village store (C5: well
-      // output is a difficulty lever)
+      // output is a difficulty lever; the ancient Aqueduct wakes a +50% flow)
       if (b.def.kind === 'well' && b.built) {
         b.genT = (b.genT || 0) + dt;
-        if (b.genT >= CONFIG.WELL.genT / ((G.diffM && G.diffM.wellMul) || 1)) {
+        if (b.genT >= CONFIG.WELL.genT / (((G.diffM && G.diffM.wellMul) || 1) * wellBoost)) {
           b.genT = 0;
           if (G.res.water < Buildings.capOf('water')) Sim.gain('water', 1);
         }
@@ -3143,10 +3409,11 @@ const Buildings = {
           }
         }
       }
-      // towers shoot
+      // towers shoot (the Sky Watch's old optics reach 1.5 tiles further)
       if (b.def.kind === 'tower' && b.built && b.cd <= 0) {
         const cx = b.x + .5, cy = b.y + .5;
-        let tgt = null, bd = b.def.atk.range * b.def.atk.range;
+        const range = b.def.atk.range + (hasSky ? CONFIG.RESTORE.skyRange : 0);
+        let tgt = null, bd = range * range;
         for (const m of G.monsters) {
           if (m.dead) continue;
           const d = U.dst2(cx, cy, m.x, m.y);
@@ -3232,6 +3499,7 @@ const Entities = {
       atkCd: 0, fearT: 0, stuckT: 0, lastD: 1e9, aiT: Math.random() * 0.5,
       ate: false, starveWarned: false,
       toolCond: CONFIG.TOOL.cond, buzzed: false,
+      partner: null, bondId: null, bondSc: 0,   // banns & blessings (v1.6)
     };
     if (v.trait && v.trait.key === 'hardy') { v.maxHp += 20; v.hp = v.maxHp; }
     return v;
@@ -3269,6 +3537,11 @@ const Entities = {
     if (v.trait && v.trait.key === 'diligent') s *= 1.12;
     if (v.schooled) s *= 1.12;                      // the schoolhouse pays off
     if (v.buzzed) s *= v.buzzMult || (1 + CONFIG.ALE.buzz); // last night's ale (bright ale pours +15%)
+    if (G.buffs.feast) s *= 1.10;                   // yesterday's wedding feast
+    if (v.partner != null) {                        // the couple's little aura
+      const p = G.villagers.find(o => o.id === v.partner);
+      if (p && !p.below && U.dst2(v.x, v.y, p.x, p.y) <= CONFIG.BANNS.auraR * CONFIG.BANNS.auraR) s *= CONFIG.BANNS.aura;
+    }
     if (v.toolCond <= 0) s *= CONFIG.TOOL.dryMult; // working bare-handed
     if (v.thirst > CONFIG.THIRST.parchedAt) s *= CONFIG.THIRST.workMult; // a dry throat slows the hands
     s *= Sim.contentment().mult;                   // beds & breathing room
@@ -3282,6 +3555,585 @@ const Entities = {
   },
 
   farmYield(v) { return CONFIG.FARM.yield; },
+};
+</script>
+<!-- ==== js/wilds.js ==== -->
+<script>
+'use strict';
+/* ============================================================
+   Dawnhold — wilds.js
+   Wildcraft (v1.6): the village edits the map, the guardian
+   draws will on the ground.
+
+   Grovekeep   wild bushes → tended → heavy-fruiting; cuttings
+   The Nursery every 2nd felled tree is a sapling to replant
+   The Spade   builders carve tiles into ponds; reeds sprout
+   Sigils      chalk circles — ward the night, hallow the day
+   Restoration a ruin wakes as the Aqueduct / Dawn Shrine /
+               Sky Watch / Root Cellar
+   Banns       co-workers bond, ask leave, raise a shared hut
+   The Hunt    drive the dawn deer herd into your spike-line
+
+   The economy here is DOM-free and headless-testable; the UI
+   taps it from ui.js, the sim from game.js. ============================================================ */
+
+const Wilds = {
+
+  /* ================= Grovekeep ================= */
+  tendAt(tx, ty) {
+    const t = G.tend.get(World.idx(tx, ty));
+    return t && World.objAt(tx, ty) === OBJ.BUSH ? t : null;
+  },
+
+  // berries a bush holds when full, by its grovekeep stage
+  bushYield(tx, ty) {
+    const t = this.tendAt(tx, ty);
+    const base = amtOf(OBJ.BUSH);
+    if (!t) return base;
+    return base + (t.stage >= 1 ? CONFIG.GROVE.yieldBonus : 0) + (t.stage >= 2 ? base : 0);
+  },
+
+  // regrow speed multiplier for a tile's bush (1 = wild)
+  tendMul(i) {
+    const t = G.tend.get(i);
+    if (!t || t.stage < 1) return 1;
+    const m = CONFIG.GROVE.regrowMul;
+    return t.stage >= 2 ? m * m : m;
+  },
+
+  // order a Forager to call on this bush across days (wild → tended → heavy)
+  orderTend(tx, ty) {
+    if (World.objAt(tx, ty) !== OBJ.BUSH) return false;
+    const i = World.idx(tx, ty);
+    let t = G.tend.get(i);
+    if (t && t.stage >= 2) return false;
+    if (!t) { t = { stage: 0, work: 0 }; G.tend.set(i, t); }
+    return true;
+  },
+
+  // a forager's tending session at the bush — returns the stage it reached, if any
+  tendWork(tx, ty, dt) {
+    const i = World.idx(tx, ty), t = G.tend.get(i);
+    if (!t || t.stage >= 2 || World.objAt(tx, ty) !== OBJ.BUSH) return 0;
+    const need = CONFIG.GROVE.stageWork * (t.stage + 1);
+    t.work += dt;
+    if (t.work >= need) {
+      t.stage++;
+      if (t.stage >= 2) t.work = need;
+      return t.stage;
+    }
+    return 0;
+  },
+
+  // harvesting a tended bush may spare a cutting the village can plant
+  onBushHarvested(tx, ty) {
+    const t = this.tendAt(tx, ty);
+    if (!t || t.stage < 1) return false;
+    if (Math.random() >= CONFIG.GROVE.cuttingChance) return false;
+    G.cuttings++;
+    Sim.float(tx + .5, ty + .2, 'cutting', '#7dc95e');
+    return true;
+  },
+
+  canPlantBush(tx, ty) {
+    if (!World.inB(tx, ty)) return false;
+    const i = World.idx(tx, ty);
+    if (World.t[i] !== T.GRASS && World.t[i] !== T.DIRT) return false;
+    if (World.occ[i]) return false;
+    const o = World.obj[i];
+    return o === OBJ.NONE || o === OBJ.FLOWER || o === OBJ.TGRASS || o === OBJ.MUSH;
+  },
+
+  plantBush(tx, ty) {
+    if (G.cuttings < 1 || !this.canPlantBush(tx, ty)) return false;
+    G.cuttings--;
+    World.setObj(tx, ty, OBJ.BUSH, amtOf(OBJ.BUSH));
+    World.bakeTile(tx, ty);
+    Sim.fx('spark', tx + .5, ty + .3, .3);
+    return true;
+  },
+
+  /* ================= The Nursery ================= */
+  nursery() { return G.buildings.find(b => b.built && b.key === 'nursery') || null; },
+
+  // a lumberjack felled a living tree — every 2nd felling roots a sapling
+  noteFell(tx, ty) {
+    G.fellCount++;
+    const n = this.nursery();
+    if (!n || G.fellCount < CONFIG.NURSERY.fellsPerSapling) return false;
+    G.fellCount -= CONFIG.NURSERY.fellsPerSapling;
+    n.sap = (n.sap || 0) + 1;
+    Sim.float(n.x + 1, n.y + .4, 'sapling rooted', '#8fd45e');
+    return true;
+  },
+
+  canPlantSapling(tx, ty) { return this.canPlantBush(tx, ty); },
+
+  plantSapling(tx, ty) {
+    const n = this.nursery();
+    if (!n || (n.sap || 0) < 1 || !this.canPlantSapling(tx, ty)) return false;
+    n.sap--;
+    const kind = U.hash2(tx, ty) < 0.4 ? OBJ.PINE : OBJ.TREE;
+    World.setObj(tx, ty, OBJ.SAPLING, 0);
+    G.regrow.set(World.idx(tx, ty), { t: CONFIG.NURSERY.growT, kind });
+    World.bakeTile(tx, ty);
+    Sim.fx('spark', tx + .5, ty + .3, .3);
+    return true;
+  },
+
+  /* ================= The Spade ================= */
+  digAt(x, y) { return G.digJobs.some(t => t.x === x && t.y === y); },
+
+  // order a Builder to carve this tile down to shallow water
+  toggleDig(x, y) {
+    if (this.digAt(x, y)) {
+      G.digJobs.splice(G.digJobs.findIndex(t => t.x === x && t.y === y), 1);
+      return 'off';
+    }
+    if (!World.inB(x, y)) return 'no';
+    const i = World.idx(x, y);
+    if (World.t[i] === T.WATER) return 'no';
+    if (World.occ[i]) return 'no';
+    const o = World.obj[i];
+    if (o !== OBJ.NONE && o !== OBJ.FLOWER && o !== OBJ.TGRASS && o !== OBJ.MUSH && o !== OBJ.STUMP) return 'no';
+    G.digJobs.push({ x, y });
+    return 'on';
+  },
+
+  finishDig(x, y) {
+    this.dropDig(x, y);
+    World.setT(x, y, T.WATER);
+    G.dug++;
+    Sim.float(x + .5, y + .3, 'water sprung', '#6fb7d9');
+    Sim.fx('spark', x + .5, y + .3, .3);
+    // reeds at the margin — herbs on a shore tile
+    if (Math.random() < CONFIG.SPADE.reedChance) {
+      const opts = [];
+      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!World.inB(nx, ny)) continue;
+        const j = World.idx(nx, ny), o = World.obj[j];
+        if (World.t[j] !== T.WATER && !World.occ[j] &&
+          (o === OBJ.NONE || o === OBJ.FLOWER || o === OBJ.TGRASS || o === OBJ.MUSH)) opts.push({ x: nx, y: ny });
+      }
+      if (opts.length) {
+        const p = U.choice(opts);
+        World.setObj(p.x, p.y, OBJ.REED, amtOf(OBJ.REED));
+        World.bakeTile(p.x, p.y);
+      }
+    }
+  },
+
+  dropDig(x, y) {
+    const i = G.digJobs.findIndex(t => t.x === x && t.y === y);
+    if (i >= 0) G.digJobs.splice(i, 1);
+  },
+
+  /* ================= Sigil-craft ================= */
+  // chalk drawn by day, salted with 1 herb + 1 charcoal, blooming at dusk
+  draftStart(kind) { G.sigilDraft = { kind, tiles: [] }; },
+
+  draftAdd(tx, ty) {
+    const d = G.sigilDraft;
+    if (!d || d.tiles.length >= 90) return false;
+    if (!World.inB(tx, ty)) return false;
+    const i = World.idx(tx, ty);
+    if (World.t[i] === T.WATER || World.occ[i]) return false;
+    const o = World.obj[i];
+    if (o !== OBJ.NONE && o !== OBJ.FLOWER && o !== OBJ.TGRASS && o !== OBJ.MUSH) return false;
+    if (d.tiles.some(t => t.x === tx && t.y === ty)) return false;
+    d.tiles.push({ x: tx, y: ty });
+    return true;
+  },
+
+  draftCommit() {
+    const d = G.sigilDraft;
+    G.sigilDraft = null;
+    if (!d || !d.tiles.length) return false;
+    if (G.res.herbs < 1 || G.res.charcoal < 1) {
+      UI.toast('Salting a sigil takes 1 herb + 1 charcoal.', 'bad');
+      return false;
+    }
+    G.res.herbs -= 1; G.res.charcoal -= 1;
+    G.sigils.push({ kind: d.kind, tiles: d.tiles, day: G.day, bloomed: false });
+    if (G.sigils.length > CONFIG.SIGIL.max) {
+      G.sigils.shift();
+      UI.toast('The oldest chalk washes away — only six sigils hold.', '');
+    }
+    UI.toast(d.kind === 'ward'
+      ? `The ward is chalked (${d.tiles.length} tiles) — it blooms at dusk.`
+      : `The hallow is chalked (${d.tiles.length} tiles) — it steadies your folk from dusk.`, 'good');
+    return true;
+  },
+
+  draftCancel() { G.sigilDraft = null; },
+
+  // bounding box per sigil keeps the scans cheap
+  _box(s) {
+    if (!s._box) {
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const t of s.tiles) {
+        if (t.x < x0) x0 = t.x; if (t.x > x1) x1 = t.x;
+        if (t.y < y0) y0 = t.y; if (t.y > y1) y1 = t.y;
+      }
+      s._box = { x0, y0, x1, y1 };
+    }
+    return s._box;
+  },
+
+  nearSigil(x, y, kind, bloomedOnly) {
+    const r2 = CONFIG.SIGIL.radius * CONFIG.SIGIL.radius;
+    for (const s of G.sigils) {
+      if (s.kind !== kind) continue;
+      if (bloomedOnly && !s.bloomed) continue; // chalk only wakes at dusk
+      const b = this._box(s);
+      if (x < b.x0 - 2 || x > b.x1 + 3 || y < b.y0 - 2 || y > b.y1 + 3) continue;
+      for (const t of s.tiles) {
+        const dx = x - (t.x + .5), dy = y - (t.y + .5);
+        if (dx * dx + dy * dy <= r2) return s;
+      }
+    }
+    return null;
+  },
+
+  // per-frame: mark monsters crossing a bloomed ward (slowed, +dmg taken)
+  auraScan() {
+    for (const m of G.monsters) {
+      if (m.dead || m.frozenT > 0) continue;
+      if (this.nearSigil(m.x, m.y, 'ward', true)) {
+        m.ampT = 0.35;
+        if (!m.frozenT) m.slowT = Math.max(m.slowT || 0, CONFIG.SIGIL.wardSlow);
+      }
+    }
+  },
+
+  // the Aqueduct's spring: villagers nearby drink without the walk
+  nearAqueduct(x, y) {
+    const r2 = CONFIG.RESTORE.aqueductR * CONFIG.RESTORE.aqueductR;
+    for (const b of G.buildings) {
+      if (b.built && b.key === 'aqueduct' && U.dst2(x, y, b.x + .5, b.y + .5) <= r2) return true;
+    }
+    return false;
+  },
+
+  duskSigils() {
+    let n = 0;
+    for (const s of G.sigils) if (!s.bloomed) { s.bloomed = true; n++; }
+    if (n) {
+      UI.toast(n === 1 ? 'A sigil blooms in the chalk.' : `${n} sigils bloom in the chalk.`, 'magic');
+      Sim.log('The chalked sigils woke with the dusk.', 'magic');
+    }
+  },
+
+  dawnSigils() {
+    if (G.sigils.length) Sim.log('Dawn washed the chalk sigils away.', '');
+    G.sigils = [];
+    this.draftCancel();
+  },
+
+  /* ================= Restoration ================= */
+  ANCIENTS: ['aqueduct', 'dawnshrine', 'skywatch', 'cellar'],
+
+  // a Scribe deciphers, Builders scaffold, and a unique ancient building stands
+  ruinRestore(tx, ty, key) {
+    if (World.objAt(tx, ty) !== OBJ.RUIN || !this.ANCIENTS.includes(key)) return false;
+    const def = BUILD[key];
+    const c = Buildings.costOf(def);
+    if (c.wood > G.res.wood || c.stone > G.res.stone) {
+      UI.toast(`Restoring ${def.name} needs ${c.wood ? c.wood + ' wood' + (c.stone ? ' + ' : '') : ''}${c.stone ? c.stone + ' stone' : ''}.`, 'bad');
+      return false;
+    }
+    G.res.wood -= c.wood; G.res.stone -= c.stone;
+    World.setObj(tx, ty, OBJ.NONE, 0);
+    const b = Buildings.create(key, tx, ty, false);
+    b.phase = 'decipher'; b.decT = 0;
+    G.stats.built++;
+    UI.toast(`${def.name}: the Scribes bend over the old script...`, 'good');
+    Sim.log(`The village undertook restoring an ancient ruin into ${def.name}.`, 'good');
+    return true;
+  },
+
+  decipherSite() { return G.buildings.find(b => !b.built && b.phase === 'decipher') || null; },
+
+  // the scribe's progress at a ruin
+  decipherWork(b, dt) {
+    b.decT = (b.decT || 0) + dt;
+    if (b.decT >= CONFIG.RESTORE.decipherT) {
+      b.phase = 'build';
+      b.progress = 0.1;
+      b.hp = b.maxHp * 0.1;
+      UI.toast(`The script is read — the builders raise the ${b.def.name}!`, 'good');
+      Sim.log(`The ruin's script was read; the ${b.def.name} rises.`, 'good');
+      return true;
+    }
+    return false;
+  },
+
+  /* ================= Banns & blessings ================= */
+  villById(id) { return G.villagers.find(v => v.id === id) || null; },
+
+  // throttled scan: villagers working side by side grow attached
+  bondScan(dt) {
+    this._bondT = (this._bondT || 0) - dt;
+    if (this._bondT > 0) return;
+    this._bondT = 0.5;
+    if (G.banns.length >= 3) return;
+    const live = G.villagers.filter(v => !v.below && v.partner == null && (v.state === 'work'));
+    for (let i = 0; i < live.length; i++) {
+      for (let j = i + 1; j < live.length; j++) {
+        const a = live[i], b = live[j];
+        if (U.dst2(a.x, a.y, b.x, b.y) > 12.25) continue; // ~3.5 tiles
+        const paired = a.bondId === b.id && b.bondId === a.id;
+        if (!paired) { a.bondId = b.id; b.bondId = a.id; a.bondSc = 0; b.bondSc = 0; continue; }
+        a.bondSc = (a.bondSc || 0) + 0.5; b.bondSc = (b.bondSc || 0) + 0.5;
+        if (a.bondSc >= CONFIG.BANNS.bondT && !G.banns.some(r => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id))) {
+          G.banns.push({ a: a.id, b: b.id });
+          a.bondSc = 0; b.bondSc = 0;
+          UI.toast(`${a.name} and ${b.name} ask leave to wed and raise a shared hut — tap either to bless the banns.`, 'magic');
+          Sim.log(`${a.name} and ${b.name} grew attached working side by side.`, 'magic');
+        }
+      }
+    }
+  },
+
+  canBless(req) {
+    const a = this.villById(req.a), b = this.villById(req.b);
+    return !!(a && b && a.partner == null && b.partner == null);
+  },
+
+  // bless the banns: a feast, a shared hut, and a +work aura between the two
+  bless(req) {
+    const a = this.villById(req.a), b = this.villById(req.b);
+    if (!this.canBless(req)) { G.banns.splice(G.banns.indexOf(req), 1); return false; }
+    if (G.res.ale < CONFIG.BANNS.feastAle || G.res.food < CONFIG.BANNS.feastFood) {
+      UI.toast(`The feast needs ${CONFIG.BANNS.feastAle} ale + ${CONFIG.BANNS.feastFood} food in store.`, 'bad');
+      return false;
+    }
+    G.res.ale -= CONFIG.BANNS.feastAle; G.res.food -= CONFIG.BANNS.feastFood;
+    G.banns.splice(G.banns.indexOf(req), 1);
+    a.partner = b.id; b.partner = a.id;
+    a.bondId = null; b.bondId = null; a.bondSc = 0; b.bondSc = 0;
+    G.feastPending = true;
+    const spot = this.hutSpot();
+    let hutMsg = '';
+    if (spot) {
+      const hut = Buildings.place('sharedhut', spot.x, spot.y);
+      if (hut) hutMsg = ` Their hut rises at ${spot.x - (World.W / 2 | 0) > 0 ? 'the east' : 'the west'} of camp.`;
+    }
+    UI.toast(`The banns are blessed — ${a.name} and ${b.name} wed! The village feasts (+10% work tomorrow).${hutMsg}`, 'magic');
+    Sim.log(`${a.name} and ${b.name} were wed under the eaves of Dawnhold.`, 'magic');
+    return true;
+  },
+
+  // spiral out from camp for a 2x2 grass spot the couple may build on
+  hutSpot() {
+    const cx = World.center.x | 0, cy = World.center.y | 0;
+    for (let r = 2; r <= 14; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const x = cx + dx, y = cy + dy;
+          const chk = Buildings.canPlace('sharedhut', x, y);
+          if (chk.ok) return { x, y };
+        }
+      }
+    }
+    return null;
+  },
+
+  // a villager died — untangle their betrothal and any pending banns
+  clearVillager(v) {
+    for (let i = G.banns.length - 1; i >= 0; i--) {
+      if (G.banns[i].a === v.id || G.banns[i].b === v.id) G.banns.splice(i, 1);
+    }
+    if (v.partner != null) {
+      const p = this.villById(v.partner);
+      if (p) { p.partner = null; UI.toast(`${p.name} has lost their beloved.`, 'bad'); }
+    }
+    if (G.herd) G.herd.drivers = G.herd.drivers.filter(id => id !== v.id);
+  },
+
+  /* ================= The driven hunt ================= */
+  dawnHerd() {
+    if (G.herd || G.day < CONFIG.HUNT.minDay || Math.random() >= CONFIG.HUNT.dawnChance) return null;
+    const c = World.edgePoint();
+    const n = U.irnd(CONFIG.HUNT.herdMin, CONFIG.HUNT.herdMax);
+    const deer = [];
+    for (let k = 0; k < n; k++) {
+      let x = c.x + (Math.random() - .5) * 4, y = c.y + (Math.random() - .5) * 4;
+      if (!this.deerPassable(x, y)) { x = c.x; y = c.y; } // never let one stand in the surf
+      deer.push({
+        id: NID(),
+        x, y,
+        anim: Math.random() * 2, dang: Math.random() * Math.PI * 2,
+      });
+    }
+    G.herd = { deer, day: G.day, hunt: false, drivers: [], caught: 0, spawn: { x: c.x, y: c.y } };
+    UI.toast('A deer herd steps from the wilds to graze — tap a deer to set a hunt.', 'good');
+    Sim.log('A deer herd came to graze at the valley\u2019s edge.', 'good');
+    return G.herd;
+  },
+
+  setHunt() {
+    const h = G.herd;
+    if (!h || h.hunt || !h.deer.length) return 0;
+    let cx = 0, cy = 0;
+    for (const d of h.deer) { cx += d.x; cy += d.y; }
+    cx /= h.deer.length; cy /= h.deer.length;
+    const cands = G.villagers
+      .filter(v => !v.below && v.job === 'forager')
+      .sort((a, b) => U.dst2(a.x, a.y, cx, cy) - U.dst2(b.x, b.y, cx, cy))
+      .slice(0, CONFIG.HUNT.drivers);
+    h.hunt = true;
+    h.drivers = cands.map(v => v.id);
+    for (const v of cands) { v.state = 'idle'; v.path = null; v.tgtTile = null; v.workB = null; }
+    if (cands.length) {
+      UI.toast(`The hunt is set — ${cands.map(v => v.name).join(' and ')} will drive the herd toward your spike-line.`, 'good');
+      Sim.log('A hunt was called; the drivers spread wide behind the herd.', 'good');
+    } else {
+      UI.toast('No foragers to drive the hunt — they must be resting.', 'bad');
+    }
+    return cands.length;
+  },
+
+  callOffHunt() {
+    const h = G.herd;
+    if (!h || !h.hunt) return;
+    h.hunt = false; h.drivers = [];
+    UI.toast('The hunt is called off — the drivers stand down.', '');
+  },
+
+  // the day's hunt: deer graze, spook from drivers, bend toward the spike-line
+  herdTick(dt) {
+    const h = G.herd;
+    if (!h) return;
+    const drivers = h.drivers.map(id => this.villById(id)).filter(v => v && !v.below);
+    const traps = G.buildings.filter(b => b.built && b.def.kind === 'trap');
+    for (let i = h.deer.length - 1; i >= 0; i--) {
+      const d = h.deer[i];
+      // taken by the spike-line?
+      const trap = traps.find(t => U.dst2(d.x, d.y, t.x + .5, t.y + .5) < 0.9);
+      if (trap) {
+        Sim.gain('food', CONFIG.HUNT.perDeer);
+        G.stats.gathered += CONFIG.HUNT.perDeer;
+        h.caught++;
+        Sim.float(d.x, d.y - .4, `+${CONFIG.HUNT.perDeer} venison`, '#c97a4b');
+        Sim.fx('spark', d.x, d.y, .4);
+        trap.hp -= CONFIG.TRAP.hpCost;
+        if (trap.hp <= 0) { Sim.fx('smoke', trap.x + .5, trap.y + .5, .6); Buildings.demolish(trap, true); }
+        h.deer.splice(i, 1);
+        continue;
+      }
+      // flee the nearest driver; a planned spike-line bends the bolt
+      let vx = 0, vy = 0, fleeing = false;
+      let best = null, bd = CONFIG.HUNT.spookR * CONFIG.HUNT.spookR;
+      for (const v of drivers) {
+        const dd = U.dst2(d.x, d.y, v.x, v.y);
+        if (dd < bd) { bd = dd; best = v; }
+      }
+      if (best) {
+        fleeing = true;
+        const dl = Math.max(0.01, Math.sqrt(bd));
+        vx = (d.x - best.x) / dl; vy = (d.y - best.y) / dl;
+        let tp = null, td = CONFIG.HUNT.trapPull * CONFIG.HUNT.trapPull;
+        for (const t of traps) {
+          const ddt = U.dst2(d.x, d.y, t.x + .5, t.y + .5);
+          if (ddt < td) { td = ddt; tp = t; }
+        }
+        if (tp) {
+          const tl = Math.max(0.01, Math.sqrt(td));
+          vx = vx * 0.62 + ((tp.x + .5 - d.x) / tl) * 0.38;
+          vy = vy * 0.62 + ((tp.y + .5 - d.y) / tl) * 0.38;
+        }
+      } else {
+        // graze: a lazy wandering heading, pulled back toward the spawn edge
+        d.dang += (Math.random() - .5) * 1.6 * dt * 6;
+        vx = Math.cos(d.dang); vy = Math.sin(d.dang);
+        const home = U.dst2(d.x, d.y, h.spawn.x, h.spawn.y);
+        if (home > 15 * 15) {
+          const hl = Math.max(0.01, Math.sqrt(home));
+          vx = vx * .4 + ((h.spawn.x - d.x) / hl) * .6;
+          vy = vy * .4 + ((h.spawn.y - d.y) / hl) * .6;
+        }
+      }
+      const spd = fleeing ? 2.6 : 0.5;
+      const len = Math.max(0.01, Math.hypot(vx, vy));
+      let nx = d.x + vx / len * spd * dt, ny = d.y + vy / len * spd * dt;
+      if (!this.deerPassable(nx, ny)) {
+        d.dang = Math.random() * Math.PI * 2;
+        nx = d.x; ny = d.y;
+      }
+      d.x = nx; d.y = ny;
+      d.anim += dt * (fleeing ? 9 : 2);
+    }
+    if (!h.deer.length) {
+      G.herd = null;
+      if (h.caught > 0) {
+        Sim.log(`The hunt drove ${h.caught} deer into the spike-line — ${h.caught * CONFIG.HUNT.perDeer} food for the village.`, 'good');
+        UI.toast(`The hunt is in! ${h.caught} deer taken — a mountain of venison.`, 'good');
+      }
+    }
+  },
+
+  deerPassable(x, y) {
+    const tx = x | 0, ty = y | 0;
+    if (!World.inB(tx, ty)) return false;
+    const i = World.idx(tx, ty);
+    if (World.t[i] === T.WATER) return false;
+    const o = World.obj[i];
+    if (o === OBJ.TREE || o === OBJ.PINE || o === OBJ.BIRCH || o === OBJ.ROCK || o === OBJ.RUIN || o === OBJ.CRYSTAL || o === OBJ.DEADTREE || o === OBJ.GRAVE) return false;
+    const b = World.bldAt(tx, ty);
+    if (b && b.built && b.def.kind !== 'trap') return false;
+    return true;
+  },
+
+  duskHerd() {
+    const h = G.herd;
+    if (!h) return;
+    if (h.caught > 0) {
+      Sim.log(`The hunters brought ${h.caught} deer home before dark.`, 'good');
+      UI.toast(`The hunt brought home ${h.caught} deer — the rest scattered into the wilds.`, 'good');
+    } else {
+      Sim.log('The herd scattered into the wilds — no spike-line awaited them.', '');
+      UI.toast('The herd scattered into the wilds — lay a spike-line before the next hunt.', 'bad');
+    }
+    G.herd = null;
+  },
+
+  // set-hunt drivers spend the day at the herd's flank (called from vThink)
+  driveThink(v) {
+    const h = G.herd;
+    if (!h || !h.hunt || !h.drivers.includes(v.id)) return false;
+    if (!h.deer.length) { v.state = 'idle'; v.path = null; return true; }
+    if (!v.path || v.pi >= v.path.length) {
+      let cx = 0, cy = 0;
+      for (const d of h.deer) { cx += d.x; cy += d.y; }
+      cx /= h.deer.length; cy /= h.deer.length;
+      // drive from the far side: aim just beyond the herd, away from camp
+      const dcx = cx - World.center.x, dcy = cy - World.center.y;
+      const dl = Math.max(0.01, Math.hypot(dcx, dcy));
+      const p = Path.find(v.x | 0, v.y | 0, U.clamp((cx + dcx / dl * 2.5) | 0, 1, World.W - 2), U.clamp((cy + dcy / dl * 2.5) | 0, 1, World.H - 2), { adjacent: true });
+      if (p) { v.path = p; v.pi = 0; v.state = 'toWork'; v.workB = null; v.tgtTile = null; }
+    }
+    return true;
+  },
+
+  /* ================= per-frame & phase hooks ================= */
+  tick(dt) {
+    this.auraScan();
+    this.herdTick(dt);
+    this.bondScan(dt);
+  },
+
+  dusk() {
+    this.duskSigils();
+    this.duskHerd();
+  },
+
+  dawn() {
+    this.dawnSigils();
+    this.dawnHerd();
+  },
 };
 </script>
 <!-- ==== js/game.js ==== -->
@@ -3318,6 +4170,9 @@ const Sim = {
     G.handsUsed = 0; G.buffs = {};
     G.drill = { runner: 0, brute: 0, stalker: 0 };
     G.endless = false;
+    G.tend = new Map(); G.cuttings = 0; G.sigils = []; G.sigilDraft = null;
+    G.digJobs = []; G.dug = 0; G.fellCount = 0; G.herd = null;
+    G.banns = []; G.feastPending = false;
 
     Buildings.byIdMap.clear();
     World.gen(G.seed);
@@ -3381,6 +4236,7 @@ const Sim = {
     // ----- essence -----
     let regen = (isDayLike() ? C.ESSENCE.regenDay : C.ESSENCE.regenNight) * G.diffM.regen;
     for (const b of G.buildings) if (b.built && b.def.essence) regen += 0.06;
+    if (G.buildings.some(b => b.built && b.key === 'dawnshrine')) regen *= C.RESTORE.shrineMul; // the Dawn Shrine remembers the light
     G.res.essence = Math.min(C.ESSENCE.max, G.res.essence + regen * dt);
 
     // ----- lamp oil: torches sip it through the night, then gutter -----
@@ -3410,6 +4266,8 @@ const Sim = {
       if (m.dead || m.hp <= 0) { G.monsters.splice(i, 1); if (G.boss === m) { G.boss = null; UI.bossBar(null); } }
     }
     this.separate(dt);
+    // wildcraft: the herd, the banns, the wards (v1.6)
+    Wilds.tick(dt);
 
     // ----- regrowth -----
     if (G.regrow.size) {
@@ -3418,9 +4276,9 @@ const Sim = {
         if (rg.t <= 0) {
           const x = i % World.W, y = (i / World.W) | 0;
           if (rg.kind === OBJ.BUSH) {
-            World.amt[i] = amtOf(OBJ.BUSH);
-          } else if (rg.kind === OBJ.HERB) {
-            World.amt[i] = amtOf(OBJ.HERB);
+            World.amt[i] = Wilds.bushYield(x, y); // tended bushes hang heavier
+          } else if (rg.kind === OBJ.HERB || rg.kind === OBJ.REED) {
+            World.amt[i] = amtOf(rg.kind);
           } else if (rg.kind === OBJ.TREE || rg.kind === OBJ.PINE) {
             if (World.obj[i] === OBJ.STUMP) {
               World.obj[i] = OBJ.SAPLING;
@@ -3447,6 +4305,20 @@ const Sim = {
     }
   },
 
+  // compass bearing of tonight's attack (nearest living lair) — 'east'.. or null
+  telegraphDir() {
+    const lairs = Buildings.lairs();
+    if (!lairs.length) return null;
+    let nearest = null, bd = 1e9;
+    for (const l of lairs) {
+      const d = U.dst2(World.center.x, World.center.y, l.x, l.y);
+      if (d < bd) { bd = d; nearest = l; }
+    }
+    const ang = Math.atan2(nearest.y - World.center.y, nearest.x - World.center.x);
+    const dirs = ['east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'north', 'northeast'];
+    return dirs[((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8];
+  },
+
   /* ---------------- phases ---------------- */
   dusk() {
     G.phase = 'dusk';
@@ -3454,16 +4326,8 @@ const Sim = {
     const n = this.waveSize(G.day) * (G.bloodMoon ? (G.diffM.bloodMult || CONFIG.WAVE.bloodMult) : 1);
     if (n > 0) {
       // direction telegraph from the nearest living lair (readable tactics)
-      const lairs = Buildings.lairs();
-      if (lairs.length) {
-        let nearest = null, bd = 1e9;
-        for (const l of lairs) {
-          const d = U.dst2(World.center.x, World.center.y, l.x, l.y);
-          if (d < bd) { bd = d; nearest = l; }
-        }
-        const ang = Math.atan2(nearest.y - World.center.y, nearest.x - World.center.x);
-        const dirs = ['east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'north', 'northeast'];
-        const dir = dirs[((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8];
+      const dir = this.telegraphDir();
+      if (dir) {
         UI.toast(G.bloodMoon
           ? `A BLOOD MOON rises — a greater horde boils from the monolith to the ${dir}!`
           : `The sun slips away. ${n} shapes crawl from the monolith to the ${dir}...`, 'bad');
@@ -3501,6 +4365,7 @@ const Sim = {
       }
     }
     G.dryWarned = false; // fresh night, fresh quiver warnings
+    Wilds.dusk(); // the chalk blooms; the herd beds down
     if (G.tut === 3) UI.tutAdvance(4);
   },
 
@@ -3551,7 +4416,24 @@ const Sim = {
     if (G.buffs.suture) delete G.buffs.suture;
     if (G.buffs.handDip) delete G.buffs.handDip;
     if (G.buffs.flintDays) { G.buffs.flintDays--; if (G.buffs.flintDays <= 0) delete G.buffs.flintDays; }
+    // the wedding feast, poured the day after the banns
+    if (G.feastPending) {
+      G.feastPending = false;
+      G.buffs.feast = true;
+      UI.toast('The wedding feast still warms the village — +10% work today.', 'magic');
+    } else if (G.buffs.feast) delete G.buffs.feast;
     G.stats.peakPop = Math.max(G.stats.peakPop, G.villagers.length);
+
+    // wildcraft: chalk fades, a herd may wander in
+    Wilds.dawn();
+    // the Sky Watch reads tonight's attack a dawn early
+    if (G.buildings.some(b => b.built && b.key === 'skywatch') && this.waveSize(G.day) > 0 && G.diffM.wave > 0) {
+      const dir = this.telegraphDir();
+      if (dir) {
+        UI.toast(`The Sky Watch reads the wind — tonight\u2019s horde will come from the ${dir}.`, 'magic');
+        this.log(`The Sky Watch marked movement to the ${dir}.`, 'magic');
+      }
+    }
 
     // victory check
     if (survivedFinal && G.finalNight && G.buildings.some(b => b.key === 'beacon' && b.built)) {
@@ -3593,8 +4475,10 @@ const Sim = {
   dayStart() {
     G.phase = 'day';
     G._capNote = false;
-    // vermin and rot claim whatever outlasted the caps overnight
+    // vermin and rot claim whatever outlasted the caps overnight —
+    // but what goes into a Root Cellar keeps
     for (const k of ['food', 'wood', 'stone']) {
+      if (k === 'food' && G.buildings.some(b => b.built && b.key === 'cellar')) continue;
       const cap = Buildings.capOf(k);
       if (cap != null && G.res[k] > cap) {
         G.res[k] = cap;
@@ -3632,7 +4516,9 @@ const Sim = {
     if (roll < 0.38) {
       let n = 0;
       for (let i = 0; i < World.obj.length; i++) {
-        if (World.obj[i] === OBJ.BUSH && World.amt[i] < amtOf(OBJ.BUSH)) { World.amt[i] = amtOf(OBJ.BUSH); n++; }
+        if (World.obj[i] === OBJ.BUSH && World.amt[i] < Wilds.bushYield(i % World.W, (i / World.W) | 0)) {
+          World.amt[i] = Wilds.bushYield(i % World.W, (i / World.W) | 0); n++;
+        }
       }
       if (n > 0) {
         UI.toast('Overnight rain — every bush hangs heavy with berries!', 'good');
@@ -3826,13 +4712,17 @@ const Sim = {
       if (!v.starveWarned) { v.starveWarned = true; UI.toast(`${v.name} is starving!`, 'bad'); this.log(`${v.name} starves — the store is empty.`, 'bad'); }
     } else if (v.hunger < 80) v.starveWarned = false;
 
-    // thirst ticks beside hunger — bottles drink on the spot, the well needs the walk
+    // thirst ticks beside hunger — bottles drink on the spot, the well needs
+    // the walk, and the ancient Aqueduct brings the spring to your work
     v.thirst = Math.min(100, v.thirst + C.THIRST.rate * dt);
     if (v.thirst > C.THIRST.drinkAt && v.state !== 'drink' && v.state !== 'flee' && v.state !== 'fight' && v.state !== 'arrive' && !v.schooling) {
       if (G.res.bottles >= 1) {
         G.res.bottles -= 1;
         v.thirst = Math.max(0, v.thirst - C.THIRST.restore);
         this.float(v.x, v.y - .6, 'bottled water', '#6fb7d9');
+      } else if (Wilds.nearAqueduct(v.x, v.y)) {
+        v.thirst = Math.max(0, v.thirst - C.THIRST.restore);
+        this.float(v.x, v.y - .6, 'spring water', '#8fd0ee');
       } else {
         this.sendToDrink(v); // no well or no route → they keep at it, growing parched
       }
@@ -3873,8 +4763,9 @@ const Sim = {
     }
 
     // fear overrides work (non-guards) — workers no longer shelter at night,
-    // so they spook from a wider radius after dark
-    if (v.job !== 'guard' && v.fearT <= 0) {
+    // so they spook from a wider radius after dark. Inside a hallow sigil
+    // the folk hold their ground.
+    if (v.job !== 'guard' && v.fearT <= 0 && !Wilds.nearSigil(v.x, v.y, 'hallow', true)) {
       for (const m of G.monsters) {
         if (!m.dead && U.dst2(v.x, v.y, m.x, m.y) < (isNightLike() ? 30 : 12)) {
           v.fearT = 4.5; v.state = 'flee'; v.path = null;
@@ -3882,6 +4773,9 @@ const Sim = {
         }
       }
     }
+
+    // a hunt's drivers spend the day at the herd's flank
+    if (Wilds.driveThink(v)) return;
 
     // a lesson in progress calls the student to the schoolhouse (fear and a
     // dry throat come first — class resumes after)
@@ -3978,7 +4872,7 @@ const Sim = {
           v.noPathT = 0;
           if (v.atkCd <= 0) {
             v.atkCd = CONFIG.GUARD.atkT;
-            this.hitMonster(m, this.guardDmg(m.type), v);
+            this.hitMonster(m, this.guardDmg(m.type, v), v);
             this.fx('spark', m.x, m.y, .25);
           }
         } else if (!v.path || v.pi >= v.path.length) {
@@ -4025,7 +4919,7 @@ const Sim = {
           v.path = null;
           if (v.atkCd <= 0) {
             v.atkCd = CONFIG.GUARD.atkT;
-            this.hitBuilding(rt, this.guardDmg());
+            this.hitBuilding(rt, this.guardDmg(null, v));
             this.fx('spark', rt.x + .5, rt.y + .3, .3);
           }
           v.noPathT = 0;
@@ -4066,8 +4960,8 @@ const Sim = {
     }
 
     if (job === 'builder') {
-      // construction sites first
-      const sites = Buildings.unBuilt();
+      // construction sites first (ruins mid-decipher wait for the Scribe)
+      const sites = Buildings.unBuilt().filter(s => s.phase !== 'decipher');
       if (sites.length) {
         let best = null, bd = 1e9;
         for (const s of sites) {
@@ -4109,6 +5003,22 @@ const Sim = {
           v.state = 'toWork';
           v.tgtTile = { x: best.x, y: best.y };
           v.workKind = 'clear'; v.workB = null;
+          return;
+        }
+      }
+      // then the Spade's digging orders — tiles carved down to ponds
+      if (G.digJobs.length) {
+        let best = null, bd = 1e9;
+        for (const t of G.digJobs) {
+          const d = U.dst2(v.x, v.y, t.x + .5, t.y + .5);
+          if (d < bd) { bd = d; best = t; }
+        }
+        const p = Path.find(v.x | 0, v.y | 0, best.x, best.y, { adjacent: true });
+        if (p) {
+          v.path = p; v.pi = 0;
+          v.state = 'toWork';
+          v.tgtTile = { x: best.x, y: best.y };
+          v.workKind = 'dig'; v.workB = null;
           return;
         }
       }
@@ -4159,8 +5069,11 @@ const Sim = {
       return;
     }
 
-    // the scribe teaches at the schoolhouse — one villager at a time
+    // the scribe teaches at the schoolhouse — one villager at a time,
+    // but a ruin mid-restoration is deciphered first
     if (job === 'scribe') {
+      const ruin = Wilds.decipherSite();
+      if (ruin && this.sendToBuilding(v, ruin, 'decipher')) return;
       let best = null, bd = 1e9;
       for (const h of G.buildings) {
         if (!h.built || h.key !== 'school') continue;
@@ -4177,10 +5090,31 @@ const Sim = {
     if (job === 'forager' || job === 'lumber' || job === 'miner' || job === 'medic') {
       const types = job === 'forager' ? [OBJ.BUSH]
         : job === 'lumber' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
-          : job === 'miner' ? [OBJ.ROCK, OBJ.RUIN, OBJ.CRYSTAL]
-            : [OBJ.HERB];
+          : job === 'miner' ? [OBJ.ROCK, OBJ.CRYSTAL]
+            : [OBJ.HERB, OBJ.REED];
       const resType = job === 'forager' ? 'food' : job === 'lumber' ? 'wood' : job === 'miner' ? 'stone' : 'herbs';
       if (v.carry.amt >= Entities.carryMax(v)) { this.sendToStore(v); return; }
+      // Grovekeep first: the player's tended bushes outrank wild berries
+      if (job === 'forager') {
+        let tt = null, td = 30 * 30;
+        for (const [i, t] of G.tend) {
+          if (t.stage >= 2 || t.work >= CONFIG.GROVE.stageWork * (t.stage + 1)) continue;
+          const x = i % World.W, y = (i / World.W) | 0;
+          if (World.objAt(x, y) !== OBJ.BUSH) continue;
+          const d = U.dst2(v.x, v.y, x + .5, y + .5);
+          if (d < td) { td = d; tt = { x, y }; }
+        }
+        if (tt) {
+          const p = Path.find(v.x | 0, v.y | 0, tt.x, tt.y, { adjacent: true });
+          if (p) {
+            v.path = p; v.pi = 0;
+            v.state = 'toWork';
+            v.tgtTile = { x: tt.x, y: tt.y };
+            v.workKind = 'tendW'; v.workB = null;
+            return;
+          }
+        }
+      }
       const near = World.findNearestObj(v.x | 0, v.y | 0, types, 36);
       if (near) {
         const p = Path.find(v.x | 0, v.y | 0, near.x, near.y, { adjacent: true });
@@ -4219,6 +5153,19 @@ const Sim = {
         v.state = 'idle'; v.tgtTile = null;
         return;
       }
+      // the Spade: the tile must still be a queued dig order on dry land
+      if (v.workKind === 'dig') {
+        if (Wilds.digAt(v.tgtTile.x, v.tgtTile.y) && World.tileT(v.tgtTile.x, v.tgtTile.y) !== T.WATER) { v.state = 'work'; v.workT = 0; return; }
+        Wilds.dropDig(v.tgtTile.x, v.tgtTile.y);
+        v.state = 'idle'; v.tgtTile = null;
+        return;
+      }
+      // Grovekeep: the bush must still be standing to be tended
+      if (v.workKind === 'tendW') {
+        if (World.objAt(v.tgtTile.x, v.tgtTile.y) === OBJ.BUSH) { v.state = 'work'; v.workT = 0; return; }
+        v.state = 'idle'; v.tgtTile = null;
+        return;
+      }
       // land clearing: any wild growth still standing is fair game
       if (v.workKind === 'clear') {
         const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
@@ -4233,8 +5180,8 @@ const Sim = {
       const o = World.objAt(v.tgtTile.x, v.tgtTile.y);
       const want = v.workKind === 'food' ? [OBJ.BUSH]
         : v.workKind === 'wood' ? [OBJ.TREE, OBJ.PINE, OBJ.BIRCH, OBJ.DEADTREE]
-          : v.workKind === 'stone' ? [OBJ.ROCK, OBJ.RUIN, OBJ.CRYSTAL]
-            : v.workKind === 'herbs' ? [OBJ.HERB] : [];
+          : v.workKind === 'stone' ? [OBJ.ROCK, OBJ.CRYSTAL]
+            : v.workKind === 'herbs' ? [OBJ.HERB, OBJ.REED] : [];
       if (want.includes(o) && World.amtAt(v.tgtTile.x, v.tgtTile.y) > 0) { v.state = 'work'; v.workT = 0; return; }
       v.state = 'idle'; v.tgtTile = null;
       return;
@@ -4249,6 +5196,7 @@ const Sim = {
         return;
       }
       if (v.workMode === 'build' && !b.built) { v.state = 'work'; return; }
+      if (v.workMode === 'decipher' && !b.built && b.phase === 'decipher') { v.state = 'work'; return; }
       if (v.workMode === 'demolish' && b.built && b.demo) { v.state = 'work'; return; }
       if (v.workMode === 'repair' && b.hp < b.maxHp && this.repairable(b)) { v.state = 'work'; return; }
       if (v.workMode === 'harvest' && b.built && b.growth >= 1) { v.state = 'work'; v.workT = 0; return; }
@@ -4276,6 +5224,26 @@ const Sim = {
     }
     if (v.workKind && v.tgtTile) {
       const { x, y } = v.tgtTile;
+      // the Spade: builders carve the tile down until water springs
+      if (v.workKind === 'dig') {
+        if (!Wilds.digAt(x, y)) { v.tgtTile = null; v.state = 'idle'; return; }
+        v.workT += dt * ws;
+        if (Math.random() < dt * 2) this.fx('spark', x + .5, y + .4, .2);
+        if (v.workT >= CONFIG.SPADE.digTime) {
+          Wilds.finishDig(x, y);
+          v.tgtTile = null; v.state = 'idle';
+        }
+        return;
+      }
+      // Grovekeep: a forager's tending session at a wild bush
+      if (v.workKind === 'tendW') {
+        const st = Wilds.tendWork(x, y, dt * ws);
+        if (st === 1) { this.float(x + .5, y + .2, 'tended', '#8fd45e'); this.log('A wild bush was tended — it will hang heavier from now on.', 'good'); }
+        else if (st === 2) { this.float(x + .5, y + .2, 'heavy-fruiting!', '#ffd94a'); this.log('A tended bush came heavy-fruiting — a proper orchard bush, for good.', 'good'); }
+        v.workT += dt;
+        if (st || v.workT > 8) { v.tgtTile = null; v.state = 'idle'; }
+        return;
+      }
       // land clearing: one burst of labor, salvage half the yield, tile goes bare.
       // water filling is slower — builders throw stone until there's ground to stand on
       if (v.workKind === 'clear') {
@@ -4312,7 +5280,11 @@ const Sim = {
         v.carry.amt++;
         this.fx('spark', x + .5, y + .3, .2);
         if (amt - 1 <= 0) {
+          const preO = World.objAt(x, y);
           const bonus = World.deplete(x, y);
+          // the Nursery counts felled living trees; tended bushes spare cuttings
+          if (preO === OBJ.TREE || preO === OBJ.PINE || preO === OBJ.BIRCH) Wilds.noteFell(x, y);
+          else if (preO === OBJ.BUSH) Wilds.onBushHarvested(x, y);
           if (bonus === 'crystal') {
             G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.CRYSTAL.essence);
             this.float(x + .5, y + .3, '+' + CONFIG.CRYSTAL.essence + ' essence', '#b48ae0');
@@ -4351,6 +5323,12 @@ const Sim = {
           this.log(`${st.name} finished their letters — schooled hands work +12% forever.`, 'good');
         }
       }
+      return;
+    }
+    // the scribe deciphers a ruin mid-restoration — the builders wait on the script
+    if (v.workMode === 'decipher' && !b.built && b.phase === 'decipher') {
+      if (Math.random() < dt * 2) this.fx('spark', b.x + .5, b.y - .2, .25);
+      if (Wilds.decipherWork(b, dt * ws)) { v.workB = null; v.state = 'idle'; }
       return;
     }
     if (v.workMode === 'craft' && b.built) {
@@ -4547,7 +5525,7 @@ const Sim = {
     v.path = p; v.pi = 0;
     v.state = 'toWork';
     v.workB = b; v.workMode = mode; v.workKind = null; v.tgtTile = null;
-    if (mode === 'harvest' || mode === 'tend' || mode === 'build' || mode === 'repair' || mode === 'craft' || mode === 'teach') v.workT = 0;
+    if (mode === 'harvest' || mode === 'tend' || mode === 'build' || mode === 'repair' || mode === 'craft' || mode === 'teach' || mode === 'decipher') v.workT = 0;
     return true;
   },
 
@@ -4735,6 +5713,7 @@ const Sim = {
   },
 
   hitMonster(m, dmg, src) {
+    if (m.ampT > 0) dmg *= CONFIG.SIGIL.wardAmp; // crossing a bloomed ward stings
     m.hp -= dmg;
     m.flash = .12;
     if (m.hp <= 0) this.monsterDeath(m, 'slain');
@@ -4779,6 +5758,7 @@ const Sim = {
     }
     if (G.follow === v) G.follow = null;
     if (G.sel && G.sel.ref === v) { G.sel = null; UI.selHide(); }
+    Wilds.clearVillager(v); // untangle betrothal, banns, hunt duty
     this.reassign();
   },
 
@@ -4878,10 +5858,11 @@ const Sim = {
     }
   },
 
-  guardDmg(mType) {
+  guardDmg(mType, v) {
     let d = CONFIG.GUARD.dmg;
     if (G.buildings.some(b => b.built && b.key === 'barracks')) d *= CONFIG.BARRACKS.dmgMult;
     if (mType && G.drill && G.drill[mType]) d *= 1 + G.drill[mType]; // muster-yard drills
+    if (v && Wilds.nearSigil(v.x, v.y, 'hallow', true)) d *= CONFIG.SIGIL.hallowGuard; // steadied by a hallow
     if (G.res.arrows <= 0) d *= CONFIG.AMMO.dryMult; // no resupply for the quivers
     return d;
   },
@@ -6674,6 +7655,22 @@ const SaveSys = {
       buffs: { ...G.buffs },
       drill: { ...(G.drill || {}) },
       endless: !!G.endless,
+      // wildcraft (v1.6): villagers are saved by array position, so partner /
+      // banns / hunt-driver links ride as indexes and are re-linked on load
+      tend: Array.from(G.tend.entries()),
+      cuttings: G.cuttings || 0,
+      sigils: (G.sigils || []).map(s => ({ kind: s.kind, tiles: s.tiles, day: s.day, bloomed: !!s.bloomed })),
+      digs: (G.digJobs || []).map(t => [t.x, t.y]),
+      dug: G.dug || 0,
+      fellCount: G.fellCount || 0,
+      feastPending: !!G.feastPending,
+      banns: (G.banns || []).map(r => [G.villagers.indexOf(Wilds.villById(r.a)), G.villagers.indexOf(Wilds.villById(r.b))]).filter(r => r[0] >= 0 && r[1] >= 0),
+      herd: G.herd ? {
+        day: G.herd.day, hunt: !!G.herd.hunt, caught: G.herd.caught || 0,
+        spawn: { ...G.herd.spawn },
+        drivers: (G.herd.drivers || []).map(id => G.villagers.findIndex(v => v.id === id)).filter(ix => ix >= 0),
+        deer: G.herd.deer.map(d => ({ x: d.x, y: d.y, anim: d.anim, dang: d.dang })),
+      } : null,
       wave: G.wave ? { left: G.wave.left, comps: G.wave.comps, t: G.wave.t, window: G.wave.window } : null,
       cam: { x: G.cam.x, y: G.cam.y, z: G.cam.z },
       nextId: _id,
@@ -6686,6 +7683,7 @@ const SaveSys = {
         growth: b.growth, lit: b.lit,
         fuel: b.fuel || 0, drillType: b.drillType || null, drillT: b.drillT || 0,
         seamDepth: b.seamDepth || 0, seamDay: b.seamDay || 0,
+        sap: b.sap || 0, phase: b.phase || null, decT: b.decT || 0,
         demo: !!b.demo,
         clear: (b.clearTiles || []).map(t => [t.x, t.y]),
       })),
@@ -6697,6 +7695,7 @@ const SaveSys = {
         state: v.state === 'arrive' ? 'arrive' : 'idle',
         carry: { type: v.carry.type, amt: v.carry.amt },
         toolCond: v.toolCond == null ? CONFIG.TOOL.cond : v.toolCond, buzzed: !!v.buzzed,
+        partnerIx: v.partner != null ? G.villagers.findIndex(o => o.id === v.partner) : -1,
       })),
       monsters: G.monsters.map(m => ({
         type: m.type, x: m.x, y: m.y, hp: m.hp, burning: m.burning > 0,
@@ -6756,6 +7755,17 @@ const SaveSys = {
     G.buffs = d.buffs || {};
     G.drill = Object.assign({ runner: 0, brute: 0, stalker: 0 }, d.drill || {});
     G.endless = !!d.endless;
+    // wildcraft (v1.6): tend stages, cuttings, sigils, digs, the herd, the banns
+    G.tend = new Map(d.tend || []);
+    G.cuttings = d.cuttings || 0;
+    G.sigils = (d.sigils || []).map(s => ({ kind: s.kind, tiles: s.tiles, day: s.day || 1, bloomed: !!s.bloomed }));
+    G.sigilDraft = null;
+    G.digJobs = (d.digs || []).map(([x, y]) => ({ x, y }));
+    G.dug = d.dug || 0;
+    G.fellCount = d.fellCount || 0;
+    G.feastPending = !!d.feastPending;
+    G.herd = null;
+    G.banns = [];
     G.wave = d.wave ? { ...d.wave } : null;
     G.cam = { x: d.cam.x, y: d.cam.y, z: d.cam.z };
     _id = d.nextId || 1000;
@@ -6771,6 +7781,7 @@ const SaveSys = {
       b.fuel = bs.fuel || 0;
       b.drillType = bs.drillType || null; b.drillT = bs.drillT || 0;
       b.seamDepth = bs.seamDepth || 0; b.seamDay = bs.seamDay || 0;
+      b.sap = bs.sap || 0; b.phase = bs.phase || null; b.decT = bs.decT || 0;
       b.demo = !!bs.demo;
       if (bs.clear && bs.clear.length) b.clearTiles = bs.clear.map(([x, y]) => ({ x, y }));
       if (!b.built) b.hp = b.maxHp * (0.1 + 0.9 * b.progress);
@@ -6793,6 +7804,27 @@ const SaveSys = {
       };
       return v;
     });
+
+    // re-link the wildcraft's people-links, which ride as array indexes
+    G.villagers.forEach((v, ix) => {
+      const pIx = d.villagers[ix] && d.villagers[ix].partnerIx;
+      v.partner = (pIx != null && pIx >= 0 && G.villagers[pIx]) ? G.villagers[pIx].id : null;
+      v.bondId = null; v.bondSc = 0;
+    });
+    G.banns = (d.banns || [])
+      .map(([ai, bi]) => (G.villagers[ai] && G.villagers[bi]) ? { a: G.villagers[ai].id, b: G.villagers[bi].id } : null)
+      .filter(Boolean);
+    if (d.herd && d.herd.deer && d.herd.deer.length) {
+      G.herd = {
+        day: d.herd.day || G.day, hunt: !!d.herd.hunt, caught: d.herd.caught || 0,
+        spawn: d.herd.spawn || { x: 3, y: 3 },
+        drivers: [],
+        deer: d.herd.deer.map(dd => ({ id: NID(), x: dd.x, y: dd.y, anim: dd.anim || 0, dang: dd.dang || 0 })),
+      };
+      G.herd.drivers = (d.herd.drivers || [])
+        .map(ix => G.villagers[ix] ? G.villagers[ix].id : -1)
+        .filter(id => id >= 0);
+    }
 
     G.monsters = (d.monsters || []).map(ms => {
       const m = Entities.makeMonster(ms.type, ms.x, ms.y);
@@ -6915,6 +7947,7 @@ const Render = {
           case OBJ.STUMP: spr = Art.s.stump; break;
           case OBJ.SAPLING: spr = Art.s.sapling; break;
           case OBJ.GRAVE: spr = Art.s.grave; break;
+          case OBJ.REED: spr = World.amt[oi] > 0 ? Art.s.reedF : Art.s.reedE; break;
         }
         if (spr) {
           const py = (ty + 1) * 16 - spr.height;
@@ -6947,11 +7980,19 @@ const Render = {
       if (m.x * 16 < (x0 - 3) * 16 || m.x * 16 > (x1 + 3) * 16 || m.y * 16 < (y0 - 3) * 16 || m.y * 16 > (y1 + 3) * 16) continue;
       draws.push({ y: m.y * 16, fn: () => this.drawMonster(ctx, m) });
     }
+    // the deer herd (the driven hunt)
+    if (G.herd) {
+      for (const d of G.herd.deer) {
+        if (d.x * 16 < (x0 - 2) * 16 || d.x * 16 > (x1 + 2) * 16 || d.y * 16 < (y0 - 2) * 16 || d.y * 16 > (y1 + 2) * 16) continue;
+        draws.push({ y: d.y * 16, fn: () => this.drawDeer(ctx, d) });
+      }
+    }
 
     draws.sort((a, b) => a.y - b.y);
     for (const d of draws) d.fn();
 
     this.drawClearMarks(ctx, x0, y0, x1, y1);
+    this.drawWildsMarks(ctx, x0, y0, x1, y1);
     this.drawEffects(ctx);
     this.drawGhost(ctx, x0, y0, x1, y1);
 
@@ -7196,6 +8237,84 @@ const Render = {
     }
   },
 
+  drawDeer(ctx, d) {
+    const spr = Art.s['deer' + (((d.anim | 0) % 2))];
+    if (!spr) return;
+    const px = d.x * 16 - spr.width / 2, py = d.y * 16 - spr.height + 2;
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath();
+    ctx.ellipse(d.x * 16, d.y * 16 + 1, 5, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.drawImage(spr, px | 0, py | 0);
+    if (G.sel && G.sel.kind === 'd') {
+      ctx.strokeStyle = '#ffe9a0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(d.x * 16, d.y * 16, 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  },
+
+  // wildcraft ground marks: tend stakes, dig brackets, and the sigil chalk
+  drawWildsMarks(ctx, x0, y0, x1, y1) {
+    const pulse = 0.6 + Math.sin(this._t * 3) * 0.2;
+    // Grovekeep: a tiny stake with stage dots by every ordered bush
+    for (const [i, t] of G.tend) {
+      const x = i % World.W, y = (i / World.W) | 0;
+      if (x < x0 - 1 || x > x1 + 1 || y < y0 - 1 || y > y1 + 1) continue;
+      if (World.obj[i] !== OBJ.BUSH) continue;
+      ctx.fillStyle = `rgba(143,212,94,${t.stage >= 2 ? 0.95 : pulse})`;
+      ctx.fillRect(x * 16 + 1, y * 16 + 12, 2, 4);
+      ctx.fillStyle = t.stage >= 1 ? '#8fd45e' : 'rgba(232,228,216,.6)';
+      ctx.fillRect(x * 16 + 1, y * 16 + 10, 2, 2);
+      if (t.stage >= 2) { ctx.fillStyle = '#ffd94a'; ctx.fillRect(x * 16 + 1, y * 16 + 8, 2, 2); }
+    }
+    // the Spade: blue corner brackets on queued dig tiles
+    for (const t of G.digJobs) {
+      if (t.x < x0 - 1 || t.x > x1 + 1 || t.y < y0 - 1 || t.y > y1 + 1) continue;
+      const px = t.x * 16, py = t.y * 16;
+      ctx.strokeStyle = `rgba(133,183,222,${pulse + 0.2})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(px + 2, py + 6); ctx.lineTo(px + 2, py + 2); ctx.lineTo(px + 6, py + 2);
+      ctx.moveTo(px + 10, py + 2); ctx.lineTo(px + 14, py + 2); ctx.lineTo(px + 14, py + 6);
+      ctx.moveTo(px + 14, py + 10); ctx.lineTo(px + 14, py + 14); ctx.lineTo(px + 10, py + 14);
+      ctx.moveTo(px + 6, py + 14); ctx.lineTo(px + 2, py + 14); ctx.lineTo(px + 2, py + 10);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+    // sigil chalk: a dashed chalk square per tile, brighter once bloomed
+    const chalk = (tiles, col, alpha, dashOff) => {
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = alpha;
+      ctx.setLineDash([3, 3]);
+      ctx.lineDashOffset = dashOff;
+      for (const t of tiles) {
+        if (t.x < x0 - 1 || t.x > x1 + 1 || t.y < y0 - 1 || t.y > y1 + 1) continue;
+        ctx.strokeRect(t.x * 16 + 1.5, t.y * 16 + 1.5, 13, 13);
+      }
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    };
+    for (const s of G.sigils) {
+      const ward = s.kind === 'ward';
+      const col = ward ? '#ffb057' : '#7de0d4';
+      chalk(s.tiles, col, s.bloomed ? 0.95 : pulse * 0.7, ward ? 0 : 4);
+      if (s.bloomed) {
+        // a glow stone at the sigil's heart
+        const c = s.tiles[(s.tiles.length / 2) | 0];
+        ctx.fillStyle = ward ? 'rgba(255,176,87,.5)' : 'rgba(125,224,212,.5)';
+        ctx.beginPath();
+        ctx.arc((c.x + .5) * 16, (c.y + .5) * 16, 3 + Math.sin(this._t * 5) * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // the draft being drawn right now
+    if (G.sigilDraft && G.sigilDraft.tiles.length) {
+      chalk(G.sigilDraft.tiles, G.sigilDraft.kind === 'ward' ? '#e8e4d8' : '#cfeee8', 0.9, -(this._t * 6) % 6);
+    }
+  },
+
   drawGhost(ctx, x0, y0, x1, y1) {
     const mode = UI.mode;
     if (!mode || !UI.ghost) return;
@@ -7239,6 +8358,30 @@ const Render = {
     } else if (mode.type === 'clear') {
       ctx.strokeStyle = 'rgba(150,255,140,.9)';
       ctx.strokeRect(gx * 16 + .5, gy * 16 + .5, 15, 15);
+    } else if (mode.type === 'dig') {
+      // a tile about to become pond: blue wash + a shovel stroke
+      const ok = !World.bldAt(gx, gy) && World.tileT(gx, gy) !== T.WATER;
+      ctx.fillStyle = ok ? 'rgba(110,170,220,.30)' : 'rgba(230,80,80,.30)';
+      ctx.fillRect(gx * 16, gy * 16, 16, 16);
+      ctx.strokeStyle = ok ? 'rgba(160,210,250,.9)' : 'rgba(255,110,110,.9)';
+      ctx.strokeRect(gx * 16 + .5, gy * 16 + .5, 15, 15);
+    } else if (mode.type === 'plant') {
+      // a sapling or cutting about to go into the ground
+      const ok = Wilds.canPlantBush(gx, gy) && (mode.what === 'bush' ? G.cuttings >= 1 : !!Wilds.nursery() && (Wilds.nursery().sap || 0) >= 1);
+      ctx.strokeStyle = ok ? 'rgba(150,255,140,.9)' : 'rgba(255,110,110,.9)';
+      ctx.beginPath();
+      ctx.arc(gx * 16 + 8, gy * 16 + 12, 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = .6;
+      const spr = mode.what === 'bush' ? Art.s.bushF : Art.s.sapling;
+      if (spr) ctx.drawImage(spr, gx * 16, (gy + 1) * 16 - spr.height);
+      ctx.globalAlpha = 1;
+    } else if (mode.type === 'sigil') {
+      // the tile the chalk is on right now
+      ctx.strokeStyle = mode.kind === 'ward' ? 'rgba(255,176,87,.9)' : 'rgba(125,224,212,.9)';
+      ctx.setLineDash([3, 3]);
+      ctx.strokeRect(gx * 16 + 1.5, gy * 16 + 1.5, 13, 13);
+      ctx.setLineDash([]);
     }
   },
 
@@ -7837,6 +8980,11 @@ const UI = {
           </div>
         </div>`;
       const carry = v.carry.amt > 0 ? `<div class="sub">Carrying ${v.carry.amt} ${v.carry.type}</div>` : '';
+      // banns & blessings: a bonded pair asks leave to wed
+      const partner = v.partner != null ? G.villagers.find(o => o.id === v.partner) : null;
+      const req = G.banns.find(r => r.a === v.id || r.b === v.id);
+      const wed = partner ? `<div class="sub" style="color:#e88bd0">Wed to ${U.esc(partner.name)} — they work +10% side by side.</div>` : '';
+      const bannsBtn = req && Wilds.canBless(req) ? `<button id="selBless">\u2661 Bless the banns</button>` : '';
       const state = { idle: 'waiting', toWork: 'heading out', work: 'working', toStore: 'hauling', shelter: 'sheltering', flee: 'fleeing!', fight: 'fighting!', arrive: 'arriving' }[v.state] || v.state;
       el.innerHTML = `
         <div style="display:flex;gap:10px;align-items:center">
@@ -7846,8 +8994,9 @@ const UI = {
             <div class="sub">${U.esc(state)}${v.trait ? ' \u00b7 ' + U.esc(v.trait.desc) : ''}</div>
           </div>
         </div>
-        ${bars}${jobRow}${carry}
+        ${bars}${jobRow}${carry}${wed}
         <div class="selActs">
+          ${bannsBtn}
           <button id="selFollow">${G.follow === v ? 'Unfollow' : 'Follow'}</button>
           ${v.job !== 'guard' ? '<button id="selShelter">To shelter</button>' : ''}
           <button id="selClose">Close</button>
@@ -7855,6 +9004,12 @@ const UI = {
       const pc = document.getElementById('selPortrait').getContext('2d');
       pc.imageSmoothingEnabled = false;
       pc.drawImage(Art.villager(v.look, 0), 0, 0, 16, 16, 0, 0, 48, 48);
+      const bl = document.getElementById('selBless');
+      if (bl) bl.onclick = () => {
+        const feast = G.res.ale >= CONFIG.BANNS.feastAle && G.res.food >= CONFIG.BANNS.feastFood;
+        if (Wilds.bless(req)) this.selRender();
+        else if (!feast) this.selRender();
+      };
       document.getElementById('selJobDown').onclick = () => this.cycleJob(v, -1);
       document.getElementById('selJobUp').onclick = () => this.cycleJob(v, 1);
       document.getElementById('selFollow').onclick = () => { G.follow = G.follow === v ? null : v; this.selRender(); };
@@ -7876,25 +9031,100 @@ const UI = {
         <div class="selActs"><button id="selClose">Close</button></div>`;
       document.getElementById('selClose').onclick = () => this.selHide();
     } else if (s.kind === 'o') {
-      // a wild worksite — tree, boulder or bush the bench can play at
+      // a wild thing — a worksite, an ordered bush, or an ancient ruin
       const t = s.ref;
-      const nm = { [OBJ.TREE]: 'Tree', [OBJ.PINE]: 'Pine', [OBJ.BIRCH]: 'Birch', [OBJ.ROCK]: 'Boulder', [OBJ.BUSH]: 'Berry Bush' }[t.o] || 'Wilds';
-      const amt = World.amtAt(t.tx, t.ty);
       const of = Bench.siteObj(t.tx, t.ty);
-      const sub = t.o === OBJ.BUSH
-        ? (amt > 0 ? 'Heavy with berries.' : 'Picked clean — it will regrow.')
-        : t.o === OBJ.ROCK ? `${amt} stone left in it.` : `${amt} wood left in it.`;
-      el.innerHTML = `
-        <h3>${U.esc(nm)}</h3>
-        <div class="sub">${U.esc(sub)}${of ? '' : ' The bench needs the right duty assigned to lend a hand here.'}</div>
-        <div class="selActs">
-          ${of ? `<button id="selObjBench">\u270b ${U.esc(Bench.GAMES.find(g => g.id === of.id).name)}${Bench.handsLeft() > 0 ? '' : ' (no hands)'}</button>` : ''}
-          <button id="selClose">Close</button>
-        </div>`;
+      let acts = '', note = '';
+      if (t.o === OBJ.RUIN) {
+        // Restoration: a ruin wakes as one unique ancient building
+        const scribeReady = (G.jobs.scribe || 0) > 0 && Buildings.built('school');
+        note = scribeReady
+          ? 'A Scribe deciphers the script (~a minute\u2019s work), then Builders raise it.'
+          : 'Restoration wants a Schoolhouse and a Scribe to read the script — then Builders.';
+        for (const key of Wilds.ANCIENTS) {
+          const def = BUILD[key];
+          const c = Buildings.costOf(def);
+          const afford = c.wood <= G.res.wood && c.stone <= G.res.stone;
+          acts += `<button id="selRes_${key}" style="${afford ? '' : 'opacity:.5'}">\u2697 ${U.esc(def.name)}${c.wood ? ` ${c.wood}w` : ''}${c.stone ? ` ${c.stone}s` : ''}</button>`;
+        }
+        el.innerHTML = `
+          <h3>Ancient Ruin</h3>
+          <div class="sub">Older than any chronicle. Choose what it wakes as — which ruin you raise shapes the whole run.</div>
+          <div class="sub" style="color:var(--amber)">${U.esc(note)}</div>
+          <div class="selActs">${acts}<button id="selClose">Close</button></div>`;
+        for (const key of Wilds.ANCIENTS) {
+          const rb = document.getElementById('selRes_' + key);
+          if (rb) rb.onclick = () => {
+            if (Wilds.ruinRestore(t.tx, t.ty, key)) this.selHide();
+            else this.selRender();
+          };
+        }
+      } else if (t.o === OBJ.BUSH) {
+        // Grovekeep: wild → tended → heavy-fruiting; cuttings plant new bushes
+        const tnd = Wilds.tendAt(t.tx, t.ty);
+        const nm = !tnd ? 'Berry Bush' : tnd.stage >= 2 ? 'Orchard Bush' : 'Tended Bush';
+        const stage = !tnd ? 'Wild — pickable berries.'
+          : tnd.stage >= 2 ? 'Heavy-fruiting — double berries, forever.'
+            : 'Tended — +2 berries and quicker regrowth.';
+        const prog = tnd && tnd.stage < 2
+          ? `<div class="row"><span class="mLbl">Tending</span><div class="meter mGrow"><div style="width:${U.clamp(tnd.work / (CONFIG.GROVE.stageWork * (tnd.stage + 1)) * 100, 0, 100)}%"></div></div></div>` : '';
+        if (!tnd) acts += `<button id="selTend">Tend (foragers)</button>`;
+        else if (tnd.stage < 2) acts += `<button id="selTendOff">Cancel tending</button>`;
+        if (G.cuttings >= 1) acts += `<button id="selPlantBush">Plant cutting (${G.cuttings})</button>`;
+        if (of) acts += `<button id="selObjBench">\u270b ${U.esc(Bench.GAMES.find(g => g.id === of.id).name)}${Bench.handsLeft() > 0 ? '' : ' (no hands)'}</button>`;
+        el.innerHTML = `
+          <h3>${U.esc(nm)}</h3>
+          <div class="sub">${U.esc(stage)}${of ? '' : ' The bench needs the right duty assigned to lend a hand here.'}</div>
+          ${prog}
+          <div class="selActs">${acts}<button id="selClose">Close</button></div>`;
+        const tb = document.getElementById('selTend');
+        if (tb) tb.onclick = () => {
+          Wilds.orderTend(t.tx, t.ty);
+          this.toast('A Forager will call on this bush across days.', 'good');
+          this.selRender();
+        };
+        const to = document.getElementById('selTendOff');
+        if (to) to.onclick = () => {
+          G.tend.delete(World.idx(t.tx, t.ty));
+          this.toast('Tending called off.', '');
+          this.selRender();
+        };
+        const pb = document.getElementById('selPlantBush');
+        if (pb) pb.onclick = () => { this.setMode({ type: 'plant', what: 'bush' }); };
+      } else {
+        const nm = { [OBJ.TREE]: 'Tree', [OBJ.PINE]: 'Pine', [OBJ.BIRCH]: 'Birch', [OBJ.ROCK]: 'Boulder' }[t.o] || 'Wilds';
+        const amt = World.amtAt(t.tx, t.ty);
+        const sub = t.o === OBJ.ROCK ? `${amt} stone left in it.` : `${amt} wood left in it.`;
+        if (of) acts += `<button id="selObjBench">\u270b ${U.esc(Bench.GAMES.find(g => g.id === of.id).name)}${Bench.handsLeft() > 0 ? '' : ' (no hands)'}</button>`;
+        el.innerHTML = `
+          <h3>${U.esc(nm)}</h3>
+          <div class="sub">${U.esc(sub)}${of ? '' : ' The bench needs the right duty assigned to lend a hand here.'}</div>
+          <div class="selActs">${acts}<button id="selClose">Close</button></div>`;
+      }
       const ob = document.getElementById('selObjBench');
       if (ob) ob.onclick = () => {
         if (!Bench.start(of.id, { tx: t.tx, ty: t.ty, o: t.o })) this.selRender();
       };
+      document.getElementById('selClose').onclick = () => this.selHide();
+    } else if (s.kind === 'd') {
+      // the driven hunt: a deer herd grazing at the map's edge
+      const h = s.ref;
+      if (!G.herd || G.herd !== h) return this.selHide();
+      const dir = h.spawn.x > World.W / 2 ? 'east' : h.spawn.x < World.W / 2 ? 'west' : 'the wilds';
+      el.innerHTML = `
+        <h3>Deer Herd</h3>
+        <div class="sub">${h.deer.length} deer grazing to the ${dir}. ${h.hunt
+          ? 'The hunt is on — your foragers are driving them. Lay or tend <b>spike traps</b> in their flight line; a deer that bolts into one is venison in the store.'
+          : 'Set a hunt and two foragers spend the day driving the herd — toward the <b>spike traps</b> you laid, if you planned the ground. Otherwise they scatter at dusk.'}</div>
+        ${h.caught ? `<div class="sub" style="color:var(--good,#7dc95e)">${h.caught} deer taken so far.</div>` : ''}
+        <div class="selActs">
+          ${h.hunt ? '<button id="selHuntOff">Call off the hunt</button>' : `<button id="selHunt">Set hunt (foragers)</button>`}
+          <button id="selClose">Close</button>
+        </div>`;
+      const sh = document.getElementById('selHunt');
+      if (sh) sh.onclick = () => { Wilds.setHunt(); this.selRender(); };
+      const so = document.getElementById('selHuntOff');
+      if (so) so.onclick = () => { Wilds.callOffHunt(); this.selRender(); };
       document.getElementById('selClose').onclick = () => this.selHide();
     } else if (s.kind === 'b') {
       const b = s.ref;
@@ -7931,7 +9161,8 @@ const UI = {
         return;
       }
       let extra = '';
-      if (!b.built) extra = `<div class="row"><span class="mLbl">Build</span><div class="meter mProg"><div style="width:${(b.progress * 100).toFixed(0)}%"></div></div></div>`;
+      if (!b.built && b.phase === 'decipher') extra = `<div class="row"><span class="mLbl">Decipher</span><div class="meter mProg"><div style="width:${U.clamp((b.decT || 0) / CONFIG.RESTORE.decipherT * 100, 0, 100)}%"></div></div></div><div class="sub" style="color:var(--purple)">A Scribe reads the old script — Builders wait on the words.</div>`;
+      else if (!b.built) extra = `<div class="row"><span class="mLbl">Build</span><div class="meter mProg"><div style="width:${(b.progress * 100).toFixed(0)}%"></div></div></div>`;
       else if (b.key === 'farm') extra = `<div class="row"><span class="mLbl">Wheat</span><div class="meter mGrow"><div style="width:${(b.growth * 100).toFixed(0)}%"></div></div></div>`;
       else if (b.def.kind === 'tower') extra = `<div class="sub">Damage ${b.def.atk.dmg} \u00b7 Range ${b.def.atk.range}</div>`;
       else if (b.def.housing) extra = `<div class="sub">Shelters ${b.def.housing}</div>`;
@@ -7953,6 +9184,11 @@ const UI = {
           if (hands <= 0) benchNote = 'No warm hands left today — they refill at dawn.';
         }
         if (b.key === 'mine' && !Bench.seam) benchActs += `<button id="selSeam">\u2b07 Dig Deeper</button>`;
+        if (b.key === 'nursery') {
+          const sap = b.sap || 0;
+          benchNote = `Every ${CONFIG.NURSERY.fellsPerSapling} felled trees pot a sapling here (${G.fellCount % CONFIG.NURSERY.fellsPerSapling} of the way).`;
+          benchActs += `<button id="selPlantSap" ${sap ? '' : 'style="opacity:.55"'}>Plant sapling (${sap} potted)</button>`;
+        }
         if (b.key === 'brazier' && !b.lit) {
           const can = G.res.wood >= CONFIG.BRAZIER.kindleWood && G.res.essence >= CONFIG.BRAZIER.kindleEss;
           benchActs += `<button id="selKindle" ${can ? '' : 'style="opacity:.55"'}>Kindle${Bench.handsLeft() > 0 ? ' \u270b' : ''}</button>`;
@@ -7987,6 +9223,11 @@ const UI = {
       };
       const ss = document.getElementById('selSeam');
       if (ss) ss.onclick = () => { Seam.start(b); };
+      const sp = document.getElementById('selPlantSap');
+      if (sp) sp.onclick = () => {
+        if ((b.sap || 0) < 1) { this.toast('No saplings potted yet — the nursery pots one for every 2 felled trees.', 'bad'); return; }
+        this.setMode({ type: 'plant', what: 'sapling' });
+      };
       const sk = document.getElementById('selKindle');
       if (sk) sk.onclick = () => {
         if (Bench.handsLeft() > 0 && isDayLike()) { Bench.start('spark', { b }); return; }
@@ -8111,7 +9352,8 @@ const UI = {
     // top group the moment they unlock (stable sort keeps roster order)
     keys.sort((a, b) => (G.unlocks[a] ? 0 : 1) - (G.unlocks[b] ? 0 : 1));
     if (cat === 'basics' || cat === 'defense') keys.push('__demolish');
-    if (cat === 'basics') keys.push('__clear');
+    if (cat === 'basics') { keys.push('__clear'); keys.push('__dig'); }
+    if (cat === 'mystic') { keys.push('__sigilWard'); keys.push('__sigilHallow'); }
     for (const k of keys) {
       if (k === '__demolish') {
         const card = document.createElement('button');
@@ -8134,6 +9376,31 @@ const UI = {
         card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'clear' }); this.closePanel(); };
         this.drawCardIcon(card, 'tree0', true);
         this.holdInfo(card, `<b>Clear Land</b> — mark trees, boulders, berry bushes, ruins or crystals and a Builder clears the tile (half the yield is salvaged). Tap shore water to fill it with stone (${CONFIG.CLEAR.waterCost} stone a tile) and make new land. Tap again to cancel.`);
+        grid.appendChild(card);
+        continue;
+      }
+      if (k === '__dig') {
+        const card = document.createElement('button');
+        card.className = 'bcard' + (this.mode && this.mode.type === 'dig' ? ' sel' : '');
+        card.innerHTML = `<canvas width="16" height="16" style="background:#2a2a33"></canvas>
+          <div><div class="bn">The Spade</div><div class="bc"><span>builders</span></div>
+          <div class="bd">Mark dry tiles — a Builder digs them down to pond water. Reeds (herbs) sprout at the margin.</div></div>`;
+        card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'dig' }); this.closePanel(); };
+        this.drawCardIcon(card, 'dirt', true);
+        this.holdInfo(card, `<b>The Spade</b> — mark dry, open ground and a Builder carves the tile down until water springs (about ${CONFIG.SPADE.digTime}s a tile). Ponds let Fishing Docks sit inland and grow <b>reeds</b> — herbs at the margin. Tap a mark again to cancel.`);
+        grid.appendChild(card);
+        continue;
+      }
+      if (k === '__sigilWard' || k === '__sigilHallow') {
+        const kind = k === '__sigilWard' ? 'ward' : 'hallow';
+        const card = document.createElement('button');
+        card.className = 'bcard' + (this.mode && this.mode.type === 'sigil' && this.mode.kind === kind ? ' sel' : '');
+        card.innerHTML = `<canvas width="16" height="16" style="background:#20242e"></canvas>
+          <div><div class="bn">${kind === 'ward' ? 'Ward Sigil' : 'Hallow Sigil'}</div><div class="bc"><span>1 herb + 1 charcoal</span></div>
+          <div class="bd">${kind === 'ward' ? 'Chalk a line — monsters crossing it at night slow down and take +25% damage.' : 'Chalk a circle — your folk inside hold their ground; guards strike +10%.'}</div></div>`;
+        card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'sigil', kind }); this.closePanel(); };
+        this.drawCardIcon(card, kind === 'ward' ? 'ic_ward' : 'ic_hallow', true);
+        this.holdInfo(card, `<b>${kind === 'ward' ? 'Ward' : 'Hallow'} Sigil</b> — drag on open ground to draw the chalk (each stroke is one sigil; six hold at once). Salting it costs 1 herb + 1 charcoal, it charges through the day, and at dusk it ${kind === 'ward' ? 'blooms: monsters crossing the chalk crawl at half speed and take +25% damage.' : 'blooms: villagers inside won\u2019t break and run, and guards strike +10% harder.'} Dawn washes the chalk away.`);
         grid.appendChild(card);
         continue;
       }
@@ -8567,6 +9834,8 @@ const UI = {
     this.mode = m;
     this.ghost = null;
     this._ghostParked = false;
+    // an abandoned (or switched) sigil draft washes away
+    if (G.sigilDraft && (!m || m.type !== 'sigil' || m.kind !== G.sigilDraft.kind)) Wilds.draftCancel();
     const chip = this.els.modeChip;
     if (!m) { chip.classList.add('hidden'); return; }
     // placement owns the bottom of the screen — drop any open selection card
@@ -8581,6 +9850,12 @@ const UI = {
       this.els.modeChipText.textContent = 'Demolish — tap buildings';
     } else if (m.type === 'clear') {
       this.els.modeChipText.textContent = 'Clear Land — trees, rocks & shore water';
+    } else if (m.type === 'dig') {
+      this.els.modeChipText.textContent = 'The Spade — tap dry tiles to carve ponds';
+    } else if (m.type === 'plant') {
+      this.els.modeChipText.textContent = m.what === 'bush' ? `Plant cutting — tap grass (${G.cuttings} in store)` : `Plant sapling — tap grass (${(Wilds.nursery() ? Wilds.nursery().sap : 0) || 0} potted)`;
+    } else if (m.type === 'sigil') {
+      this.els.modeChipText.textContent = m.kind === 'ward' ? 'Ward sigil — drag to chalk a line (1 herb + 1 charcoal)' : 'Hallow sigil — drag to chalk a circle (1 herb + 1 charcoal)';
     } else if (m.type === 'power') {
       this.els.modeChipText.textContent = `${POWERS[m.key].name} — tap target`;
     }
@@ -8632,6 +9907,30 @@ const UI = {
       else if (r === 'water') this.toast('A Builder will fill this water with stone.', '');
       else if (r === 'on') this.toast('A Builder will clear this tile.', '');
       this.updateHUD();
+    } else if (m.type === 'dig') {
+      const r = Wilds.toggleDig(tileX, tileY);
+      if (r === 'off') this.toast('Dig order cancelled.', '');
+      else if (r === 'on') this.toast('A Builder will dig this tile down to water.', '');
+      else this.toast('The Spade needs dry, open ground.', 'bad');
+      this.updateHUD();
+    } else if (m.type === 'plant') {
+      const ok = m.what === 'bush' ? Wilds.plantBush(tileX, tileY) : Wilds.plantSapling(tileX, tileY);
+      if (ok) {
+        this.toast(m.what === 'bush' ? 'The cutting takes root — a wild bush, yours now.' : 'The sapling is planted — a grove begins.', 'good');
+        this.updateHUD();
+      } else if (m.what === 'bush' && G.cuttings < 1) {
+        this.toast('No cuttings in store — tend wild bushes to spare some.', 'bad');
+      } else if (m.what === 'sapling' && !(Wilds.nursery() && (Wilds.nursery().sap || 0) >= 1)) {
+        this.toast('No saplings potted — the nursery pots one for every 2 felled trees.', 'bad');
+      } else {
+        this.toast('Plants need open grass or dirt.', 'bad');
+      }
+    } else if (m.type === 'sigil') {
+      // a tap with no drag chalks a single tile
+      if (!isDayLike()) { this.toast('Sigils are chalked by day — the dusk wakes them.', 'bad'); return; }
+      if (!G.sigilDraft) Wilds.draftStart(m.kind);
+      Wilds.draftAdd(tileX, tileY);
+      Wilds.draftCommit();
     } else if (m.type === 'power') {
       Powers.cast(m.key, tileX + 0.5, tileY + 0.5);
       this.updateHUD();
@@ -8694,14 +9993,22 @@ const UI = {
       if (p.moved) {
         const paint = this.mode && this.mode.type === 'build' && BUILD[this.mode.key] && BUILD[this.mode.key].paint;
         const demo = this.mode && this.mode.type === 'demolish';
+        const sig = this.mode && this.mode.type === 'sigil';
         const steer = this.mode && this.mode.type === 'build' && !BUILD[this.mode.key].paint;
-        if ((paint || demo) && G.state === 'playing') {
+        if ((paint || demo || sig) && G.state === 'playing') {
           const w = Render.screenToWorld(e.clientX, e.clientY);
           const tx = (w.x / 16) | 0, ty = (w.y / 16) | 0;
           if (!this._lastTile || this._lastTile.x !== tx || this._lastTile.y !== ty) {
             this._lastTile = { x: tx, y: ty };
             this.ghost = { x: tx, y: ty };
-            this.tryPlace(tx, ty);
+            if (sig) {
+              // chalk follows the drag; the shape is salted & committed on release
+              if (!G.sigilDraft) {
+                if (!isDayLike()) { this.toast('Sigils are chalked by day — the dusk wakes them.', 'bad'); return; }
+                Wilds.draftStart(this.mode.kind);
+              }
+              Wilds.draftAdd(tx, ty);
+            } else this.tryPlace(tx, ty);
           }
         } else if (steer && G.state === 'playing') {
           // placing a building: one finger steers the ghost, release parks it,
@@ -8729,6 +10036,8 @@ const UI = {
       if (this._pt.size < 2) this._pinch = null;
       this._lastMx = undefined; this._lastMy = undefined;
       this._lastTile = null;
+      // a finished chalk stroke is salted and set — the mode stays for the next sigil
+      if (this.mode && this.mode.type === 'sigil' && G.sigilDraft && G.sigilDraft.tiles.length) Wilds.draftCommit();
       if (!p) return;
       const dt = performance.now() - p.t;
       if (!p.moved && dt < 800 && G.state === 'playing') this.tap(e.clientX, e.clientY);
@@ -8807,6 +10116,11 @@ const UI = {
         if (d < bd) { bd = d; best = { kind: 'v', ref: v }; }
       }
     }
+    if (!best && G.herd) {
+      for (const d of G.herd.deer) {
+        if (U.dst(wx, wy, d.x, d.y) < 0.8) { best = { kind: 'd', ref: G.herd }; break; }
+      }
+    }
     if (!best) {
       let b = World.bldAt(wx | 0, wy | 0);
       if (!b) {
@@ -8817,11 +10131,11 @@ const UI = {
       }
       if (b) best = { kind: 'b', ref: b };
     }
-    // nothing standing — a wild worksite the bench can play at?
+    // nothing standing — a wild worksite, an ordered bush, or an old ruin?
     if (!best) {
       const tx = wx | 0, ty = wy | 0;
       const o = World.objAt(tx, ty);
-      if (Bench.siteObj(tx, ty)) best = { kind: 'o', ref: { tx, ty, o } };
+      if (o === OBJ.BUSH || o === OBJ.RUIN || Bench.siteObj(tx, ty)) best = { kind: 'o', ref: { tx, ty, o } };
     }
     if (best) { this.select(best.kind, best.ref); G.follow = null; }
     else this.selHide();
@@ -8924,7 +10238,7 @@ const UI = {
       <ul>
         <li><b>Forager</b> — berries. Fast early food; bushes regrow daily.</li>
         <li><b>Lumberjack</b> — wood for tents, palisades, towers.</li>
-        <li><b>Miner</b> — stone from boulders; salvages ancient ruins; cracks crystal lodes for essence; works Mine Shafts when lodes run dry — and descends into <b>the Deep Seam</b> if you order it.</li>
+        <li><b>Miner</b> — stone from boulders; cracks crystal lodes for essence; works Mine Shafts when lodes run dry — and descends into <b>the Deep Seam</b> if you order it.</li>
         <li><b>Farmer</b> — tends wheat plots. A Windmill nearby grows them 35% faster.</li>
         <li><b>Fisher</b> — works a Fishing Dock on the shore. Steady food, no farmland.</li>
         <li><b>Medic</b> — gathers herbs to stock the Hospital, which mends the wounded nearby. Needs a built Hospital (day 2).</li>
@@ -8941,6 +10255,16 @@ const UI = {
       <p>A <b>Brazier</b> kindled with wood and essence burns all night as a great light — and set beside a Dark Monolith it slowly <b>cleanses</b> it: no mending, no defenders, until the stone cracks into salvageable dawn-stone. No raid, no graves. The <b>Muster Yard</b> drills your guards against a straw effigy: pick shields (runners), pikes (brutes) or scatter (stalkers) for a permanent +10% damage per drill (stacks to +30%), ring the horn to rally off-duty guards — or play the drill for real and the bonus lands a day early.</p>
       <h2>The Deep Seam</h2>
       <p>Order <b>Dig Deeper</b> on a Mine Shaft and a miner spends the day below while you watch the wheel. Each level the seam gets richer — stone, double stone, flint (tools last +25% for days), then crystal flecks of essence — but every level spins the wheel: <b>okay, injured, or dead</b>. Injured miners crawl out hurt and the tunnel seals; dead ones are lost to the dark. If the worst happens you get one chance at the <b>rescue</b>: steer the ropeline through falling rock, and the injured walk away clean while the dead come up hurt but alive. Climb out any time to bank the haul.</p>
+      <h2>Wildcraft — the village edits the map</h2>
+      <ul>
+        <li><b>Grovekeep</b> — tap a wild berry bush and order <b>Tend</b>: a Forager calls on it across days until it's <b>tended</b> (+2 berries, faster regrow), then <b>heavy-fruiting</b> (double berries, for good). Tended bushes may spare <b>cuttings</b> when harvested — plant them anywhere to breed your own orchards.</li>
+        <li><b>The Nursery</b> — every 2 trees your Lumberjacks fell pots a <b>sapling</b>. Select the nursery to plant them out as groves: wood stops being strip-mining and becomes forestry.</li>
+        <li><b>The Spade</b> — mark dry tiles (Build panel) and a Builder digs them down to <b>pond</b> water. Docks can sit inland on ponds, and <b>reeds</b> — herbs — sprout at the margin.</li>
+        <li><b>Sigils</b> — drag to draw chalk on open ground (Build &rarr; Mystic); salting a stroke costs 1 herb + 1 charcoal. A <b>ward</b> blooms at dusk: monsters crossing it crawl at half speed and take +25% damage. A <b>hallow</b> steadies your folk inside: no fleeing, guards +10%. Dawn washes the chalk away; six sigils hold at once.</li>
+        <li><b>Restoration</b> — tap an <b>Ancient Ruin</b> and choose what it wakes as: the <b>Aqueduct</b> (wells +50%, folk drink on the spot nearby), the <b>Dawn Shrine</b> (essence regen +50%), the <b>Sky Watch</b> (towers +1.5 range, tonight's attack direction revealed at dawn) or the <b>Root Cellar</b> (food cap +80, nothing spoils). A Scribe deciphers for a stretch, Builders scaffold after — which ruin you raise shapes the whole run.</li>
+        <li><b>Banns &amp; blessings</b> — villagers who work side by side grow attached, and in time a pair asks leave to wed. Tap either to <b>bless the banns</b>: a feast (1 ale + food) puts +10% into the next day's work, the couple raises a <b>shared hut</b>, and they work +10% while together.</li>
+        <li><b>The driven hunt</b> — some mornings a <b>deer herd</b> grazes at the map's edge. Tap a deer and <b>set a hunt</b>: two foragers spend the day driving it — toward the <b>spike traps</b> you laid, if you planned the ground. Each deer driven into the line is a heap of venison; a botched drive scatters the herd by dusk.</li>
+      </ul>
       <h2>Supply Lines</h2>
       <ul>
         <li><b>Arrows are ammunition</b> — every tower shot spends 1 (ballistae 2), and raids pack quivers (5). Dry quivers: towers hold fire, guards hit at 75%. Build a Fletcher Hut before your towers go up.</li>

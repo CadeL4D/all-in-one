@@ -215,6 +215,43 @@ const BUILD = {
     short: 'Drill guards vs a monster type: +10% damage. Rally horn.',
     desc: 'Guards drill against a straw-and-bone effigy. Pick the drill — shields (vs runners), pikes (vs brutes), scatter (vs stalkers) — and drilled guards strike +10% harder against that type (stacks to +30%). Ring the horn and off-duty guards run to the yard.',
   },
+  nursery: {
+    name: 'Tree Nursery', cat: 'basics', w: 2, h: 2, hp: 280, cost: { wood: 14, stone: 4 }, time: 30,
+    kind: 'nursery', capOne: true, light: 1.4, tall: 6, unlock: 4,
+    short: 'Every 2 felled trees root a sapling — plant groves.',
+    desc: `Seedbeds and sapling pots. Every ${CONFIG.NURSERY.fellsPerSapling} trees the Lumberjacks fell, a sapling is potted here; carry them out and plant groves anywhere — wood stops being strip-mining and becomes forestry. Only one may stand.`,
+  },
+  sharedhut: { // raised by a blessed couple — never built from the menu
+    name: 'Shared Hut', cat: null, w: 2, h: 2, hp: 340, cost: {}, time: 26,
+    housing: 2, comfort: 2, light: 2.4, kind: 'house', unlock: 99,
+    short: 'A wedded pair\u2019s home: two beds, snug comfort.',
+    desc: 'Two beds under one roof, raised by the couple themselves. Snug comfort, and the two of them work +10% while side by side.',
+  },
+  // ---- the ancient buildings: a ruin restores into exactly one of these ----
+  aqueduct: {
+    name: 'Aqueduct', cat: null, w: 1, h: 1, hp: 380, cost: { wood: 8, stone: 16 }, time: 65,
+    kind: 'aqueduct', light: 1.5, tall: 14, unlock: 99,
+    short: 'Ancient: wells +50%; folk drink on the spot nearby.',
+    desc: 'Old stone channels wake and run sweet. Wells draw half again as fast, and anyone working within 4 tiles drinks straight from the spout — no walk, no bottle.',
+  },
+  dawnshrine: {
+    name: 'Dawn Shrine', cat: null, w: 1, h: 1, hp: 300, cost: { stone: 12 }, time: 55,
+    kind: 'dawnshrine', light: 3.2, tall: 10, essence: true, unlock: 99,
+    short: 'Ancient: essence regenerates +50%.',
+    desc: 'A dawn-carved altar that still remembers the light. Essence seeps back half again as fast while it stands; villagers pause to pray there.',
+  },
+  skywatch: {
+    name: 'Sky Watch', cat: null, w: 1, h: 1, hp: 360, cost: { wood: 10, stone: 12 }, time: 60,
+    kind: 'skywatch', light: 2.0, tall: 20, unlock: 99,
+    short: 'Ancient: towers +1.5 range; dusk warnings a dawn early.',
+    desc: 'A leaning watch-spire, its optics still true. Towers reach 1.5 tiles further, and the watchers read tonight\u2019s attack direction at dawn — a full day\u2019s warning.',
+  },
+  cellar: {
+    name: 'Root Cellar', cat: null, w: 1, h: 1, hp: 320, cost: { wood: 14, stone: 6 }, time: 50,
+    kind: 'cellar', light: 1.0, unlock: 99,
+    short: 'Ancient: food cap +80; nothing spoils.',
+    desc: 'Cool, dry, older than the village above it. The food store deepens by 80 — and what goes in keeps: no more dawn rot.',
+  },
   beacon: {
     name: 'The Beacon', cat: 'mystic', w: 3, h: 3, hp: 900, cost: { wood: 100, stone: 80 }, time: 110,
     kind: 'beacon', light: 0, tall: 40, unlock: 10,
@@ -439,6 +476,7 @@ const Buildings = {
     if (type === 'food' || type === 'meals' || type === 'ale' || type === 'herbs') {
       const gran = G.buildings.filter(b => b.built && b.key === 'granary').length;
       cap += gran * (type === 'herbs' ? 10 : S.perGranary);
+      if (type === 'food') cap += G.buildings.filter(b => b.built && b.key === 'cellar').length * CONFIG.RESTORE.cellarFood;
     }
     if (type === 'wood' || type === 'stone') {
       const sto = G.buildings.filter(b => b.built && b.key === 'storehouse').length;
@@ -473,6 +511,8 @@ const Buildings = {
     const night = isNightLike();
     const hasBarracks = G.buildings.some(b => b.built && b.key === 'barracks');
     const hasBakery = G.buildings.some(b => b.built && b.key === 'bakery');
+    const hasSky = G.buildings.some(b => b.built && b.key === 'skywatch'); // towers reach further
+    const wellBoost = G.buildings.some(b => b.built && b.key === 'aqueduct') ? CONFIG.RESTORE.wellMul : 1;
     const windmills = [];
     for (const b of G.buildings) if (b.built && b.key === 'windmill') windmills.push(b);
     for (const b of G.buildings) {
@@ -507,10 +547,10 @@ const Buildings = {
         }
       }
       // wells draw a bucket at a time into the village store (C5: well
-      // output is a difficulty lever)
+      // output is a difficulty lever; the ancient Aqueduct wakes a +50% flow)
       if (b.def.kind === 'well' && b.built) {
         b.genT = (b.genT || 0) + dt;
-        if (b.genT >= CONFIG.WELL.genT / ((G.diffM && G.diffM.wellMul) || 1)) {
+        if (b.genT >= CONFIG.WELL.genT / (((G.diffM && G.diffM.wellMul) || 1) * wellBoost)) {
           b.genT = 0;
           if (G.res.water < Buildings.capOf('water')) Sim.gain('water', 1);
         }
@@ -589,10 +629,11 @@ const Buildings = {
           }
         }
       }
-      // towers shoot
+      // towers shoot (the Sky Watch's old optics reach 1.5 tiles further)
       if (b.def.kind === 'tower' && b.built && b.cd <= 0) {
         const cx = b.x + .5, cy = b.y + .5;
-        let tgt = null, bd = b.def.atk.range * b.def.atk.range;
+        const range = b.def.atk.range + (hasSky ? CONFIG.RESTORE.skyRange : 0);
+        let tgt = null, bd = range * range;
         for (const m of G.monsters) {
           if (m.dead) continue;
           const d = U.dst2(cx, cy, m.x, m.y);
