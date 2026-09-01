@@ -7,25 +7,6 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
-> **v1.6.0 — The Wildcraft Update:** the village stops strip-mining the map
-and starts *editing* it. Order **Tend** on wild berry bushes until they stand
-*tended* and then *heavy-fruiting* — tended harvests sometimes spare a
-**cutting** the village can plant anywhere. The **Tree Nursery** pots a
-sapling for every 2nd tree the Lumberjacks fell, and planted groves grow
-back into oaks and pines. Builders **dig ponds** tile by tile — Fishing
-Docks move inland, and reeds (herbs) sprout at the margin. And the guardian
-draws will on the ground: **sigil-craft** chalks a **ward** (monsters
-crossing it crawl and take +25% damage) or a **hallow** (guards +10%,
-workers don't break) that blooms at dusk and washes at dawn. The ancient
-**ruins wake**: pick what a ruin becomes — **Aqueduct, Dawn Shrine, Sky
-Watch or Root Cellar** — and a Scribe deciphers while Builders raise it.
-Two villagers who work side by side grow attached and **ask leave to wed** —
-bless the banns for the feast, the shared hut and the couple's +10% aura.
-And on some dawns a **deer herd** grazes in from the wilds: set the hunt,
-lay the spike-line in their path, and drive them in. All of it is optional
-upside — no new stocks, jobs or panels, and a village that never wildcrafts
-still holds its walls.
-
 > **v1.5.0 — The Daycraft Update:** the day itself becomes playable. The
 **bench** gives the guardian **six warm hands a day** (a little hand-meter by
 the dock) to spend on ~8-second touch-work at any ready worksite — **fourteen
@@ -120,59 +101,6 @@ portable file anytime with `node rebake.js`.
 ---
 
 ## Changelog
-
-### v1.6.0 — The Wildcraft Update
-- **Grovekeep — bushes become orchards.** Order **Tend** on a wild berry
-  bush and a Forager calls on it across the days: wild → *tended* (10s of
-  tending; **+2 berries**, regrows 1.35× faster) → *heavy-fruiting* (20s
-  more; **double yield**, 1.8× regrow — an orchard bush for good). Harvests
-  of tended bushes have a 60% chance to spare a **cutting**; plant cuttings
-  on open grass or dirt and a full bush stands there the same minute.
-- **The Tree Nursery — wood becomes forestry.** 14 wood + 4 stone, one per
-  village. Every 2nd tree the Lumberjacks fell pots a **sapling** there;
-  carry saplings out and plant groves anywhere — each grows into a tree
-  (oak, or a windbreak pine) in ~110s.
-- **The Spade — dig where the water should be.** Order a dig on any clear
-  tile and a Builder hauls it down to shallow water (~6s a tile). A pond
-  lets a **Fishing Dock stand inland**, and 35% of fresh pond edges sprout a
-  **reed** — harvestable herbs on a shore you made.
-- **Sigil-craft — draw where the night should bend.** Pick **ward** or
-  **hallow**, drag to chalk the circle (up to 90 tiles), salt it with
-  **1 herb + 1 charcoal**, and it charges through the day: at **dusk it
-  blooms**, at **dawn the chalk washes away**. A bloomed **ward** marks
-  monsters crossing it — they crawl and take **+25% damage** while on the
-  chalk. A bloomed **hallow** steadies everything inside: guards strike
-  **+10%**, and workers there hold their ground instead of fleeing. Only
-  six sigils hold at once — the oldest chalk crumbles.
-- **Restoration — the ruins wake.** Tap an ancient ruin and choose what it
-  becomes: the **Aqueduct** (8w+16s; wells draw **+50%**, anyone within 4
-  tiles drinks on the spot), the **Dawn Shrine** (12s; essence regenerates
-  **+50%**), the **Sky Watch** (10w+12s; towers reach **+1.5 tiles** and
-  tonight's attack direction is read at **dawn** — a full day's warning) or
-  the **Root Cellar** (14w+6s; food cap **+80**, and **nothing spoils**).
-  A Scribe deciphers the old script (~60s), then Builders raise it. Each
-  ruin yields exactly one ancient, so which ruins your map spawns shapes
-  the whole run.
-- **Banns & blessings — the village grows families.** Two unmarried
-  villagers who work side by side (~3.5 tiles) grow attached, and after
-  ~150s together they **ask leave to wed**. Bless them (1 ale + 6 food):
-  they're wed, the village feasts (**+10% work the next day**), a **shared
-  hut** — two beds, snug comfort — rises by camp, and the couple works
-  **+10% whenever they're together**. Death untangles the betrothal gently;
-  up to three banns may wait at once.
-- **The driven hunt — food you plan for.** From day 2, some dawns (45%) a
-  herd of 4–6 deer steps from the wilds to graze. Tap a deer to set the
-  hunt: the two nearest Foragers spend the day at its flank. Deer bolt from
-  a driver within 5.5 tiles, and a **spike-line laid in the bolt-line bends
-  the flee** — every deer that finds the line is **+14 venison** (traps
-  wear; a flattened trap is the cost of a sloppy line). At dusk the rest
-  scatter into the wilds.
-- **All of it rides the save** — tend stages, cuttings, chalk sigils, dig
-  orders, potted saplings, banns, marriages re-linked by id, the herd and
-  its drivers, the pending feast — and a v1.5 save loads clean with
-  wildcraft defaults. 112 new headless checks (643 green across the four
-  suites), and `rebake.js` is now the verified incremental baker it always
-  claimed to be.
 
 ### v1.5.0 — The Daycraft Update
 - **The bench — six warm hands a day.** A small hand-meter by the dock
@@ -690,8 +618,6 @@ js/world.js         seeded map gen (noise), guarantees, baking, queries
 js/path.js          A* (binary heap, 8-dir); monsters path through walls
 js/buildings.js     BUILD defs; placement/construction/farms/towers/repair
 js/entities.js      villager & monster factories, names, traits
-js/wilds.js         the wildcraft: grovekeep, nursery, spade, sigils,
-                    restoration, banns, the driven hunt
 js/game.js          simulation, day cycle, jobs, waves, combat, events
 js/powers.js        Mend / Smite / Stasis / Meteor
 js/daycraft.js      the bench: 14 minigames, warm hands, braziers'
@@ -722,8 +648,8 @@ redraws at ~3Hz.
 *(Shipped in v1.5.0: the whole minigame bench below, The Kindling's
 braziers, The Muster Yard's drills and The Deep Seam — with the seam
 reworked into a spinning wheel of okay/injured/dead and a rescue skill game.
-Shipped in v1.6.0 — The Wildcraft Update: the wilds-shaping, sigil-craft,
-restoration, banns and driven-hunt sections below.)*
+The wilds-shaping, sigil-craft, restoration, banns and driven-hunt ideas
+further down remain candidates.)*
 
 *(The previous backlog batch bet on timers and pressure; this one bets the
 other way. The complaint it answers: by mid-morning of any day the player is

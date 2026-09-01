@@ -100,7 +100,6 @@ const Render = {
           case OBJ.STUMP: spr = Art.s.stump; break;
           case OBJ.SAPLING: spr = Art.s.sapling; break;
           case OBJ.GRAVE: spr = Art.s.grave; break;
-          case OBJ.REED: spr = World.amt[oi] > 0 ? Art.s.reedF : Art.s.reedE; break;
         }
         if (spr) {
           const py = (ty + 1) * 16 - spr.height;
@@ -133,19 +132,11 @@ const Render = {
       if (m.x * 16 < (x0 - 3) * 16 || m.x * 16 > (x1 + 3) * 16 || m.y * 16 < (y0 - 3) * 16 || m.y * 16 > (y1 + 3) * 16) continue;
       draws.push({ y: m.y * 16, fn: () => this.drawMonster(ctx, m) });
     }
-    // the deer herd (the driven hunt)
-    if (G.herd) {
-      for (const d of G.herd.deer) {
-        if (d.x * 16 < (x0 - 2) * 16 || d.x * 16 > (x1 + 2) * 16 || d.y * 16 < (y0 - 2) * 16 || d.y * 16 > (y1 + 2) * 16) continue;
-        draws.push({ y: d.y * 16, fn: () => this.drawDeer(ctx, d) });
-      }
-    }
 
     draws.sort((a, b) => a.y - b.y);
     for (const d of draws) d.fn();
 
     this.drawClearMarks(ctx, x0, y0, x1, y1);
-    this.drawWildsMarks(ctx, x0, y0, x1, y1);
     this.drawEffects(ctx);
     this.drawGhost(ctx, x0, y0, x1, y1);
 
@@ -390,84 +381,6 @@ const Render = {
     }
   },
 
-  drawDeer(ctx, d) {
-    const spr = Art.s['deer' + (((d.anim | 0) % 2))];
-    if (!spr) return;
-    const px = d.x * 16 - spr.width / 2, py = d.y * 16 - spr.height + 2;
-    ctx.fillStyle = 'rgba(0,0,0,.25)';
-    ctx.beginPath();
-    ctx.ellipse(d.x * 16, d.y * 16 + 1, 5, 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.drawImage(spr, px | 0, py | 0);
-    if (G.sel && G.sel.kind === 'd') {
-      ctx.strokeStyle = '#ffe9a0';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(d.x * 16, d.y * 16, 8, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  },
-
-  // wildcraft ground marks: tend stakes, dig brackets, and the sigil chalk
-  drawWildsMarks(ctx, x0, y0, x1, y1) {
-    const pulse = 0.6 + Math.sin(this._t * 3) * 0.2;
-    // Grovekeep: a tiny stake with stage dots by every ordered bush
-    for (const [i, t] of G.tend) {
-      const x = i % World.W, y = (i / World.W) | 0;
-      if (x < x0 - 1 || x > x1 + 1 || y < y0 - 1 || y > y1 + 1) continue;
-      if (World.obj[i] !== OBJ.BUSH) continue;
-      ctx.fillStyle = `rgba(143,212,94,${t.stage >= 2 ? 0.95 : pulse})`;
-      ctx.fillRect(x * 16 + 1, y * 16 + 12, 2, 4);
-      ctx.fillStyle = t.stage >= 1 ? '#8fd45e' : 'rgba(232,228,216,.6)';
-      ctx.fillRect(x * 16 + 1, y * 16 + 10, 2, 2);
-      if (t.stage >= 2) { ctx.fillStyle = '#ffd94a'; ctx.fillRect(x * 16 + 1, y * 16 + 8, 2, 2); }
-    }
-    // the Spade: blue corner brackets on queued dig tiles
-    for (const t of G.digJobs) {
-      if (t.x < x0 - 1 || t.x > x1 + 1 || t.y < y0 - 1 || t.y > y1 + 1) continue;
-      const px = t.x * 16, py = t.y * 16;
-      ctx.strokeStyle = `rgba(133,183,222,${pulse + 0.2})`;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(px + 2, py + 6); ctx.lineTo(px + 2, py + 2); ctx.lineTo(px + 6, py + 2);
-      ctx.moveTo(px + 10, py + 2); ctx.lineTo(px + 14, py + 2); ctx.lineTo(px + 14, py + 6);
-      ctx.moveTo(px + 14, py + 10); ctx.lineTo(px + 14, py + 14); ctx.lineTo(px + 10, py + 14);
-      ctx.moveTo(px + 6, py + 14); ctx.lineTo(px + 2, py + 14); ctx.lineTo(px + 2, py + 10);
-      ctx.stroke();
-    }
-    ctx.lineWidth = 1;
-    // sigil chalk: a dashed chalk square per tile, brighter once bloomed
-    const chalk = (tiles, col, alpha, dashOff) => {
-      ctx.strokeStyle = col;
-      ctx.globalAlpha = alpha;
-      ctx.setLineDash([3, 3]);
-      ctx.lineDashOffset = dashOff;
-      for (const t of tiles) {
-        if (t.x < x0 - 1 || t.x > x1 + 1 || t.y < y0 - 1 || t.y > y1 + 1) continue;
-        ctx.strokeRect(t.x * 16 + 1.5, t.y * 16 + 1.5, 13, 13);
-      }
-      ctx.setLineDash([]);
-      ctx.globalAlpha = 1;
-    };
-    for (const s of G.sigils) {
-      const ward = s.kind === 'ward';
-      const col = ward ? '#ffb057' : '#7de0d4';
-      chalk(s.tiles, col, s.bloomed ? 0.95 : pulse * 0.7, ward ? 0 : 4);
-      if (s.bloomed) {
-        // a glow stone at the sigil's heart
-        const c = s.tiles[(s.tiles.length / 2) | 0];
-        ctx.fillStyle = ward ? 'rgba(255,176,87,.5)' : 'rgba(125,224,212,.5)';
-        ctx.beginPath();
-        ctx.arc((c.x + .5) * 16, (c.y + .5) * 16, 3 + Math.sin(this._t * 5) * 0.8, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    // the draft being drawn right now
-    if (G.sigilDraft && G.sigilDraft.tiles.length) {
-      chalk(G.sigilDraft.tiles, G.sigilDraft.kind === 'ward' ? '#e8e4d8' : '#cfeee8', 0.9, -(this._t * 6) % 6);
-    }
-  },
-
   drawGhost(ctx, x0, y0, x1, y1) {
     const mode = UI.mode;
     if (!mode || !UI.ghost) return;
@@ -511,30 +424,6 @@ const Render = {
     } else if (mode.type === 'clear') {
       ctx.strokeStyle = 'rgba(150,255,140,.9)';
       ctx.strokeRect(gx * 16 + .5, gy * 16 + .5, 15, 15);
-    } else if (mode.type === 'dig') {
-      // a tile about to become pond: blue wash + a shovel stroke
-      const ok = !World.bldAt(gx, gy) && World.tileT(gx, gy) !== T.WATER;
-      ctx.fillStyle = ok ? 'rgba(110,170,220,.30)' : 'rgba(230,80,80,.30)';
-      ctx.fillRect(gx * 16, gy * 16, 16, 16);
-      ctx.strokeStyle = ok ? 'rgba(160,210,250,.9)' : 'rgba(255,110,110,.9)';
-      ctx.strokeRect(gx * 16 + .5, gy * 16 + .5, 15, 15);
-    } else if (mode.type === 'plant') {
-      // a sapling or cutting about to go into the ground
-      const ok = Wilds.canPlantBush(gx, gy) && (mode.what === 'bush' ? G.cuttings >= 1 : !!Wilds.nursery() && (Wilds.nursery().sap || 0) >= 1);
-      ctx.strokeStyle = ok ? 'rgba(150,255,140,.9)' : 'rgba(255,110,110,.9)';
-      ctx.beginPath();
-      ctx.arc(gx * 16 + 8, gy * 16 + 12, 6, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = .6;
-      const spr = mode.what === 'bush' ? Art.s.bushF : Art.s.sapling;
-      if (spr) ctx.drawImage(spr, gx * 16, (gy + 1) * 16 - spr.height);
-      ctx.globalAlpha = 1;
-    } else if (mode.type === 'sigil') {
-      // the tile the chalk is on right now
-      ctx.strokeStyle = mode.kind === 'ward' ? 'rgba(255,176,87,.9)' : 'rgba(125,224,212,.9)';
-      ctx.setLineDash([3, 3]);
-      ctx.strokeRect(gx * 16 + 1.5, gy * 16 + 1.5, 13, 13);
-      ctx.setLineDash([]);
     }
   },
 

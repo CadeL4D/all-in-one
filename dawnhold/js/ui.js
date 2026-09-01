@@ -382,11 +382,6 @@ const UI = {
           </div>
         </div>`;
       const carry = v.carry.amt > 0 ? `<div class="sub">Carrying ${v.carry.amt} ${v.carry.type}</div>` : '';
-      // banns & blessings: a bonded pair asks leave to wed
-      const partner = v.partner != null ? G.villagers.find(o => o.id === v.partner) : null;
-      const req = G.banns.find(r => r.a === v.id || r.b === v.id);
-      const wed = partner ? `<div class="sub" style="color:#e88bd0">Wed to ${U.esc(partner.name)} — they work +10% side by side.</div>` : '';
-      const bannsBtn = req && Wilds.canBless(req) ? `<button id="selBless">\u2661 Bless the banns</button>` : '';
       const state = { idle: 'waiting', toWork: 'heading out', work: 'working', toStore: 'hauling', shelter: 'sheltering', flee: 'fleeing!', fight: 'fighting!', arrive: 'arriving' }[v.state] || v.state;
       el.innerHTML = `
         <div style="display:flex;gap:10px;align-items:center">
@@ -396,9 +391,8 @@ const UI = {
             <div class="sub">${U.esc(state)}${v.trait ? ' \u00b7 ' + U.esc(v.trait.desc) : ''}</div>
           </div>
         </div>
-        ${bars}${jobRow}${carry}${wed}
+        ${bars}${jobRow}${carry}
         <div class="selActs">
-          ${bannsBtn}
           <button id="selFollow">${G.follow === v ? 'Unfollow' : 'Follow'}</button>
           ${v.job !== 'guard' ? '<button id="selShelter">To shelter</button>' : ''}
           <button id="selClose">Close</button>
@@ -406,12 +400,6 @@ const UI = {
       const pc = document.getElementById('selPortrait').getContext('2d');
       pc.imageSmoothingEnabled = false;
       pc.drawImage(Art.villager(v.look, 0), 0, 0, 16, 16, 0, 0, 48, 48);
-      const bl = document.getElementById('selBless');
-      if (bl) bl.onclick = () => {
-        const feast = G.res.ale >= CONFIG.BANNS.feastAle && G.res.food >= CONFIG.BANNS.feastFood;
-        if (Wilds.bless(req)) this.selRender();
-        else if (!feast) this.selRender();
-      };
       document.getElementById('selJobDown').onclick = () => this.cycleJob(v, -1);
       document.getElementById('selJobUp').onclick = () => this.cycleJob(v, 1);
       document.getElementById('selFollow').onclick = () => { G.follow = G.follow === v ? null : v; this.selRender(); };
@@ -433,100 +421,25 @@ const UI = {
         <div class="selActs"><button id="selClose">Close</button></div>`;
       document.getElementById('selClose').onclick = () => this.selHide();
     } else if (s.kind === 'o') {
-      // a wild thing — a worksite, an ordered bush, or an ancient ruin
+      // a wild worksite — tree, boulder or bush the bench can play at
       const t = s.ref;
+      const nm = { [OBJ.TREE]: 'Tree', [OBJ.PINE]: 'Pine', [OBJ.BIRCH]: 'Birch', [OBJ.ROCK]: 'Boulder', [OBJ.BUSH]: 'Berry Bush' }[t.o] || 'Wilds';
+      const amt = World.amtAt(t.tx, t.ty);
       const of = Bench.siteObj(t.tx, t.ty);
-      let acts = '', note = '';
-      if (t.o === OBJ.RUIN) {
-        // Restoration: a ruin wakes as one unique ancient building
-        const scribeReady = (G.jobs.scribe || 0) > 0 && Buildings.built('school');
-        note = scribeReady
-          ? 'A Scribe deciphers the script (~a minute\u2019s work), then Builders raise it.'
-          : 'Restoration wants a Schoolhouse and a Scribe to read the script — then Builders.';
-        for (const key of Wilds.ANCIENTS) {
-          const def = BUILD[key];
-          const c = Buildings.costOf(def);
-          const afford = c.wood <= G.res.wood && c.stone <= G.res.stone;
-          acts += `<button id="selRes_${key}" style="${afford ? '' : 'opacity:.5'}">\u2697 ${U.esc(def.name)}${c.wood ? ` ${c.wood}w` : ''}${c.stone ? ` ${c.stone}s` : ''}</button>`;
-        }
-        el.innerHTML = `
-          <h3>Ancient Ruin</h3>
-          <div class="sub">Older than any chronicle. Choose what it wakes as — which ruin you raise shapes the whole run.</div>
-          <div class="sub" style="color:var(--amber)">${U.esc(note)}</div>
-          <div class="selActs">${acts}<button id="selClose">Close</button></div>`;
-        for (const key of Wilds.ANCIENTS) {
-          const rb = document.getElementById('selRes_' + key);
-          if (rb) rb.onclick = () => {
-            if (Wilds.ruinRestore(t.tx, t.ty, key)) this.selHide();
-            else this.selRender();
-          };
-        }
-      } else if (t.o === OBJ.BUSH) {
-        // Grovekeep: wild → tended → heavy-fruiting; cuttings plant new bushes
-        const tnd = Wilds.tendAt(t.tx, t.ty);
-        const nm = !tnd ? 'Berry Bush' : tnd.stage >= 2 ? 'Orchard Bush' : 'Tended Bush';
-        const stage = !tnd ? 'Wild — pickable berries.'
-          : tnd.stage >= 2 ? 'Heavy-fruiting — double berries, forever.'
-            : 'Tended — +2 berries and quicker regrowth.';
-        const prog = tnd && tnd.stage < 2
-          ? `<div class="row"><span class="mLbl">Tending</span><div class="meter mGrow"><div style="width:${U.clamp(tnd.work / (CONFIG.GROVE.stageWork * (tnd.stage + 1)) * 100, 0, 100)}%"></div></div></div>` : '';
-        if (!tnd) acts += `<button id="selTend">Tend (foragers)</button>`;
-        else if (tnd.stage < 2) acts += `<button id="selTendOff">Cancel tending</button>`;
-        if (G.cuttings >= 1) acts += `<button id="selPlantBush">Plant cutting (${G.cuttings})</button>`;
-        if (of) acts += `<button id="selObjBench">\u270b ${U.esc(Bench.GAMES.find(g => g.id === of.id).name)}${Bench.handsLeft() > 0 ? '' : ' (no hands)'}</button>`;
-        el.innerHTML = `
-          <h3>${U.esc(nm)}</h3>
-          <div class="sub">${U.esc(stage)}${of ? '' : ' The bench needs the right duty assigned to lend a hand here.'}</div>
-          ${prog}
-          <div class="selActs">${acts}<button id="selClose">Close</button></div>`;
-        const tb = document.getElementById('selTend');
-        if (tb) tb.onclick = () => {
-          Wilds.orderTend(t.tx, t.ty);
-          this.toast('A Forager will call on this bush across days.', 'good');
-          this.selRender();
-        };
-        const to = document.getElementById('selTendOff');
-        if (to) to.onclick = () => {
-          G.tend.delete(World.idx(t.tx, t.ty));
-          this.toast('Tending called off.', '');
-          this.selRender();
-        };
-        const pb = document.getElementById('selPlantBush');
-        if (pb) pb.onclick = () => { this.setMode({ type: 'plant', what: 'bush' }); };
-      } else {
-        const nm = { [OBJ.TREE]: 'Tree', [OBJ.PINE]: 'Pine', [OBJ.BIRCH]: 'Birch', [OBJ.ROCK]: 'Boulder' }[t.o] || 'Wilds';
-        const amt = World.amtAt(t.tx, t.ty);
-        const sub = t.o === OBJ.ROCK ? `${amt} stone left in it.` : `${amt} wood left in it.`;
-        if (of) acts += `<button id="selObjBench">\u270b ${U.esc(Bench.GAMES.find(g => g.id === of.id).name)}${Bench.handsLeft() > 0 ? '' : ' (no hands)'}</button>`;
-        el.innerHTML = `
-          <h3>${U.esc(nm)}</h3>
-          <div class="sub">${U.esc(sub)}${of ? '' : ' The bench needs the right duty assigned to lend a hand here.'}</div>
-          <div class="selActs">${acts}<button id="selClose">Close</button></div>`;
-      }
+      const sub = t.o === OBJ.BUSH
+        ? (amt > 0 ? 'Heavy with berries.' : 'Picked clean — it will regrow.')
+        : t.o === OBJ.ROCK ? `${amt} stone left in it.` : `${amt} wood left in it.`;
+      el.innerHTML = `
+        <h3>${U.esc(nm)}</h3>
+        <div class="sub">${U.esc(sub)}${of ? '' : ' The bench needs the right duty assigned to lend a hand here.'}</div>
+        <div class="selActs">
+          ${of ? `<button id="selObjBench">\u270b ${U.esc(Bench.GAMES.find(g => g.id === of.id).name)}${Bench.handsLeft() > 0 ? '' : ' (no hands)'}</button>` : ''}
+          <button id="selClose">Close</button>
+        </div>`;
       const ob = document.getElementById('selObjBench');
       if (ob) ob.onclick = () => {
         if (!Bench.start(of.id, { tx: t.tx, ty: t.ty, o: t.o })) this.selRender();
       };
-      document.getElementById('selClose').onclick = () => this.selHide();
-    } else if (s.kind === 'd') {
-      // the driven hunt: a deer herd grazing at the map's edge
-      const h = s.ref;
-      if (!G.herd || G.herd !== h) return this.selHide();
-      const dir = h.spawn.x > World.W / 2 ? 'east' : h.spawn.x < World.W / 2 ? 'west' : 'the wilds';
-      el.innerHTML = `
-        <h3>Deer Herd</h3>
-        <div class="sub">${h.deer.length} deer grazing to the ${dir}. ${h.hunt
-          ? 'The hunt is on — your foragers are driving them. Lay or tend <b>spike traps</b> in their flight line; a deer that bolts into one is venison in the store.'
-          : 'Set a hunt and two foragers spend the day driving the herd — toward the <b>spike traps</b> you laid, if you planned the ground. Otherwise they scatter at dusk.'}</div>
-        ${h.caught ? `<div class="sub" style="color:var(--good,#7dc95e)">${h.caught} deer taken so far.</div>` : ''}
-        <div class="selActs">
-          ${h.hunt ? '<button id="selHuntOff">Call off the hunt</button>' : `<button id="selHunt">Set hunt (foragers)</button>`}
-          <button id="selClose">Close</button>
-        </div>`;
-      const sh = document.getElementById('selHunt');
-      if (sh) sh.onclick = () => { Wilds.setHunt(); this.selRender(); };
-      const so = document.getElementById('selHuntOff');
-      if (so) so.onclick = () => { Wilds.callOffHunt(); this.selRender(); };
       document.getElementById('selClose').onclick = () => this.selHide();
     } else if (s.kind === 'b') {
       const b = s.ref;
@@ -563,8 +476,7 @@ const UI = {
         return;
       }
       let extra = '';
-      if (!b.built && b.phase === 'decipher') extra = `<div class="row"><span class="mLbl">Decipher</span><div class="meter mProg"><div style="width:${U.clamp((b.decT || 0) / CONFIG.RESTORE.decipherT * 100, 0, 100)}%"></div></div></div><div class="sub" style="color:var(--purple)">A Scribe reads the old script — Builders wait on the words.</div>`;
-      else if (!b.built) extra = `<div class="row"><span class="mLbl">Build</span><div class="meter mProg"><div style="width:${(b.progress * 100).toFixed(0)}%"></div></div></div>`;
+      if (!b.built) extra = `<div class="row"><span class="mLbl">Build</span><div class="meter mProg"><div style="width:${(b.progress * 100).toFixed(0)}%"></div></div></div>`;
       else if (b.key === 'farm') extra = `<div class="row"><span class="mLbl">Wheat</span><div class="meter mGrow"><div style="width:${(b.growth * 100).toFixed(0)}%"></div></div></div>`;
       else if (b.def.kind === 'tower') extra = `<div class="sub">Damage ${b.def.atk.dmg} \u00b7 Range ${b.def.atk.range}</div>`;
       else if (b.def.housing) extra = `<div class="sub">Shelters ${b.def.housing}</div>`;
@@ -586,11 +498,6 @@ const UI = {
           if (hands <= 0) benchNote = 'No warm hands left today — they refill at dawn.';
         }
         if (b.key === 'mine' && !Bench.seam) benchActs += `<button id="selSeam">\u2b07 Dig Deeper</button>`;
-        if (b.key === 'nursery') {
-          const sap = b.sap || 0;
-          benchNote = `Every ${CONFIG.NURSERY.fellsPerSapling} felled trees pot a sapling here (${G.fellCount % CONFIG.NURSERY.fellsPerSapling} of the way).`;
-          benchActs += `<button id="selPlantSap" ${sap ? '' : 'style="opacity:.55"'}>Plant sapling (${sap} potted)</button>`;
-        }
         if (b.key === 'brazier' && !b.lit) {
           const can = G.res.wood >= CONFIG.BRAZIER.kindleWood && G.res.essence >= CONFIG.BRAZIER.kindleEss;
           benchActs += `<button id="selKindle" ${can ? '' : 'style="opacity:.55"'}>Kindle${Bench.handsLeft() > 0 ? ' \u270b' : ''}</button>`;
@@ -625,11 +532,6 @@ const UI = {
       };
       const ss = document.getElementById('selSeam');
       if (ss) ss.onclick = () => { Seam.start(b); };
-      const sp = document.getElementById('selPlantSap');
-      if (sp) sp.onclick = () => {
-        if ((b.sap || 0) < 1) { this.toast('No saplings potted yet — the nursery pots one for every 2 felled trees.', 'bad'); return; }
-        this.setMode({ type: 'plant', what: 'sapling' });
-      };
       const sk = document.getElementById('selKindle');
       if (sk) sk.onclick = () => {
         if (Bench.handsLeft() > 0 && isDayLike()) { Bench.start('spark', { b }); return; }
@@ -754,8 +656,7 @@ const UI = {
     // top group the moment they unlock (stable sort keeps roster order)
     keys.sort((a, b) => (G.unlocks[a] ? 0 : 1) - (G.unlocks[b] ? 0 : 1));
     if (cat === 'basics' || cat === 'defense') keys.push('__demolish');
-    if (cat === 'basics') { keys.push('__clear'); keys.push('__dig'); }
-    if (cat === 'mystic') { keys.push('__sigilWard'); keys.push('__sigilHallow'); }
+    if (cat === 'basics') keys.push('__clear');
     for (const k of keys) {
       if (k === '__demolish') {
         const card = document.createElement('button');
@@ -778,31 +679,6 @@ const UI = {
         card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'clear' }); this.closePanel(); };
         this.drawCardIcon(card, 'tree0', true);
         this.holdInfo(card, `<b>Clear Land</b> — mark trees, boulders, berry bushes, ruins or crystals and a Builder clears the tile (half the yield is salvaged). Tap shore water to fill it with stone (${CONFIG.CLEAR.waterCost} stone a tile) and make new land. Tap again to cancel.`);
-        grid.appendChild(card);
-        continue;
-      }
-      if (k === '__dig') {
-        const card = document.createElement('button');
-        card.className = 'bcard' + (this.mode && this.mode.type === 'dig' ? ' sel' : '');
-        card.innerHTML = `<canvas width="16" height="16" style="background:#2a2a33"></canvas>
-          <div><div class="bn">The Spade</div><div class="bc"><span>builders</span></div>
-          <div class="bd">Mark dry tiles — a Builder digs them down to pond water. Reeds (herbs) sprout at the margin.</div></div>`;
-        card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'dig' }); this.closePanel(); };
-        this.drawCardIcon(card, 'dirt', true);
-        this.holdInfo(card, `<b>The Spade</b> — mark dry, open ground and a Builder carves the tile down until water springs (about ${CONFIG.SPADE.digTime}s a tile). Ponds let Fishing Docks sit inland and grow <b>reeds</b> — herbs at the margin. Tap a mark again to cancel.`);
-        grid.appendChild(card);
-        continue;
-      }
-      if (k === '__sigilWard' || k === '__sigilHallow') {
-        const kind = k === '__sigilWard' ? 'ward' : 'hallow';
-        const card = document.createElement('button');
-        card.className = 'bcard' + (this.mode && this.mode.type === 'sigil' && this.mode.kind === kind ? ' sel' : '');
-        card.innerHTML = `<canvas width="16" height="16" style="background:#20242e"></canvas>
-          <div><div class="bn">${kind === 'ward' ? 'Ward Sigil' : 'Hallow Sigil'}</div><div class="bc"><span>1 herb + 1 charcoal</span></div>
-          <div class="bd">${kind === 'ward' ? 'Chalk a line — monsters crossing it at night slow down and take +25% damage.' : 'Chalk a circle — your folk inside hold their ground; guards strike +10%.'}</div></div>`;
-        card.onclick = () => { if (this.afterPop()) return; this.setMode({ type: 'sigil', kind }); this.closePanel(); };
-        this.drawCardIcon(card, kind === 'ward' ? 'ic_ward' : 'ic_hallow', true);
-        this.holdInfo(card, `<b>${kind === 'ward' ? 'Ward' : 'Hallow'} Sigil</b> — drag on open ground to draw the chalk (each stroke is one sigil; six hold at once). Salting it costs 1 herb + 1 charcoal, it charges through the day, and at dusk it ${kind === 'ward' ? 'blooms: monsters crossing the chalk crawl at half speed and take +25% damage.' : 'blooms: villagers inside won\u2019t break and run, and guards strike +10% harder.'} Dawn washes the chalk away.`);
         grid.appendChild(card);
         continue;
       }
@@ -1236,8 +1112,6 @@ const UI = {
     this.mode = m;
     this.ghost = null;
     this._ghostParked = false;
-    // an abandoned (or switched) sigil draft washes away
-    if (G.sigilDraft && (!m || m.type !== 'sigil' || m.kind !== G.sigilDraft.kind)) Wilds.draftCancel();
     const chip = this.els.modeChip;
     if (!m) { chip.classList.add('hidden'); return; }
     // placement owns the bottom of the screen — drop any open selection card
@@ -1252,12 +1126,6 @@ const UI = {
       this.els.modeChipText.textContent = 'Demolish — tap buildings';
     } else if (m.type === 'clear') {
       this.els.modeChipText.textContent = 'Clear Land — trees, rocks & shore water';
-    } else if (m.type === 'dig') {
-      this.els.modeChipText.textContent = 'The Spade — tap dry tiles to carve ponds';
-    } else if (m.type === 'plant') {
-      this.els.modeChipText.textContent = m.what === 'bush' ? `Plant cutting — tap grass (${G.cuttings} in store)` : `Plant sapling — tap grass (${(Wilds.nursery() ? Wilds.nursery().sap : 0) || 0} potted)`;
-    } else if (m.type === 'sigil') {
-      this.els.modeChipText.textContent = m.kind === 'ward' ? 'Ward sigil — drag to chalk a line (1 herb + 1 charcoal)' : 'Hallow sigil — drag to chalk a circle (1 herb + 1 charcoal)';
     } else if (m.type === 'power') {
       this.els.modeChipText.textContent = `${POWERS[m.key].name} — tap target`;
     }
@@ -1309,30 +1177,6 @@ const UI = {
       else if (r === 'water') this.toast('A Builder will fill this water with stone.', '');
       else if (r === 'on') this.toast('A Builder will clear this tile.', '');
       this.updateHUD();
-    } else if (m.type === 'dig') {
-      const r = Wilds.toggleDig(tileX, tileY);
-      if (r === 'off') this.toast('Dig order cancelled.', '');
-      else if (r === 'on') this.toast('A Builder will dig this tile down to water.', '');
-      else this.toast('The Spade needs dry, open ground.', 'bad');
-      this.updateHUD();
-    } else if (m.type === 'plant') {
-      const ok = m.what === 'bush' ? Wilds.plantBush(tileX, tileY) : Wilds.plantSapling(tileX, tileY);
-      if (ok) {
-        this.toast(m.what === 'bush' ? 'The cutting takes root — a wild bush, yours now.' : 'The sapling is planted — a grove begins.', 'good');
-        this.updateHUD();
-      } else if (m.what === 'bush' && G.cuttings < 1) {
-        this.toast('No cuttings in store — tend wild bushes to spare some.', 'bad');
-      } else if (m.what === 'sapling' && !(Wilds.nursery() && (Wilds.nursery().sap || 0) >= 1)) {
-        this.toast('No saplings potted — the nursery pots one for every 2 felled trees.', 'bad');
-      } else {
-        this.toast('Plants need open grass or dirt.', 'bad');
-      }
-    } else if (m.type === 'sigil') {
-      // a tap with no drag chalks a single tile
-      if (!isDayLike()) { this.toast('Sigils are chalked by day — the dusk wakes them.', 'bad'); return; }
-      if (!G.sigilDraft) Wilds.draftStart(m.kind);
-      Wilds.draftAdd(tileX, tileY);
-      Wilds.draftCommit();
     } else if (m.type === 'power') {
       Powers.cast(m.key, tileX + 0.5, tileY + 0.5);
       this.updateHUD();
@@ -1395,22 +1239,14 @@ const UI = {
       if (p.moved) {
         const paint = this.mode && this.mode.type === 'build' && BUILD[this.mode.key] && BUILD[this.mode.key].paint;
         const demo = this.mode && this.mode.type === 'demolish';
-        const sig = this.mode && this.mode.type === 'sigil';
         const steer = this.mode && this.mode.type === 'build' && !BUILD[this.mode.key].paint;
-        if ((paint || demo || sig) && G.state === 'playing') {
+        if ((paint || demo) && G.state === 'playing') {
           const w = Render.screenToWorld(e.clientX, e.clientY);
           const tx = (w.x / 16) | 0, ty = (w.y / 16) | 0;
           if (!this._lastTile || this._lastTile.x !== tx || this._lastTile.y !== ty) {
             this._lastTile = { x: tx, y: ty };
             this.ghost = { x: tx, y: ty };
-            if (sig) {
-              // chalk follows the drag; the shape is salted & committed on release
-              if (!G.sigilDraft) {
-                if (!isDayLike()) { this.toast('Sigils are chalked by day — the dusk wakes them.', 'bad'); return; }
-                Wilds.draftStart(this.mode.kind);
-              }
-              Wilds.draftAdd(tx, ty);
-            } else this.tryPlace(tx, ty);
+            this.tryPlace(tx, ty);
           }
         } else if (steer && G.state === 'playing') {
           // placing a building: one finger steers the ghost, release parks it,
@@ -1438,8 +1274,6 @@ const UI = {
       if (this._pt.size < 2) this._pinch = null;
       this._lastMx = undefined; this._lastMy = undefined;
       this._lastTile = null;
-      // a finished chalk stroke is salted and set — the mode stays for the next sigil
-      if (this.mode && this.mode.type === 'sigil' && G.sigilDraft && G.sigilDraft.tiles.length) Wilds.draftCommit();
       if (!p) return;
       const dt = performance.now() - p.t;
       if (!p.moved && dt < 800 && G.state === 'playing') this.tap(e.clientX, e.clientY);
@@ -1518,11 +1352,6 @@ const UI = {
         if (d < bd) { bd = d; best = { kind: 'v', ref: v }; }
       }
     }
-    if (!best && G.herd) {
-      for (const d of G.herd.deer) {
-        if (U.dst(wx, wy, d.x, d.y) < 0.8) { best = { kind: 'd', ref: G.herd }; break; }
-      }
-    }
     if (!best) {
       let b = World.bldAt(wx | 0, wy | 0);
       if (!b) {
@@ -1533,11 +1362,11 @@ const UI = {
       }
       if (b) best = { kind: 'b', ref: b };
     }
-    // nothing standing — a wild worksite, an ordered bush, or an old ruin?
+    // nothing standing — a wild worksite the bench can play at?
     if (!best) {
       const tx = wx | 0, ty = wy | 0;
       const o = World.objAt(tx, ty);
-      if (o === OBJ.BUSH || o === OBJ.RUIN || Bench.siteObj(tx, ty)) best = { kind: 'o', ref: { tx, ty, o } };
+      if (Bench.siteObj(tx, ty)) best = { kind: 'o', ref: { tx, ty, o } };
     }
     if (best) { this.select(best.kind, best.ref); G.follow = null; }
     else this.selHide();
@@ -1640,7 +1469,7 @@ const UI = {
       <ul>
         <li><b>Forager</b> — berries. Fast early food; bushes regrow daily.</li>
         <li><b>Lumberjack</b> — wood for tents, palisades, towers.</li>
-        <li><b>Miner</b> — stone from boulders; cracks crystal lodes for essence; works Mine Shafts when lodes run dry — and descends into <b>the Deep Seam</b> if you order it.</li>
+        <li><b>Miner</b> — stone from boulders; salvages ancient ruins; cracks crystal lodes for essence; works Mine Shafts when lodes run dry — and descends into <b>the Deep Seam</b> if you order it.</li>
         <li><b>Farmer</b> — tends wheat plots. A Windmill nearby grows them 35% faster.</li>
         <li><b>Fisher</b> — works a Fishing Dock on the shore. Steady food, no farmland.</li>
         <li><b>Medic</b> — gathers herbs to stock the Hospital, which mends the wounded nearby. Needs a built Hospital (day 2).</li>
@@ -1657,16 +1486,6 @@ const UI = {
       <p>A <b>Brazier</b> kindled with wood and essence burns all night as a great light — and set beside a Dark Monolith it slowly <b>cleanses</b> it: no mending, no defenders, until the stone cracks into salvageable dawn-stone. No raid, no graves. The <b>Muster Yard</b> drills your guards against a straw effigy: pick shields (runners), pikes (brutes) or scatter (stalkers) for a permanent +10% damage per drill (stacks to +30%), ring the horn to rally off-duty guards — or play the drill for real and the bonus lands a day early.</p>
       <h2>The Deep Seam</h2>
       <p>Order <b>Dig Deeper</b> on a Mine Shaft and a miner spends the day below while you watch the wheel. Each level the seam gets richer — stone, double stone, flint (tools last +25% for days), then crystal flecks of essence — but every level spins the wheel: <b>okay, injured, or dead</b>. Injured miners crawl out hurt and the tunnel seals; dead ones are lost to the dark. If the worst happens you get one chance at the <b>rescue</b>: steer the ropeline through falling rock, and the injured walk away clean while the dead come up hurt but alive. Climb out any time to bank the haul.</p>
-      <h2>Wildcraft — the village edits the map</h2>
-      <ul>
-        <li><b>Grovekeep</b> — tap a wild berry bush and order <b>Tend</b>: a Forager calls on it across days until it's <b>tended</b> (+2 berries, faster regrow), then <b>heavy-fruiting</b> (double berries, for good). Tended bushes may spare <b>cuttings</b> when harvested — plant them anywhere to breed your own orchards.</li>
-        <li><b>The Nursery</b> — every 2 trees your Lumberjacks fell pots a <b>sapling</b>. Select the nursery to plant them out as groves: wood stops being strip-mining and becomes forestry.</li>
-        <li><b>The Spade</b> — mark dry tiles (Build panel) and a Builder digs them down to <b>pond</b> water. Docks can sit inland on ponds, and <b>reeds</b> — herbs — sprout at the margin.</li>
-        <li><b>Sigils</b> — drag to draw chalk on open ground (Build &rarr; Mystic); salting a stroke costs 1 herb + 1 charcoal. A <b>ward</b> blooms at dusk: monsters crossing it crawl at half speed and take +25% damage. A <b>hallow</b> steadies your folk inside: no fleeing, guards +10%. Dawn washes the chalk away; six sigils hold at once.</li>
-        <li><b>Restoration</b> — tap an <b>Ancient Ruin</b> and choose what it wakes as: the <b>Aqueduct</b> (wells +50%, folk drink on the spot nearby), the <b>Dawn Shrine</b> (essence regen +50%), the <b>Sky Watch</b> (towers +1.5 range, tonight's attack direction revealed at dawn) or the <b>Root Cellar</b> (food cap +80, nothing spoils). A Scribe deciphers for a stretch, Builders scaffold after — which ruin you raise shapes the whole run.</li>
-        <li><b>Banns &amp; blessings</b> — villagers who work side by side grow attached, and in time a pair asks leave to wed. Tap either to <b>bless the banns</b>: a feast (1 ale + food) puts +10% into the next day's work, the couple raises a <b>shared hut</b>, and they work +10% while together.</li>
-        <li><b>The driven hunt</b> — some mornings a <b>deer herd</b> grazes at the map's edge. Tap a deer and <b>set a hunt</b>: two foragers spend the day driving it — toward the <b>spike traps</b> you laid, if you planned the ground. Each deer driven into the line is a heap of venison; a botched drive scatters the herd by dusk.</li>
-      </ul>
       <h2>Supply Lines</h2>
       <ul>
         <li><b>Arrows are ammunition</b> — every tower shot spends 1 (ballistae 2), and raids pack quivers (5). Dry quivers: towers hold fire, guards hit at 75%. Build a Fletcher Hut before your towers go up.</li>

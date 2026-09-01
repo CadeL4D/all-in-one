@@ -289,10 +289,9 @@ const World = {
       this.obj[i] = OBJ.STUMP;
       G.regrow.set(i, { t: (150 + Math.random() * 60) / rm, kind: o });   // stump → sapling → tree
     } else if (o === OBJ.BUSH) {
-      // tended bushes (Grovekeep) regrow faster still
-      G.regrow.set(i, { t: (170 + Math.random() * 50) / (rm * (Wilds.tendMul(i) || 1)), kind: OBJ.BUSH });
-    } else if (o === OBJ.HERB || o === OBJ.REED) {
-      G.regrow.set(i, { t: CONFIG.HERB.regrow / rm, kind: o });
+      G.regrow.set(i, { t: (170 + Math.random() * 50) / rm, kind: OBJ.BUSH });
+    } else if (o === OBJ.HERB) {
+      G.regrow.set(i, { t: CONFIG.HERB.regrow / rm, kind: OBJ.HERB });
     } else if (o === OBJ.CRYSTAL) {
       this.obj[i] = OBJ.NONE;
       bonus = 'crystal';
@@ -362,7 +361,7 @@ const World = {
           const i = this.idx(x, y);
           const o = this.obj[i];
           if (types.includes(o)) {
-            const needsAmt = o === OBJ.BUSH || o === OBJ.HERB || o === OBJ.REED;
+            const needsAmt = o === OBJ.BUSH || o === OBJ.HERB;
             if (needsAmt && this.amt[i] <= 0) continue;
             cands.push({ x, y, i, d: r });
           }
