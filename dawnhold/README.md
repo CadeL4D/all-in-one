@@ -651,113 +651,82 @@ redraws at ~3Hz.
 
 ---
 
-## Balance re-look — what the numbers say (v1.5 audit — SHIPPED)
+## The city-building gap — diagnosis & candidate backlog
 
-*(A pass over `CONFIG` in `js/core.js` with the complaint "too easy at the
-start, flat after" in hand. All figures are the Normal preset. **Every
-suggested change below shipped in v1.5.0** — the audit text is kept as the
-rationale.)*
+*(Written 2026-09-01 at the guardian's ask, replacing the shipped v1.4/v1.5
+audit sections — both live on in the changelog above. This is the standing
+backlog: what's wrong with the building layer, and what would fix it.)*
 
-**What holds up:** tool wear is the best-tuned sink in the game — a tool
-lasts ~125s of active work, so twenty workers eat ~20 tools a day and the
-Smithy chain (2 wood + 1 stone → one per 3.2s) never becomes background
-noise. Storage caps bite just before the Beacon (100 wood + 80 stone fits
-under the 120/120 caps with room for nothing else — hoarding is a real
-choice). Comfort multipliers are honest texture, not a fake lever.
+**The one-line diagnosis: other builders make you assemble a machine in
+space; Dawnhold lets you assemble a shopping list.** The layer isn't missing
+features — the chains, caps, tools and auras all exist — it's missing
+*pressure* that makes **where** and **why** you build matter. Left alone the
+build loop self-terminates around day 5–6: the palisade ring is drawn, food
+is stable, and nothing ever demands a bigger village.
 
-**Where the numbers betray the feel:**
+### What Rise to Ruins has that Dawnhold doesn't
 
-1. **Nights 1–3 can't bite.** Night 1 is 3 shades — 84 hp in total against
-   one guard's 10.4 dps (7.5 × 1/0.72s): eight seconds of fighting. The wave
-   curve `1.4 + 1.75 × day` doesn't clear ten monsters until day 5's blood
-   moon, by which point a tower is up and arrows are cheap. *Suggested:*
-   night-1 floor 3 → 4, shade dmg 4 → 5, curve base 1.4 → 2.0 and per
-   1.75 → 1.95 (day 3 ≈ 8, the blood moon ≈ 19), runners debut day 3 → 2.
-2. **Every food chain outruns the mouths.** A villager eats ~124 hunger a
-   day — 7 food raw, or ~2.2 food as meals. Against that: a fisher lands
-   1 food / 3.4s with no inputs, no land and no regrow (~55 a day after
-   haul walks) from a day-2 building; a farmer pushing two plots manages
-   ~30–45; and bush foraging is free. Hunger stops being a system on day 1
-   and never comes back. *Suggested:* `FISHER.rate` 3.4 → 6.0, and
-   `HUNGER.rate` 0.355 → 0.42 so mouths matter again.
-3. **Essence is a dead battery by day 4.** Start 40, passive ~22 a day,
-   +2 a kill — the 120 cap arrives around day 3–4; after that every kill
-   pays nothing and Mend/Smite are the only outlets. *Suggested:*
-   `regenDay` 0.105 → 0.075, max 120 → 100, `perKill` 2 → 3 (pay the
-   fight), and pull Stasis/Meteor unlocks in to day 3/5 so the bank has
-   somewhere to go.
-4. **The ceiling never rises.** Defense compounds — Barracks ×1.3, tower
-   II/III, schooled +12% — while waves grow linearly to a flat cap of 30
-   and hp scales +5.5%/day only from day 9. Around day 14 a maxed village
-   auto-wins every night, blood moons included, and endless mode flattens.
-   *Suggested:* `hpScale` 0.055 → 0.085, and an endless-only wave cap of
-   38 past the Beacon.
-5. **Day 1 offers ~5 buildings and no problems.** Unlocks open with
-   Granary/Storehouse, the first waves are 0–3 shades, and no system needs
-   the player before dusk — which is precisely the gap the Daycraft bench
-   above is drawn to fill. The numbers say what the hands say: the early
-   game has nothing to hold.
+- **A land war.** Corruption creeps across RtR's map and fire pits push it
+  back — every placement is a tug-of-war over territory. Dawnhold's dark is
+  three fixed monoliths; the map never fights back.
+- **Rebuild churn.** RtR's defenses are ground down every night, so
+  construction never stops. Dawnhold's walls are tanky and repair is nearly
+  free (`CONFIG.REPAIR`: 1 resource per 24 hp) — the shell stabilizes.
+- **Construction that summons labor.** In RtR, placing a building makes the
+  village visibly swarm to it. A Dawnhold building does nothing until a job
+  slider moves; the indirect layer is less reactive than the genre it sits in.
+- **Perk variance.** RtR runs diverge (God-Experience chests). A Dawnhold
+  build order is deterministic — day-3 towers, day-4 windmill, every time.
+- The god layer Dawnhold already matches (essence, shrines, Smite, Meteor);
+  what's missing is essence coming back as villager-visible things — RtR
+  builds golems and faith with it.
 
----
+### Why it feels flat — three structural reasons
 
-## The difficulty spread — shipped in v1.4
+1. **The global pool flattens space.** The kiln, press and windmill transmute
+   `G.res` with nobody fetching anything, and crafters pull from the pool too
+   (`Buildings.update`). The windmill's 6-tile breeze and the dock's shoreline
+   are the only placement puzzles; haul distance is a soft, invisible cost, so
+   the dominant strategy is sprawl.
+2. **Demand never escalates.** The need ladder is static and fully revealed by
+   day 5, population caps at 44 (`ARRIVE.maxPop`), and the Beacon wins around
+   day 10. No threshold ever demands a new good → a new chain → a new
+   building. Great builders feed you exactly that ladder.
+3. **A run is too short for a city.** A campaign is about an hour, and the
+   build menu stops changing meaningfully just as the Long Night arrives.
+   Endless mode exists, but nothing in it demands growth either.
 
-Each preset is a *different game* rather than the same game tuned up or
-down: on top of the original four knobs (wave size ×0.68 Easy / ×1.38 Hard,
-monster HP ×0.88 / ×1.22, night length ×0.88 / ×1.15, essence regen ×1.1 /
-×0.9), every preset now sets the seventeen levers below. These tables are
-the shipped values — they live in `CONFIG.DIFF` in `js/core.js`, one edit
-per cell. The v1.5 Daycraft mechanics shipped from the backlog above; the
-remaining wilds-shaping ideas stay candidates. Verified headless:
-each lever measured per preset, 3-day soaks, and cross-preset orderings
-(wilds 887 > 841 > 798 > 725 sources; wells 16 > 13 > 12 > 11 buckets).
+### Candidate fixes, in payoff order
 
-### A. Resources & scarcity (the "resources feel plentiful" fix)
+1. **Real hauling everywhere.** Extend the v1.2 supply lines to the whole
+   economy: charcoal shouldn't teleport from the pool into the kiln — every
+   conversion becomes a carried trip (`CARRY: 8`), so distance becomes a rate,
+   warehouse and granary placement becomes layout, and the village visibly
+   moves its own goods. The single biggest lever, and most of the machinery
+   (haulers, `Buildings.nearestStore`, the Warehouse) already exists.
+2. **Eager hands.** A finished building auto-pulls one idle villager into its
+   job (overridable in the roster panel). Placement reads instantly as
+   cause → effect — the RtR swarm, kept honest.
+3. **Escalating demand.** Arrivals won't stay past pop 12 without cottages,
+   past 20 without ale, past 30 without bread and a Schoolhouse — population
+   becomes the need-chain engine. Hooks the existing COMFORT leave-chance, and
+   every threshold is a new chain the player must build.
+4. **Irrigated plots drink water** *(already queued)*. The farm → Irrigated
+   Plot upgrade only keeps its faster rows while a hauler keeps the channel
+   fed from a well — water becomes a spatial constraint farms must drink from,
+   and wells become infrastructure worth clustering around instead of a
+   set-and-forget bucket.
+5. **The long-shadow frontier.** Each dawn, every surviving monolith pushes a
+   visible shadow-line a tile or two further into the valley; inside the line,
+   work rates sag and the wild thins. Light holds it — torch rings, tower
+   reach — and destroying a monolith rolls the line back for good. The map
+   becomes territory and the endgame becomes a land-grab. (Deliberately not
+   the rejected Restless-Dark blight stains: the line moves at dawn scale and
+   clearing it is conquest, not weeding.)
 
-| # | Lever | Peaceful | Easy | Normal | Hard |
-|---|---|---|---|---|---|
-| A1 | Starting store (wood/food/…) | ×1.25 | ×1.1 | ×1 (today) | ×0.7 |
-| A2 | Wild yields (bush/tree/rock/herb units) | ×1.15 | ×1 | **×0.85** | ×0.7 |
-| A3 | Regrow speed (bushes, stumps→saplings) | ×1.25 | ×1.1 | ×1 | ×0.8 |
-| A4 | Map density (trees/rocks/bushes sprinkled) | ×1.1 | ×1 | ×0.9 | ×0.8 |
-| A5 | Build costs | ×0.9 | ×1 | ×1 | ×1.15 |
+### Guardrails, restated
 
-A2 alone at ×0.85 Normal is the scarcity fix: a bush drops 6 not 7, a tree
-8 not 9 — the kiln's 10-wood floor and the store caps start to bite by
-mid-game without touching combat.
-
-### B. Monsters
-
-| # | Lever | Peaceful | Easy | Normal | Hard |
-|---|---|---|---|---|---|
-| B1 | Monster speed | ×0.9 | ×0.95 | ×1 | ×1.08 |
-| B2 | Debut days (runners/brutes/stalkers/wraiths) | +3 | +1 | today | −1 |
-| B3 | Blood-moon horde multiplier | ×1.2 | ×1.35 | ×1.5 | ×1.75 |
-| B4 | Monolith mend rate while unraided | ×0.5 | ×0.75 | ×1 | ×1.5 |
-| B5 | Night-1 wave size | 0 | 2 | 4 | 5 |
-| B6 | Essence payout per kill | ×1.25 | ×1.1 | ×1 | ×0.9 |
-
-B2 on Hard means brutes at day 5 and wraiths at day 10 — the *composition*
-changes, not just the count, so Hard demands different defenses (ballistae
-and interior guards earlier), not just more of them.
-
-### C. Other axes
-
-| # | Lever | Peaceful | Easy | Normal | Hard |
-|---|---|---|---|---|---|
-| C1 | Day length (seconds of building time) | 240 | 225 | 210 | 185 |
-| C2 | Wanderer arrival chance at dawn | 0.8 | 0.7 | 0.65 | 0.5 |
-| C3 | Day-event hostility (daylight ambush weight) | 0 | ×0.5 | ×1 | ×1.5 |
-| C4 | Comfort spread (snug/crowded multipliers) | gentler | snug ×1.08 | today | crowd ×0.85 |
-| C5 | Well water output | ×1.25 | ×1.1 | ×1 | ×0.9 |
-| C6 | Tool wear rate | ×0.8 | ×0.9 | ×1 | ×1.15 |
-
-### Reading the spread
-
-- **Peaceful** is a cozy build sandbox: fat wilds, fast regrowth, no waves
-  or ambushes, long days, quick wells, slow tools.
-- **Hard** starts hungry (×0.7 stores and yields), rushed (185s days),
-  ambushed (×1.5 hostile events) and crowded (×0.85), with brutes and
-  wraiths arriving a day early and monoliths mending ×1.5 between raids.
-
-
+No villager hiding indoors; no villager-versus-villager collision; no
+researched corruption sets (Restless Dark stays rejected); Wildcraft stays
+dead. Whatever ships must make two villages look different by day 10 — that's
+the acceptance test for the whole list.
