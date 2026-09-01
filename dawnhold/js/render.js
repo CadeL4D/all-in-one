@@ -174,7 +174,6 @@ const Render = {
     } else if (b.key === 'torch') spr = Art.s['torch' + animF];
     else if (b.key === 'lair') spr = Art.s['lair' + animF];
     else if (b.key === 'windmill') spr = Art.s['windmill' + animF];
-    else if (b.key === 'brazier') spr = Art.s[b.lit ? 'brazierOn' + animF : 'brazier'];
     else if (b.key === 'herbalistHut') spr = Art.s.herbalist;
     else spr = Art.s[b.key];
 
@@ -472,7 +471,6 @@ const Render = {
       for (const b of G.buildings) {
         if (!b.built) continue;
         let r = b.def.light;
-        if (b.key === 'brazier') r = b.lit ? CONFIG.BRAZIER.light + Math.sin(this._t * 6 + b.id) * 0.2 : 0;
         if (!r) continue;
         if (b.key === 'torch') r = (oilDry ? 1.7 : 3.4) + Math.sin(this._t * 7 + b.id) * (oilDry ? .04 : .12);
         hole(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, r, 0.92);
@@ -504,11 +502,10 @@ const Render = {
       };
       for (const b of G.buildings) {
         if (!b.built) continue;
-        const isBrz = b.key === 'brazier' && b.lit;
-        if (!b.def.light && !isBrz) continue;
+        if (!b.def.light) continue;
         const dim = b.key === 'torch' && oilDry;
-        const wob = (b.key === 'torch' || isBrz) ? 1 + Math.sin(this._t * 9 + b.id * 1.7) * 0.09 : 1;
-        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, (isBrz ? 3.4 : b.key === 'torch' ? (dim ? 1.0 : 2.2) : b.def.light * 0.8) * wob);
+        const wob = b.key === 'torch' ? 1 + Math.sin(this._t * 9 + b.id * 1.7) * 0.09 : 1;
+        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, (b.key === 'torch' ? (dim ? 1.0 : 2.2) : b.def.light * 0.8) * wob);
       }
       if (G.beaconLit) {
         const b = G.buildings.find(bb => bb.key === 'beacon' && bb.built);

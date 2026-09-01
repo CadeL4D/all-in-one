@@ -203,18 +203,6 @@ const BUILD = {
     short: 'Essence regenerates faster.',
     desc: 'Faith of the valley made stone. Slowly regenerates your Essence.',
   },
-  brazier: {
-    name: 'Brazier', cat: 'mystic', w: 1, h: 1, hp: 180, cost: { wood: 6, stone: 4 }, time: 12,
-    kind: 'brazier', light: 0, tall: 8, unlock: 3,
-    short: 'Kindle it — a great light all night. Cleanses monoliths.',
-    desc: `Kindled with ${CONFIG.BRAZIER.kindleWood} wood + ${CONFIG.BRAZIER.kindleEss} essence, it burns a whole night as a super-torch — and set beside a Dark Monolith it slowly cleanses the lair: no mending, no defenders, until the stone cracks into dawn-stone.`,
-  },
-  muster: {
-    name: 'Muster Yard', cat: 'defense', w: 2, h: 2, hp: 320, cost: { wood: 16, stone: 6 }, time: 30,
-    kind: 'muster', capOne: true, light: 1.8, tall: 4, unlock: 5,
-    short: 'Drill guards vs a monster type: +10% damage. Rally horn.',
-    desc: 'Guards drill against a straw-and-bone effigy. Pick the drill — shields (vs runners), pikes (vs brutes), scatter (vs stalkers) — and drilled guards strike +10% harder against that type (stacks to +30%). Ring the horn and off-duty guards run to the yard.',
-  },
   beacon: {
     name: 'The Beacon', cat: 'mystic', w: 3, h: 3, hp: 900, cost: { wood: 100, stone: 80 }, time: 110,
     kind: 'beacon', light: 0, tall: 40, unlock: 10,
@@ -412,9 +400,6 @@ const Buildings = {
   fisherHuts() { return G.buildings.filter(b => b.built && b.def.kind === 'fisher'); },
   mines() { return G.buildings.filter(b => b.built && b.def.kind === 'mine'); },
   hospitals() { return G.buildings.filter(b => b.key === 'hospital' && b.built); },
-  braziers() { return G.buildings.filter(b => b.built && b.key === 'brazier'); },
-  litBraziers() { return G.buildings.filter(b => b.built && b.key === 'brazier' && b.lit); },
-  musters() { return G.buildings.filter(b => b.built && b.key === 'muster'); },
   demoSites() { return G.buildings.filter(b => b.built && b.demo); },
 
   nearestStore(tx, ty) {
@@ -545,47 +530,6 @@ const Buildings = {
           if (G.res.food > CONFIG.MILL.foodKeep && G.res.flour < Buildings.capOf('flour')) {
             G.res.food -= 1;
             Sim.gain('flour', 1);
-          }
-        }
-      }
-      // braziers burn their fuel through the night (a strong kindle lasts a
-      // night and a half), and one set beside a lair cleanses it: the
-      // monolith can't mend, can't call its brood, and cracks into dawn-stone
-      if (b.def.kind === 'brazier' && b.built && b.lit) {
-        if (isNightLike()) {
-          b.fuel = (b.fuel || 0) - dt;
-          if (b.fuel <= 0) { b.lit = false; b.fuel = 0; }
-        }
-        if (b.lit) {
-          for (const l of G.buildings) {
-            if (l.key !== 'lair') continue;
-            if (U.dst(b.x + .5, b.y + .5, l.x + .5, l.y + .5) > CONFIG.BRAZIER.cleanseR) continue;
-            l.cleansed = true;
-            l.hp -= CONFIG.BRAZIER.cleanseDps * dt;
-            if (Math.random() < dt * 2) Sim.fx('spark', l.x + .5, l.y + .2, .35);
-            if (l.hp <= 0) { Sim.lairCleansed(l); break; } // lair is gone — stop poking the list
-          }
-        }
-      }
-      // the muster yard: off-duty guards near the effigy drill against the
-      // chosen monster type — a completed drill is a permanent +10% (cap +30%)
-      if (b.def.kind === 'muster' && b.built && b.drillType && G.villagers.length) {
-        const cur = G.drill[b.drillType] || 0;
-        if (cur < CONFIG.MUSTER.bonusCap) {
-          let drillers = 0;
-          for (const v of G.villagers) {
-            if (v.job !== 'guard' || v.below) continue;
-            if (U.dst2(v.x, v.y, b.x + 1, b.y + 1) < 36) drillers++;
-          }
-          if (drillers > 0 && !G.raidTarget) { // no drills while a raid is on
-            b.drillT = (b.drillT || 0) + dt * Math.min(2, drillers);
-            if (b.drillT >= CONFIG.MUSTER.drillT) {
-              b.drillT = 0;
-              G.drill[b.drillType] = Math.min(CONFIG.MUSTER.bonusCap, cur + CONFIG.MUSTER.bonus);
-              const nm = { runner: 'shields', brute: 'pikes', stalker: 'scatter' }[b.drillType];
-              UI.toast(`Drill complete — the guards' ${nm} work: +10% vs ${CONFIG.MONS[b.drillType].name}s.`, 'good');
-              Sim.log(`The yard drilled ${nm} — guards strike +10% harder against ${CONFIG.MONS[b.drillType].name}s.`, 'good');
-            }
           }
         }
       }

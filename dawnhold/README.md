@@ -7,25 +7,22 @@ assets, sound, or dependencies, and every sprite is hand-painted procedurally
 in code. Build a village by day, hold back the horde by night, and light the
 Great Beacon to bring back the dawn.
 
-> **v1.5.0 — The Daycraft Update:** the day itself becomes playable. The
-**bench** gives the guardian **six warm hands a day** (a little hand-meter by
-the dock) to spend on ~8-second touch-work at any ready worksite — **fourteen
-minigames**, each painted and playable, each paying a stock the village
-already tracks: split logs on the swing's sweet band, hook the bobber's dip,
-trace a boulder's glowing fault, circle a berry bush past its thorns, swipe
-wheat with the wind, knead and stir to the bounce, strike when the forge bar
-flares, match feather patterns, tap cresting brew-bubbles, dip wicks on the
-wave, suture without crossing the red, strike sparks until a brazier catches,
-call the straw effigy's drill-shape. Braziers (**The Kindling**) burn all
-night as great lights — and beside a monolith they slowly **cleanse** it into
-salvageable dawn-stone, no raid and no graves. The **Muster Yard** drills
-guards for a permanent +10% per monster type. And **the Deep Seam** below a
-Mine Shaft is push-your-luck mining: a **spinning wheel** rules every level
-deeper — **okay, injured, dead** — and an injured or dead miner gets one
-chance at the **rescue skill game**: injured becomes okay, dead becomes
-injured. The v1.5 balance audit ships with it: earlier, hungrier nights, a
-real essence bank, and a ceiling that rises in endless mode. Rebuild the
-portable file anytime with `node rebake.js`.
+> **v1.5.1 — The Daycraft Update, trimmed:** the day itself stays playable.
+The **bench** gives the guardian **six warm hands a day** (a little
+hand-meter by the dock) to spend on ~8-second touch-work at any ready
+worksite — **twelve minigames**, each painted and playable, each paying a
+stock the village already tracks: split logs on the swing's sweet band, hook
+the bobber's dip, trace a boulder's glowing fault, circle a berry bush past
+its thorns, swipe wheat with the wind, knead and stir to the bounce, strike
+when the forge bar flares, match feather patterns, tap cresting brew-bubbles,
+dip wicks on the wave, suture without crossing the red. And **the Deep Seam**
+below a Mine Shaft is push-your-luck mining: a **spinning wheel** rules every
+level deeper — **okay, injured, dead** — and an injured or dead miner gets
+one chance at the **rescue skill game**: injured becomes okay, dead becomes
+injured. The Kindling's braziers and the Muster Yard shipped in v1.5.0 and
+are gone in v1.5.1, cut at the guardian's request. The v1.5 balance audit
+stands: earlier, hungrier nights, a real essence bank, and a ceiling that
+rises in endless mode. Rebuild the portable file anytime with `node rebake.js`.
 
 > **v1.4.2 — The Pocket Update:** built for the **vertical phone screen**.
 > One control row up top — the day clock stretches while **round pause/speed
@@ -101,6 +98,23 @@ portable file anytime with `node rebake.js`.
 ---
 
 ## Changelog
+
+### v1.5.1 — Braziers and the Muster Yard removed
+
+The guardian played the Daycraft build and asked for two of its day-3/day-5
+flagships to go:
+
+- **The Kindling is out.** No braziers, no kindling, no monolith cleansing —
+  lairs are raided the old way again (guards, spikes, arrows), and a
+  monolith's mend-and-defenders behavior is back to unconditionally on.
+- **The Muster Yard is out.** No drills, no rally horn — guard damage comes
+  from the Barracks alone.
+- **The bench is twelve games.** The Spark (kindling) and the Effigy (drills)
+  existed only to power the two removed buildings and left with them; the
+  other twelve games and the Deep Seam are untouched.
+- Saves round-trip: a v1.5.0 save that had braziers or a Muster Yard loads
+  clean — those buildings are quietly dropped and their tiles freed.
+- Portable file rebuilt with `node rebake.js`; headless suites green.
 
 ### v1.5.0 — The Daycraft Update
 - **The bench — six warm hands a day.** A small hand-meter by the dock
@@ -551,14 +565,12 @@ This game was designed from a review-driven audit of its inspirations.
   through walls); colossi 10% d15 (endless) — debut days shift −1 on Hard,
   +1 Easy, +3 Peaceful. HP +8.5%/day past day 9.
 - **Defense math:** shade 28hp/5dmg vs guard 7.5dmg/0.72s (+30% with
-  Barracks, +10%/drill from the Muster Yard), tower 8dmg/1.1s (range 5.5),
+  Barracks), tower 8dmg/1.1s (range 5.5),
   ballista 27dmg/2.3s (range 7.5 — out-ranges bonecasters). Palisade
   220hp/2w, stone wall 520hp/4s. Spike traps 15 dmg + slow per step, wear
   out after ~3 monsters. Lair 1100hp, mends 0.6%/s when not struck for 8s,
   and spawns day-scaled defenders (up to 5 alive, every ~7s) while raided —
-  a 3-guard raid is a rolling fight, not a 20-second teardown. A lit
-  brazier beside a lair ends both: no mend, no defenders, 4 cleanse-dps
-  until the stone cracks.
+  a 3-guard raid is a rolling fight, not a 20-second teardown.
 - **Essence:** starts 40, cap 100, ~0.075/s day · 0.05/s night
   (×difficulty), every kill pays at least 3 (more from brutes, colossi and
   the boss; double on blood moons; lairs +25, crystals +8, boss +40),
@@ -595,10 +607,7 @@ This game was designed from a review-driven audit of its inspirations.
   regrow, Sickle +2 food & a re-seeded plot, Knead 3 bread for 2 flour,
   Stir 3 meals for a normal batch, Hammer true tools (2× wear life), Flight
   14 arrows per batch, Brew bright ale (+15% at the next pour), Dip half oil
-  tonight, Suture +15 hp per herb today, Spark a kindle (strong = 1.5
-  nights), Effigy a drill landed early. Braziers: 4 wood + 8 essence a
-  kindle; cleanse 4 dps beside a lair → +30 dawn-stone, +12 essence. Muster
-  drills: +10% a type in ~60s of daywork, cap +30%. The Deep Seam: pay
+  tonight, Suture +15 hp per herb today. The Deep Seam: pay
   3/6/6(+flint)/8+6ess/10+10ess a level, then 12+12; odds 90/8/2 at depth 1
   → 55/28/17 at depth 6, floor 40/30/30; the rescue turns injured→okay and
   dead→injured.
@@ -620,8 +629,7 @@ js/buildings.js     BUILD defs; placement/construction/farms/towers/repair
 js/entities.js      villager & monster factories, names, traits
 js/game.js          simulation, day cycle, jobs, waves, combat, events
 js/powers.js        Mend / Smite / Stasis / Meteor
-js/daycraft.js      the bench: 14 minigames, warm hands, braziers'
-                    kindling/cleansing, muster drills, the Deep Seam
+js/daycraft.js      the bench: 12 minigames, warm hands, the Deep Seam
 js/save.js          localStorage autosave and three slots
 js/render.js        camera, y-sorted draw, lighting, minimap, effects
 js/ui.js            touch/mouse input, panels, selection, tutorial, screens
@@ -640,149 +648,6 @@ Terrain is baked once to an offscreen canvas; entities are capped
 (70 monsters / 44 villagers); AI thinks at ~2Hz staggered; night lighting uses
 a half-resolution destination-out pass with capped light count; the minimap
 redraws at ~3Hz.
-
----
-
-## Research backlog — Daycraft (v1.5 candidates)
-
-*(Shipped in v1.5.0: the whole minigame bench below, The Kindling's
-braziers, The Muster Yard's drills and The Deep Seam — with the seam
-reworked into a spinning wheel of okay/injured/dead and a rescue skill game.
-The wilds-shaping, sigil-craft, restoration, banns and driven-hunt ideas
-further down remain candidates.)*
-
-*(The previous backlog batch bet on timers and pressure; this one bets the
-other way. The complaint it answers: by mid-morning of any day the player is
-a spectator — jobs are assigned, the site is queued, and nothing needs you
-until dusk. These candidates make the **day itself playable**: a bench of
-original activities — fast hands-on **minigames** at the worksites and
-slower **daycraft** projects — each productive (a player who does them all
-day ends the day measurably ahead) and each optional (a player who skips
-them is comfortable, not doomed). No new economy chains: every idea spends
-wood, stone, food, herbs, essence and the jobs the village already has.)*
-
-### The minigame bench — the guardian lends a hand
-
-*The new rule of play: villagers keep working on their own, but the guardian
-can put hands directly on any ready worksite and play a few seconds of
-touch-work for a bonus. Six **warm hands** a day (a small sun-meter by the
-dock), each session ~8 seconds, the world keeps simulating while you play,
-every payoff is a stock the village already tracks — and a player who never
-touches the bench loses nothing. Sigil-craft and the Kindling below are the
-bench's slow flagships; this is its quick menu.*
-
-- **The Chop (wood):** a felled log rests at camp — tap with the axe's swing
-  rhythm; every split inside the sweet band is +1 wood, up to +6 a session.
-- **The Line (fishing):** tap the bobber's dip to hook, tap again to land; a
-  clean landing doubles the catch, and the rare dawn-silver pays 2 essence.
-- **The Fault (stone):** swipe along a boulder's glowing crack to split it
-  clean — +2 stone, and the rock holds one extra unit before it's spent.
-- **The Comb (berries):** circle a bush without catching the thorn specks;
-  +3 berries and the bush regrows about half a minute faster.
-- **The Sickle (harvest):** swipe the wheat rows in time with the wind; clean
-  swales bundle +2 grain and the plot re-seeds itself.
-- **The Knead (bread):** tap-tap-hold on the dough's bounce; the batch bakes
-  three loaves for two's flour.
-- **The Stir (meals):** keep the ladle inside the pot's slow swirl for eight
-  seconds; the same pot renders 3 meals where 2 stood.
-- **The Hammer (smith):** strike the instant the bar flares; a "true" tool
-  lasts twice as long as a forged one.
-- **The Flight (arrows):** drag feathers to shafts in the pattern shown; a
-  matched flight batches 14 arrows where 10 stood.
-- **The Brew (ale):** tap the bubbles as they crest; a watched brew pours
-  bright ale — +15% work tomorrow instead of +10%.
-- **The Dip (oil):** dip the wicks on the wave; hand-dipped torches sip half
-  oil tonight.
-- **The Suture (hospital):** trace the wound's line without crossing red;
-  the medic's next mends restore +15 hp per herb.
-- **The Spark (braziers):** the hands behind The Kindling below — strike
-  sparks on the cap until it catches; a strong kindle burns a night and a
-  half.
-- **The Effigy (muster yard):** the drill below played for real — tap the
-  shape the straw shade raises, and the +10% lands a day early.
-
-### Shape the wilds — the village edits the map
-
-- **Grovekeep (domestication):** tap a wild berry bush and order **Tend** —
-  a Forager calls on it across days: wild → *tended* (+2 yield, faster
-  regrow) → *heavy-fruiting* (double yield, an orchard bush for good).
-  Tended bushes drop **cuttings** the village can plant anywhere, so food
-  stops being strip-mining the wilds and becomes breeding your own orchards
-  — a dozen tiny long-term projects scattered across the map, each with
-  visible stages.
-- **The Nursery (forestry):** for every 2 trees felled a Lumberjack plants a
-  sapling at the nursery; saplings are dragged out and planted as groves.
-  Wood stops being purely extractive, and *where* you raise a wood becomes a
-  landscape decision — a windbreak of pines shielding the huts, a hedge of
-  oaks funnelling raiders past your towers.
-- **The Spade (dig & pond):** a dig tool carves a tile into shallow water
-  (builders haul ~6s a tile). Ponds let Fishing Docks sit inland, bank water
-  for thirsty days, and grow reeds — herbs at the margin. The water-fill
-  tool terraforms the map *up*; this terraforms it *down*.
-
-### The guardian's hand — draw your will on the ground
-
-- **Sigil-craft:** drag to draw a chalk circle on the ground (the wall
-  drag-paint, repurposed) — salting it costs 1 herb + 1 charcoal, and it
-  charges through the daylight hours. At dusk a **ward** sigil blooms:
-  monsters crossing it slow and take +25% damage. A **hallow** sigil instead
-  steadies villagers inside: guards +10%, and workers within won't break and
-  run. The quiet afternoon is spent *drawing where the night should bend* —
-  the drawing is the defense.
-- **The Kindling (the push of light):** braziers can be kindled during the
-  day (wood + essence) to burn all night as super-torches — and a brazier
-  planted beside a Dark Monolith slowly *cleanses* it: the lair stops
-  mending, stops defending, and finally cracks into salvageable dawn-stone
-  without a single grave. Light stops being decoration; reclaiming the map
-  from the dark becomes a slow, deliberate day campaign.
-
-### Projects with a finish line — check-in work
-
-- **Restoration (the ruins wake):** the ancient ruins stop being salvage and
-  become **restorations** — a Scribe deciphers for a day, Builders scaffold
-  for two, and the ruin stands again as a unique ancient building: the
-  **Aqueduct** (wells +50%, drinks on the spot within 4 tiles), the **Dawn
-  Shrine** (essence regen +50%; villagers pray there, a small daily visit),
-  the **Sky Watch** (towers +1.5 range; dusk warnings arrive a dawn early),
-  the **Root Cellar** (food cap +80; nothing spoils). Which ruin you raise
-  shapes the whole run, and getting there is a multi-day project worth
-  opening the panel for.
-- **The Muster Yard (drills):** guards drill against a straw-and-bone effigy
-  of the last monster the village killed. Pick the drill — **shields** (vs
-  runners), **pikes** (vs brutes), **scatter** (vs stalkers) — and drilled
-  guards take a permanent +10% against that type; the yard also unlocks
-  **rally**: ring the horn and off-duty guards run to it. The dusk telegraph
-  already names the attacking lair, so a quiet morning is spent drilling for
-  exactly what tonight brings.
-- **The Deep Seam (push-your-luck mining):** order **Dig Deeper** on a Mine
-  Shaft and a miner spends the day below. Each level the seam gets richer —
-  stone → double stone → flint (tools last +25%) → crystal flecks (essence)
-  — but every level risks a collapse: the tunnel seals and the miner crawls
-  out hurt. A repeatable risk dial for days when nothing else needs you.
-
-### The village is alive — moments worth tapping
-
-- **Banns & blessings:** villagers who work beside each other grow attached
-  (the Chronicle already remembers friendships); in time a pair asks leave
-  to raise a **shared hut** — bless the banns and they build it together:
-  two beds, snug comfort, a small +work aura between them, and the village
-  throws a feast (1 ale + food; +10% work the next day). Housing, comfort
-  and the Chronicle folded into one tap-worthy moment.
-- **The driven hunt:** some mornings a deer herd grazes at the map's edge.
-  Set a **hunt** and two villagers spend the day driving it — toward the
-  spike-line you laid, if you planned the ground. A clean drive is a mountain
-  of food and a Chronicle entry; a botched one scatters the herd into the
-  wilds. Map-reading, line-setting and payoff, all before lunch.
-
-### Guardrails
-
-Daycraft is *upside*: none of it may gate the night (a village that never
-tends, draws, drills or digs still holds its walls), and none of it may add
-a stock, a job or a panel — tending belongs to Foragers, saplings to
-Lumberjacks, deciphering to Scribes, drills to Guards, digs to Miners, and
-the map stays the canvas while the day becomes the brush. The bench obeys
-the same law: warm hands are capped at six a day and every minigame pays an
-existing stock.
 
 ---
 

@@ -21,8 +21,6 @@
    The Brew    (tavern)     tap the bubbles as they crest
    The Dip     (oil press)  dip the wicks on the wave
    The Suture  (hospital)   trace the wound, avoid the red
-   The Spark   (brazier)    strike sparks until it catches
-   The Effigy  (muster)     tap the shape the straw shade raises
 
    Plus THE DEEP SEAM: push-your-luck mining below a Mine Shaft.
    Each level deeper is richer, and the spinning wheel decides —
@@ -88,13 +86,6 @@ const Bench = {
       case 'hospital':
         if (!j('medic') || G.res.herbs < 1 || G.buffs.suture) return null;
         return { id: 'suture' };
-      case 'brazier':
-        if (b.lit) return null;
-        if (G.res.wood < CONFIG.BRAZIER.kindleWood || G.res.essence < CONFIG.BRAZIER.kindleEss) return null;
-        return { id: 'spark' };
-      case 'muster':
-        if (!b.drillType || (G.drill[b.drillType] || 0) >= CONFIG.MUSTER.bonusCap) return null;
-        return { id: 'effigy' };
     }
     return null;
   },
@@ -965,119 +956,6 @@ const Bench = {
       },
     },
 
-    /* ---- The Spark — strike sparks until the brazier catches ---- */
-    {
-      id: 'spark', name: 'The Spark', hint: 'Strike fast — fill the striker\u2019s heat before it drains. Catch it early for a strong kindle.',
-      init(s) { s.heat = 0; s.sparks = []; s.strong = false; },
-      tick(s, dt) {
-        s.heat = Math.max(0, s.heat - dt * 0.30);
-        for (const sp of s.sparks) { sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.t -= dt; }
-        s.sparks = s.sparks.filter(p => p.t > 0);
-        if (s.heat >= 1) {
-          s.strong = s.t < CONFIG.BENCH.sessionT * 0.6;
-          s.done = true;
-        }
-      },
-      down(s) {
-        s.heat = Math.min(1.001, s.heat + 0.085);
-        for (let i = 0; i < 3; i++) s.sparks.push({ x: 40, y: 30, vx: (Math.random() - .5) * 40, vy: -20 - Math.random() * 25, t: 0.4 + Math.random() * 0.3 });
-      },
-      draw(s, x, P, C2) {
-        P(0, 0, 80, 60, '#241f30');
-        for (let i = 0; i < 16; i++) P((i * 7) % 78, (i * 13) % 58, 1, 1, 'rgba(200,180,255,.12)');
-        P(0, 48, 80, 12, '#33291f');
-        // the brazier
-        P(32, 40, 16, 6, '#6e6e78'); P(32, 40, 16, 1, '#8d8d95');
-        P(34, 46, 3, 6, '#55555f'); P(43, 46, 3, 6, '#55555f');
-        P(34, 38, 12, 3, s.heat > 0.5 ? '#6e3418' : '#3a3a44');
-        if (s.heat > 0.6) { P(36, 34, 8, 4, '#ff7a2e'); P(38, 31, 4, 4, '#ffce56'); }
-        // the striker cap
-        C2(40, 22, 6, '#3a3a44', 0); C2(40, 22, 5, '#55555f', 0); P(38, 18, 4, 2, '#71717d');
-        // sparks
-        for (const sp of s.sparks) P(sp.x, sp.y, 1, 1, sp.t % 0.2 > 0.1 ? '#fff2b0' : '#ffd977');
-        // heat gauge
-        P(66, 10, 7, 34, '#181420');
-        P(67, 11 + 32 * (1 - s.heat), 5, 32 * s.heat, s.heat > 0.75 ? '#ffd977' : '#e86a1e');
-        P(66, 9, 7, 1, s.heat > 0.75 ? '#ffe9a0' : '#3a3a44');
-      },
-      apply(s, site) {
-        if (s.heat < 1) return null;
-        const b = site && site.b;
-        if (!b || !Sim.kindle(b, s.strong)) return null;
-        Bench.payFx(site, s.strong ? 'STRONG kindle!' : 'kindled', '#ffb057');
-        return s.strong
-          ? 'The Spark — a STRONG kindle: the brazier burns a night and a half.'
-          : 'The Spark — the brazier catches and will burn till dawn.';
-      },
-    },
-
-    /* ---- The Effigy — tap the shape the straw shade raises ---- */
-    {
-      id: 'effigy', name: 'The Effigy', hint: 'Tap the drill-shape the straw shade raises — four true calls and the drill lands now.',
-      init(s) { s.shape = -1; s.showT = 0.6; s.gapT = 0; s.hits = 0; s.flash = 0; s.errT = 0; },
-      SHAPES: ['shield', 'pike', 'claw'],
-      tick(s, dt) {
-        s.flash = Math.max(0, s.flash - dt); s.errT = Math.max(0, s.errT - dt);
-        if (s.shape < 0) {
-          s.gapT -= dt;
-          if (s.gapT <= 0) { s.shape = (Math.random() * 3) | 0; s.showT = 0.95; }
-        } else {
-          s.showT -= dt;
-          if (s.showT <= 0) { s.shape = -1; s.gapT = 0.45; s.late = 0.5; }
-        }
-        if (s.late > 0) s.late -= dt;
-        if (s.hits >= 4) s.done = true;
-      },
-      down(s, x, y) {
-        if (y < 42 || s.done) return;
-        const hit = x < 27 ? 0 : x < 53 ? 1 : 2;
-        if (s.shape >= 0 && hit === s.shape) { s.hits++; s.flash = 0.3; }
-        else if (s.late > 0 && hit === s.lastShape) { s.hits++; s.flash = 0.3; } // called just after the hide
-        else { s.errT = 0.4; }
-        s.shape = -1; s.gapT = 0.4 + Math.random() * 0.3; s.lastShape = hit;
-      },
-      draw(s, x, P, C2) {
-        P(0, 0, 80, 60, '#5a8a4a');
-        P(0, 40, 80, 20, '#7c5f42'); P(0, 40, 80, 2, '#8a6d4e');
-        for (let i = 0; i < 8; i++) P(4 + i * 10, 44 + (i % 3) * 4, 2, 1, '#6e5136');
-        // the straw-shade effigy
-        P(34, 30, 12, 12, '#c9a94b'); P(33, 32, 14, 8, '#c9a94b'); P(34, 30, 12, 1, '#e0c46a');
-        P(36, 33, 2, 2, '#7a4ec0'); P(42, 33, 2, 2, '#7a4ec0');
-        P(38, 37, 4, 1, '#8a6a1e');
-        P(31, 34, 3, 5, '#b8942e'); P(46, 32, 3, 6, '#b8942e');
-        P(30, 44, 3, 8, '#6b4a2b'); P(47, 44, 3, 8, '#6b4a2b');
-        // the raised shape
-        if (s.shape >= 0) {
-          const bob = Math.sin(s.t * 9) * 1.2;
-          const sy = 12 + bob;
-          if (s.shape === 0) { C2(40, sy + 3, 5, 'rgba(255,233,160,.9)', 1); P(38, sy, 5, 3, '#e8e0d0'); P(39, sy + 3, 3, 2, '#c9ced9'); }
-          else if (s.shape === 1) { P(39, sy, 2.4, 12, '#c9b47a'); P(39, sy - 2, 2.4, 3, '#cfd8e0'); }
-          else { P(35, sy, 3, 2, '#e8e0d0'); P(38, sy + 2, 3, 2, '#e8e0d0'); P(42, sy + 1, 3, 2, '#e8e0d0'); P(36, sy + 4, 2, 2, '#cfd8e0'); P(41, sy + 5, 2, 2, '#cfd8e0'); }
-        }
-        // the three drill buttons
-        const labels = [['shield', 4], ['pike', 30], ['claw', 56]];
-        for (const [nm, bx] of labels) {
-          P(bx, 44, 20, 14, '#241f30');
-          P(bx + 1, 45, 18, 12, s.flash > 0 && nm === 'x' ? '#33301f' : '#2c2c34');
-          if (nm === 'shield') { P(bx + 8, 47, 4, 5, '#e8e0d0'); P(bx + 9, 52, 2, 2, '#c9ced9'); }
-          else if (nm === 'pike') { P(bx + 9, 46, 2, 8, '#c9b47a'); P(bx + 9, 45, 2, 2, '#cfd8e0'); }
-          else { P(bx + 6, 47, 3, 2, '#e8e0d0'); P(bx + 9, 49, 3, 2, '#e8e0d0'); P(bx + 12, 48, 3, 2, '#e8e0d0'); }
-        }
-        for (let i = 0; i < s.hits; i++) P(4 + i * 4, 3, 2, 2, '#ffe9a0');
-        if (s.errT > 0) P(30, 24, 20, 2, '#e05555');
-      },
-      apply(s, site) {
-        const b = site && site.b;
-        if (!b || !b.drillType || s.hits < 4) return null;
-        const cur = G.drill[b.drillType] || 0;
-        if (cur >= CONFIG.MUSTER.bonusCap) return null;
-        G.drill[b.drillType] = Math.min(CONFIG.MUSTER.bonusCap, cur + CONFIG.MUSTER.bonus);
-        b.drillT = 0;
-        const nm = { runner: 'shields', brute: 'pikes', stalker: 'scatter' }[b.drillType];
-        Bench.payFx(site, 'drill lands!', '#e8a94b');
-        return `The Effigy — the drill played true: +10% vs ${CONFIG.MONS[b.drillType].name}s, landed today.`;
-      },
-    },
   ],
 };
 

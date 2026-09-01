@@ -24,7 +24,6 @@ const SaveSys = {
       finalNight: G.finalNight, beaconLit: G.beaconLit, finalNightDay: G.finalNightDay || 0,
       handsUsed: G.handsUsed || 0,
       buffs: { ...G.buffs },
-      drill: { ...(G.drill || {}) },
       endless: !!G.endless,
       wave: G.wave ? { left: G.wave.left, comps: G.wave.comps, t: G.wave.t, window: G.wave.window } : null,
       cam: { x: G.cam.x, y: G.cam.y, z: G.cam.z },
@@ -35,8 +34,7 @@ const SaveSys = {
       },
       buildings: G.buildings.map(b => ({
         key: b.key, x: b.x, y: b.y, hp: b.hp, built: b.built, progress: b.progress,
-        growth: b.growth, lit: b.lit,
-        fuel: b.fuel || 0, drillType: b.drillType || null, drillT: b.drillT || 0,
+        growth: b.growth,
         seamDepth: b.seamDepth || 0, seamDay: b.seamDay || 0,
         demo: !!b.demo,
         clear: (b.clearTiles || []).map(t => [t.x, t.y]),
@@ -106,7 +104,6 @@ const SaveSys = {
     G.finalNight = !!d.finalNight; G.beaconLit = !!d.beaconLit; G.finalNightDay = d.finalNightDay || 0;
     G.handsUsed = d.handsUsed || 0;
     G.buffs = d.buffs || {};
-    G.drill = Object.assign({ runner: 0, brute: 0, stalker: 0 }, d.drill || {});
     G.endless = !!d.endless;
     G.wave = d.wave ? { ...d.wave } : null;
     G.cam = { x: d.cam.x, y: d.cam.y, z: d.cam.z };
@@ -118,10 +115,9 @@ const SaveSys = {
     Buildings.byIdMap.clear();
     G.buildings = [];
     for (const bs of d.buildings) {
+      if (!Buildings.def(bs.key)) continue; // building type removed in a later version
       const b = Buildings.create(bs.key, bs.x, bs.y, bs.built);
-      b.hp = bs.hp; b.progress = bs.progress; b.growth = bs.growth; b.lit = !!bs.lit;
-      b.fuel = bs.fuel || 0;
-      b.drillType = bs.drillType || null; b.drillT = bs.drillT || 0;
+      b.hp = bs.hp; b.progress = bs.progress; b.growth = bs.growth;
       b.seamDepth = bs.seamDepth || 0; b.seamDay = bs.seamDay || 0;
       b.demo = !!bs.demo;
       if (bs.clear && bs.clear.length) b.clearTiles = bs.clear.map(([x, y]) => ({ x, y }));

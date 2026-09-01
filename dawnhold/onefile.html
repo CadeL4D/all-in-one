@@ -370,7 +370,7 @@ h1{font-size:44px;letter-spacing:10px;font-weight:900;color:var(--amber2);text-s
         <button class="bigbtn diff" data-diff="hard"><b>Hard</b><span>Scant stores, hungry dark, short days.</span></button>
         <button id="btnDiffBack" class="bigbtn ghost">Back</button>
       </div>
-      <div class="verText">v1.5.0 &middot; The Daycraft Update &middot; saves in this browser</div>
+      <div class="verText">v1.5.1 &middot; The Daycraft Update &middot; saves in this browser</div>
     </div>
   </div>
 
@@ -542,13 +542,6 @@ const CONFIG = {
     sessionT: 8,        // seconds a session may run (real time; the world keeps simulating)
     chopMax: 6,         // wood cap per Chop session
   },
-  BRAZIER: {            // The Kindling: a lit brazier burns all night as a
-    kindleWood: 4, kindleEss: 8,   // super-torch — and beside a monolith it
-    light: 5.2,          // slowly cleanses it: no mending, no defenders,
-    cleanseDps: 4,       // until it cracks into dawn-stone
-    cleanseR: 3.5, dawnStone: 30, dawnEss: 12,
-  },
-  MUSTER: { drillT: 60, bonus: 0.10, bonusCap: 0.30 }, // one drill = +10% vs a monster type, capped
   SEAM: {   // The Deep Seam: push-your-luck mining below a Mine Shaft
     // per-level pay (stone, and essence at the crystal flecks);
     // level 3 also yields flint (tools last +25% for 3 days)
@@ -661,7 +654,6 @@ const G = {
   dryWarned: false,        // one "towers are dry" notice per night
   handsUsed: 0,            // warm hands spent today (Bench.handsPerDay resets at dawn)
   buffs: {},               // daycraft day-scopes: brightAle, handDip, suture, trueTools, flintDays
-  drill: { runner: 0, brute: 0, stalker: 0 }, // muster-yard drills: +dmg vs each monster type
   endless: false,          // set after the Beacon victory — waves may cap at 38
   tut: 0, tutOn: true,
   shake: 0,
@@ -1630,57 +1622,6 @@ const Art = {
       R(x, 13, 26, 6, 8, PAL.door); R(x, 13, 26, 6, 1, '#7a5a34');
       R(x, 6, 19, 4, 4, '#2c2c34'); R(x, 21, 19, 4, 4, '#2c2c34');
       S.barracks = c;
-    }
-    // --- brazier (The Kindling): stone bowl on legs; 2 lit frames ---
-    {
-      const { c, x } = mkc(16, 20);
-      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 18, 10, 2);
-      R(x, 4, 13, 2, 5, PAL.stoneD); R(x, 10, 13, 2, 5, PAL.stoneD);   // legs
-      R(x, 2, 9, 12, 4, PAL.stoneB); R(x, 2, 9, 12, 1, PAL.stoneL); R(x, 2, 12, 12, 1, PAL.stoneD); // bowl
-      R(x, 3, 8, 10, 1, '#4c4c56');
-      R(x, 4, 7, 8, 1, '#3a3a44');                                     // cold coals
-      S.brazier = c;
-    }
-    for (let f = 0; f < 2; f++) {
-      const { c, x } = mkc(16, 20);
-      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(3, 18, 10, 2);
-      R(x, 4, 13, 2, 5, PAL.stoneD); R(x, 10, 13, 2, 5, PAL.stoneD);
-      R(x, 2, 9, 12, 4, PAL.stoneB); R(x, 2, 9, 12, 1, PAL.stoneL); R(x, 2, 12, 12, 1, PAL.stoneD);
-      R(x, 3, 8, 10, 1, '#6e3418');
-      R(x, 4, 7, 8, 1, '#ff7a2e');                                     // hot coals
-      // tall flame, two flicker frames
-      const fy = f ? 0 : 1;
-      R(x, 6, 2 + fy, 4, 6, '#ff9a2e'); R(x, 5, 4 + fy, 6, 4, '#ffce56'); R(x, 6, 5 + fy, 4, 2, '#fff2b0');
-      if (f) { R(x, 4, 5 + fy, 1, 2, '#ff9a2e'); R(x, 11, 3 + fy, 1, 3, '#ff9a2e'); }
-      else { R(x, 3, 4 + fy, 1, 3, '#ff9a2e'); R(x, 12, 5 + fy, 1, 2, '#ffce56'); }
-      S['brazierOn' + f] = c;
-    }
-    // --- muster yard 2x2: fenced drill yard, straw-shade effigy, horn post ---
-    {
-      const { c, x } = mkc(32, 30);
-      x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(4, 27, 24, 2);
-      // trampled dirt ring
-      R(x, 3, 12, 26, 14, '#8a6d4e'); R(x, 3, 12, 26, 1, '#9a7d5c');
-      R(x, 5, 14, 22, 10, '#7c5f42');
-      for (let i = 0; i < 5; i++) R(x, 6 + i * 4, 15 + (i % 3) * 3, 2, 1, '#6e5136');
-      // fence posts around
-      for (const p of [[2, 10], [9, 8], [20, 8], [28, 10], [2, 22], [28, 22]]) {
-        R(x, p[0], p[1], 2, 6, PAL.woodD); R(x, p[0], p[1], 2, 1, PAL.woodL);
-      }
-      R(x, 2, 12, 6, 1, PAL.wood); R(x, 24, 12, 6, 1, PAL.wood);
-      R(x, 4, 16, 24, 1, PAL.woodD);
-      // straw-shade effigy: little straw blob with purple-button eyes on a pole
-      R(x, 14, 20, 3, 6, '#6b4a2b');
-      R(x, 10, 12, 11, 8, '#c9a94b'); R(x, 9, 14, 13, 4, '#c9a94b');
-      R(x, 10, 12, 11, 1, '#e0c46a');
-      R(x, 8, 15, 2, 4, '#b8942e'); R(x, 21, 13, 2, 5, '#b8942e');     // straw arms
-      R(x, 12, 14, 2, 2, '#7a4ec0'); R(x, 17, 14, 2, 2, '#7a4ec0');    // button eyes
-      R(x, 14, 17, 3, 1, '#8a6a1e');
-      R(x, 11, 10, 9, 2, '#e0c46a'); R(x, 12, 9, 7, 1, '#e0c46a');     // straw hat brim
-      // horn post + weapon rack
-      R(x, 26, 14, 2, 12, '#6b4a26'); R(x, 24, 14, 6, 2, '#8a5f37'); R(x, 25, 13, 2, 2, '#c9a94b');
-      R(x, 5, 24, 7, 2, PAL.wood); R(x, 6, 21, 1, 3, PAL.metalD); R(x, 9, 21, 1, 3, PAL.metal);
-      S.muster = c;
     }
   },
 
@@ -2757,18 +2698,6 @@ const BUILD = {
     short: 'Essence regenerates faster.',
     desc: 'Faith of the valley made stone. Slowly regenerates your Essence.',
   },
-  brazier: {
-    name: 'Brazier', cat: 'mystic', w: 1, h: 1, hp: 180, cost: { wood: 6, stone: 4 }, time: 12,
-    kind: 'brazier', light: 0, tall: 8, unlock: 3,
-    short: 'Kindle it — a great light all night. Cleanses monoliths.',
-    desc: `Kindled with ${CONFIG.BRAZIER.kindleWood} wood + ${CONFIG.BRAZIER.kindleEss} essence, it burns a whole night as a super-torch — and set beside a Dark Monolith it slowly cleanses the lair: no mending, no defenders, until the stone cracks into dawn-stone.`,
-  },
-  muster: {
-    name: 'Muster Yard', cat: 'defense', w: 2, h: 2, hp: 320, cost: { wood: 16, stone: 6 }, time: 30,
-    kind: 'muster', capOne: true, light: 1.8, tall: 4, unlock: 5,
-    short: 'Drill guards vs a monster type: +10% damage. Rally horn.',
-    desc: 'Guards drill against a straw-and-bone effigy. Pick the drill — shields (vs runners), pikes (vs brutes), scatter (vs stalkers) — and drilled guards strike +10% harder against that type (stacks to +30%). Ring the horn and off-duty guards run to the yard.',
-  },
   beacon: {
     name: 'The Beacon', cat: 'mystic', w: 3, h: 3, hp: 900, cost: { wood: 100, stone: 80 }, time: 110,
     kind: 'beacon', light: 0, tall: 40, unlock: 10,
@@ -2966,9 +2895,6 @@ const Buildings = {
   fisherHuts() { return G.buildings.filter(b => b.built && b.def.kind === 'fisher'); },
   mines() { return G.buildings.filter(b => b.built && b.def.kind === 'mine'); },
   hospitals() { return G.buildings.filter(b => b.key === 'hospital' && b.built); },
-  braziers() { return G.buildings.filter(b => b.built && b.key === 'brazier'); },
-  litBraziers() { return G.buildings.filter(b => b.built && b.key === 'brazier' && b.lit); },
-  musters() { return G.buildings.filter(b => b.built && b.key === 'muster'); },
   demoSites() { return G.buildings.filter(b => b.built && b.demo); },
 
   nearestStore(tx, ty) {
@@ -3099,47 +3025,6 @@ const Buildings = {
           if (G.res.food > CONFIG.MILL.foodKeep && G.res.flour < Buildings.capOf('flour')) {
             G.res.food -= 1;
             Sim.gain('flour', 1);
-          }
-        }
-      }
-      // braziers burn their fuel through the night (a strong kindle lasts a
-      // night and a half), and one set beside a lair cleanses it: the
-      // monolith can't mend, can't call its brood, and cracks into dawn-stone
-      if (b.def.kind === 'brazier' && b.built && b.lit) {
-        if (isNightLike()) {
-          b.fuel = (b.fuel || 0) - dt;
-          if (b.fuel <= 0) { b.lit = false; b.fuel = 0; }
-        }
-        if (b.lit) {
-          for (const l of G.buildings) {
-            if (l.key !== 'lair') continue;
-            if (U.dst(b.x + .5, b.y + .5, l.x + .5, l.y + .5) > CONFIG.BRAZIER.cleanseR) continue;
-            l.cleansed = true;
-            l.hp -= CONFIG.BRAZIER.cleanseDps * dt;
-            if (Math.random() < dt * 2) Sim.fx('spark', l.x + .5, l.y + .2, .35);
-            if (l.hp <= 0) { Sim.lairCleansed(l); break; } // lair is gone — stop poking the list
-          }
-        }
-      }
-      // the muster yard: off-duty guards near the effigy drill against the
-      // chosen monster type — a completed drill is a permanent +10% (cap +30%)
-      if (b.def.kind === 'muster' && b.built && b.drillType && G.villagers.length) {
-        const cur = G.drill[b.drillType] || 0;
-        if (cur < CONFIG.MUSTER.bonusCap) {
-          let drillers = 0;
-          for (const v of G.villagers) {
-            if (v.job !== 'guard' || v.below) continue;
-            if (U.dst2(v.x, v.y, b.x + 1, b.y + 1) < 36) drillers++;
-          }
-          if (drillers > 0 && !G.raidTarget) { // no drills while a raid is on
-            b.drillT = (b.drillT || 0) + dt * Math.min(2, drillers);
-            if (b.drillT >= CONFIG.MUSTER.drillT) {
-              b.drillT = 0;
-              G.drill[b.drillType] = Math.min(CONFIG.MUSTER.bonusCap, cur + CONFIG.MUSTER.bonus);
-              const nm = { runner: 'shields', brute: 'pikes', stalker: 'scatter' }[b.drillType];
-              UI.toast(`Drill complete — the guards' ${nm} work: +10% vs ${CONFIG.MONS[b.drillType].name}s.`, 'good');
-              Sim.log(`The yard drilled ${nm} — guards strike +10% harder against ${CONFIG.MONS[b.drillType].name}s.`, 'good');
-            }
           }
         }
       }
@@ -3316,7 +3201,6 @@ const Sim = {
     G.tut = 0; G.tutOn = true;
     G.shake = 0; G.sel = null; G.follow = null;
     G.handsUsed = 0; G.buffs = {};
-    G.drill = { runner: 0, brute: 0, stalker: 0 };
     G.endless = false;
 
     Buildings.byIdMap.clear();
@@ -3720,15 +3604,14 @@ const Sim = {
   },
 
   // monoliths shrug off old wounds, and a raided one calls its brood to defend it.
-  // A lit brazier nearby (b.cleansed, set in Buildings.update) silences both.
   lairTick(dt) {
     const rt = G.raidTarget;
     for (const b of G.buildings) {
       if (b.key !== 'lair') continue;
       if (b.hitT > 0) b.hitT = Math.max(0, b.hitT - dt);
-      else if (b.hp < b.maxHp && !b.cleansed) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * CONFIG.LAIR.regenPct * (G.diffM.lairRegenMul || 1) * dt);
+      else if (b.hp < b.maxHp) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * CONFIG.LAIR.regenPct * (G.diffM.lairRegenMul || 1) * dt);
       // struck within the last ~2.5s → the raid is live, the brood answers
-      if (b === rt && !b.cleansed && b.hitT > CONFIG.LAIR.regenDelay - 2.5) {
+      if (b === rt && b.hitT > CONFIG.LAIR.regenDelay - 2.5) {
         b.defT = (b.defT == null ? 1.2 : b.defT) - dt;
         if (b.defT <= 0) {
           b.defT = CONFIG.RAID.defEvery;
@@ -3737,7 +3620,6 @@ const Sim = {
       } else if (b === rt) {
         b.defT = null; // guards stopped hacking — the brood settles
       }
-      b.cleansed = false; // braziers re-light this flag each frame they burn
     }
   },
 
@@ -4804,61 +4686,6 @@ const Sim = {
     }
   },
 
-  // a kindled brazier has burned a monolith down to clean stone — no raid,
-  // no graves: the lair cracks into salvageable dawn-stone (The Kindling)
-  lairCleansed(b) {
-    const idx = G.buildings.indexOf(b);
-    if (idx < 0) return;
-    G.buildings.splice(idx, 1);
-    Buildings.byIdMap.delete(b.id);
-    World.occ[World.idx(b.x, b.y)] = 0;
-    if (G.raidTarget === b) G.raidTarget = null;
-    if (G.sel && G.sel.ref === b) { G.sel = null; UI.selHide(); }
-    this.gain('stone', CONFIG.BRAZIER.dawnStone);
-    G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.BRAZIER.dawnEss);
-    this.fx('smoke', b.x + .5, b.y + .5, 1.2);
-    for (let k = 0; k < 6; k++) this.fx('spark', b.x + (Math.random() - .5), b.y - Math.random() * .8, .5);
-    G.shake = Math.max(G.shake, 5);
-    UI.toast(`The monolith cracks into clean dawn-stone! +${CONFIG.BRAZIER.dawnStone} stone, +${CONFIG.BRAZIER.dawnEss} essence`, 'good');
-    this.log('The light burned a Dark Monolith clean away. Dawn-stone for the taking.', 'good');
-    if (!Buildings.lairs().length) {
-      UI.toast('The last monolith has fallen — the nights grow thin!', 'good');
-      this.log('No lairs remain. The dark must now crawl in from the wilds.', 'good');
-    }
-  },
-
-  // The Kindling: pay wood + essence and a brazier burns through the night.
-  // A strong kindle (lit fast at the striker) carries a night and a half.
-  kindle(b, strong) {
-    if (!b || !b.built || b.key !== 'brazier' || b.lit) return false;
-    if (G.res.wood < CONFIG.BRAZIER.kindleWood || G.res.essence < CONFIG.BRAZIER.kindleEss) return false;
-    G.res.wood -= CONFIG.BRAZIER.kindleWood;
-    G.res.essence -= CONFIG.BRAZIER.kindleEss;
-    b.lit = true;
-    b.fuel = CONFIG.NIGHT_LEN * (G.diffM.night || 1) * (strong ? 1.5 : 1);
-    this.fx('ring', b.x + .5, b.y + .5, .5, { col: '#ffb057' });
-    UI.toast(strong ? 'The brazier ROARS — a strong kindle burns a night and a half!' : 'The brazier catches — it will burn till dawn.', 'good');
-    this.log('A brazier was kindled against the coming dark.', 'good');
-    return true;
-  },
-
-  // ring the muster-yard horn: off-duty guards run to the yard
-  rally(b) {
-    let n = 0;
-    for (const v of G.villagers) {
-      if (v.job !== 'guard' || v.below) continue;
-      if (U.dst2(v.x, v.y, b.x + 1, b.y + 1) < 25) continue;
-      const p = Path.find(v.x | 0, v.y | 0, b.x + 1, b.y + 1, { adjacent: true });
-      if (p) { v.path = p; v.pi = 0; v.tgt = null; n++; }
-    }
-    if (n) {
-      this.fx('ring', b.x + 1, b.y + 1, .8, { col: '#e8a94b' });
-      UI.toast('The horn rings — the guards muster at the yard!', '');
-    }
-    return n;
-  },
-
-
   lairDestroyed(b) {
     const idx = G.buildings.indexOf(b);
     if (idx >= 0) G.buildings.splice(idx, 1);
@@ -4881,7 +4708,6 @@ const Sim = {
   guardDmg(mType) {
     let d = CONFIG.GUARD.dmg;
     if (G.buildings.some(b => b.built && b.key === 'barracks')) d *= CONFIG.BARRACKS.dmgMult;
-    if (mType && G.drill && G.drill[mType]) d *= 1 + G.drill[mType]; // muster-yard drills
     if (G.res.arrows <= 0) d *= CONFIG.AMMO.dryMult; // no resupply for the quivers
     return d;
   },
@@ -5227,8 +5053,6 @@ const Powers = {
    The Brew    (tavern)     tap the bubbles as they crest
    The Dip     (oil press)  dip the wicks on the wave
    The Suture  (hospital)   trace the wound, avoid the red
-   The Spark   (brazier)    strike sparks until it catches
-   The Effigy  (muster)     tap the shape the straw shade raises
 
    Plus THE DEEP SEAM: push-your-luck mining below a Mine Shaft.
    Each level deeper is richer, and the spinning wheel decides —
@@ -5294,13 +5118,6 @@ const Bench = {
       case 'hospital':
         if (!j('medic') || G.res.herbs < 1 || G.buffs.suture) return null;
         return { id: 'suture' };
-      case 'brazier':
-        if (b.lit) return null;
-        if (G.res.wood < CONFIG.BRAZIER.kindleWood || G.res.essence < CONFIG.BRAZIER.kindleEss) return null;
-        return { id: 'spark' };
-      case 'muster':
-        if (!b.drillType || (G.drill[b.drillType] || 0) >= CONFIG.MUSTER.bonusCap) return null;
-        return { id: 'effigy' };
     }
     return null;
   },
@@ -6171,119 +5988,6 @@ const Bench = {
       },
     },
 
-    /* ---- The Spark — strike sparks until the brazier catches ---- */
-    {
-      id: 'spark', name: 'The Spark', hint: 'Strike fast — fill the striker\u2019s heat before it drains. Catch it early for a strong kindle.',
-      init(s) { s.heat = 0; s.sparks = []; s.strong = false; },
-      tick(s, dt) {
-        s.heat = Math.max(0, s.heat - dt * 0.30);
-        for (const sp of s.sparks) { sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.t -= dt; }
-        s.sparks = s.sparks.filter(p => p.t > 0);
-        if (s.heat >= 1) {
-          s.strong = s.t < CONFIG.BENCH.sessionT * 0.6;
-          s.done = true;
-        }
-      },
-      down(s) {
-        s.heat = Math.min(1.001, s.heat + 0.085);
-        for (let i = 0; i < 3; i++) s.sparks.push({ x: 40, y: 30, vx: (Math.random() - .5) * 40, vy: -20 - Math.random() * 25, t: 0.4 + Math.random() * 0.3 });
-      },
-      draw(s, x, P, C2) {
-        P(0, 0, 80, 60, '#241f30');
-        for (let i = 0; i < 16; i++) P((i * 7) % 78, (i * 13) % 58, 1, 1, 'rgba(200,180,255,.12)');
-        P(0, 48, 80, 12, '#33291f');
-        // the brazier
-        P(32, 40, 16, 6, '#6e6e78'); P(32, 40, 16, 1, '#8d8d95');
-        P(34, 46, 3, 6, '#55555f'); P(43, 46, 3, 6, '#55555f');
-        P(34, 38, 12, 3, s.heat > 0.5 ? '#6e3418' : '#3a3a44');
-        if (s.heat > 0.6) { P(36, 34, 8, 4, '#ff7a2e'); P(38, 31, 4, 4, '#ffce56'); }
-        // the striker cap
-        C2(40, 22, 6, '#3a3a44', 0); C2(40, 22, 5, '#55555f', 0); P(38, 18, 4, 2, '#71717d');
-        // sparks
-        for (const sp of s.sparks) P(sp.x, sp.y, 1, 1, sp.t % 0.2 > 0.1 ? '#fff2b0' : '#ffd977');
-        // heat gauge
-        P(66, 10, 7, 34, '#181420');
-        P(67, 11 + 32 * (1 - s.heat), 5, 32 * s.heat, s.heat > 0.75 ? '#ffd977' : '#e86a1e');
-        P(66, 9, 7, 1, s.heat > 0.75 ? '#ffe9a0' : '#3a3a44');
-      },
-      apply(s, site) {
-        if (s.heat < 1) return null;
-        const b = site && site.b;
-        if (!b || !Sim.kindle(b, s.strong)) return null;
-        Bench.payFx(site, s.strong ? 'STRONG kindle!' : 'kindled', '#ffb057');
-        return s.strong
-          ? 'The Spark — a STRONG kindle: the brazier burns a night and a half.'
-          : 'The Spark — the brazier catches and will burn till dawn.';
-      },
-    },
-
-    /* ---- The Effigy — tap the shape the straw shade raises ---- */
-    {
-      id: 'effigy', name: 'The Effigy', hint: 'Tap the drill-shape the straw shade raises — four true calls and the drill lands now.',
-      init(s) { s.shape = -1; s.showT = 0.6; s.gapT = 0; s.hits = 0; s.flash = 0; s.errT = 0; },
-      SHAPES: ['shield', 'pike', 'claw'],
-      tick(s, dt) {
-        s.flash = Math.max(0, s.flash - dt); s.errT = Math.max(0, s.errT - dt);
-        if (s.shape < 0) {
-          s.gapT -= dt;
-          if (s.gapT <= 0) { s.shape = (Math.random() * 3) | 0; s.showT = 0.95; }
-        } else {
-          s.showT -= dt;
-          if (s.showT <= 0) { s.shape = -1; s.gapT = 0.45; s.late = 0.5; }
-        }
-        if (s.late > 0) s.late -= dt;
-        if (s.hits >= 4) s.done = true;
-      },
-      down(s, x, y) {
-        if (y < 42 || s.done) return;
-        const hit = x < 27 ? 0 : x < 53 ? 1 : 2;
-        if (s.shape >= 0 && hit === s.shape) { s.hits++; s.flash = 0.3; }
-        else if (s.late > 0 && hit === s.lastShape) { s.hits++; s.flash = 0.3; } // called just after the hide
-        else { s.errT = 0.4; }
-        s.shape = -1; s.gapT = 0.4 + Math.random() * 0.3; s.lastShape = hit;
-      },
-      draw(s, x, P, C2) {
-        P(0, 0, 80, 60, '#5a8a4a');
-        P(0, 40, 80, 20, '#7c5f42'); P(0, 40, 80, 2, '#8a6d4e');
-        for (let i = 0; i < 8; i++) P(4 + i * 10, 44 + (i % 3) * 4, 2, 1, '#6e5136');
-        // the straw-shade effigy
-        P(34, 30, 12, 12, '#c9a94b'); P(33, 32, 14, 8, '#c9a94b'); P(34, 30, 12, 1, '#e0c46a');
-        P(36, 33, 2, 2, '#7a4ec0'); P(42, 33, 2, 2, '#7a4ec0');
-        P(38, 37, 4, 1, '#8a6a1e');
-        P(31, 34, 3, 5, '#b8942e'); P(46, 32, 3, 6, '#b8942e');
-        P(30, 44, 3, 8, '#6b4a2b'); P(47, 44, 3, 8, '#6b4a2b');
-        // the raised shape
-        if (s.shape >= 0) {
-          const bob = Math.sin(s.t * 9) * 1.2;
-          const sy = 12 + bob;
-          if (s.shape === 0) { C2(40, sy + 3, 5, 'rgba(255,233,160,.9)', 1); P(38, sy, 5, 3, '#e8e0d0'); P(39, sy + 3, 3, 2, '#c9ced9'); }
-          else if (s.shape === 1) { P(39, sy, 2.4, 12, '#c9b47a'); P(39, sy - 2, 2.4, 3, '#cfd8e0'); }
-          else { P(35, sy, 3, 2, '#e8e0d0'); P(38, sy + 2, 3, 2, '#e8e0d0'); P(42, sy + 1, 3, 2, '#e8e0d0'); P(36, sy + 4, 2, 2, '#cfd8e0'); P(41, sy + 5, 2, 2, '#cfd8e0'); }
-        }
-        // the three drill buttons
-        const labels = [['shield', 4], ['pike', 30], ['claw', 56]];
-        for (const [nm, bx] of labels) {
-          P(bx, 44, 20, 14, '#241f30');
-          P(bx + 1, 45, 18, 12, s.flash > 0 && nm === 'x' ? '#33301f' : '#2c2c34');
-          if (nm === 'shield') { P(bx + 8, 47, 4, 5, '#e8e0d0'); P(bx + 9, 52, 2, 2, '#c9ced9'); }
-          else if (nm === 'pike') { P(bx + 9, 46, 2, 8, '#c9b47a'); P(bx + 9, 45, 2, 2, '#cfd8e0'); }
-          else { P(bx + 6, 47, 3, 2, '#e8e0d0'); P(bx + 9, 49, 3, 2, '#e8e0d0'); P(bx + 12, 48, 3, 2, '#e8e0d0'); }
-        }
-        for (let i = 0; i < s.hits; i++) P(4 + i * 4, 3, 2, 2, '#ffe9a0');
-        if (s.errT > 0) P(30, 24, 20, 2, '#e05555');
-      },
-      apply(s, site) {
-        const b = site && site.b;
-        if (!b || !b.drillType || s.hits < 4) return null;
-        const cur = G.drill[b.drillType] || 0;
-        if (cur >= CONFIG.MUSTER.bonusCap) return null;
-        G.drill[b.drillType] = Math.min(CONFIG.MUSTER.bonusCap, cur + CONFIG.MUSTER.bonus);
-        b.drillT = 0;
-        const nm = { runner: 'shields', brute: 'pikes', stalker: 'scatter' }[b.drillType];
-        Bench.payFx(site, 'drill lands!', '#e8a94b');
-        return `The Effigy — the drill played true: +10% vs ${CONFIG.MONS[b.drillType].name}s, landed today.`;
-      },
-    },
   ],
 };
 
@@ -6672,7 +6376,6 @@ const SaveSys = {
       finalNight: G.finalNight, beaconLit: G.beaconLit, finalNightDay: G.finalNightDay || 0,
       handsUsed: G.handsUsed || 0,
       buffs: { ...G.buffs },
-      drill: { ...(G.drill || {}) },
       endless: !!G.endless,
       wave: G.wave ? { left: G.wave.left, comps: G.wave.comps, t: G.wave.t, window: G.wave.window } : null,
       cam: { x: G.cam.x, y: G.cam.y, z: G.cam.z },
@@ -6683,8 +6386,7 @@ const SaveSys = {
       },
       buildings: G.buildings.map(b => ({
         key: b.key, x: b.x, y: b.y, hp: b.hp, built: b.built, progress: b.progress,
-        growth: b.growth, lit: b.lit,
-        fuel: b.fuel || 0, drillType: b.drillType || null, drillT: b.drillT || 0,
+        growth: b.growth,
         seamDepth: b.seamDepth || 0, seamDay: b.seamDay || 0,
         demo: !!b.demo,
         clear: (b.clearTiles || []).map(t => [t.x, t.y]),
@@ -6754,7 +6456,6 @@ const SaveSys = {
     G.finalNight = !!d.finalNight; G.beaconLit = !!d.beaconLit; G.finalNightDay = d.finalNightDay || 0;
     G.handsUsed = d.handsUsed || 0;
     G.buffs = d.buffs || {};
-    G.drill = Object.assign({ runner: 0, brute: 0, stalker: 0 }, d.drill || {});
     G.endless = !!d.endless;
     G.wave = d.wave ? { ...d.wave } : null;
     G.cam = { x: d.cam.x, y: d.cam.y, z: d.cam.z };
@@ -6766,10 +6467,9 @@ const SaveSys = {
     Buildings.byIdMap.clear();
     G.buildings = [];
     for (const bs of d.buildings) {
+      if (!Buildings.def(bs.key)) continue; // building type removed in a later version
       const b = Buildings.create(bs.key, bs.x, bs.y, bs.built);
-      b.hp = bs.hp; b.progress = bs.progress; b.growth = bs.growth; b.lit = !!bs.lit;
-      b.fuel = bs.fuel || 0;
-      b.drillType = bs.drillType || null; b.drillT = bs.drillT || 0;
+      b.hp = bs.hp; b.progress = bs.progress; b.growth = bs.growth;
       b.seamDepth = bs.seamDepth || 0; b.seamDay = bs.seamDay || 0;
       b.demo = !!bs.demo;
       if (bs.clear && bs.clear.length) b.clearTiles = bs.clear.map(([x, y]) => ({ x, y }));
@@ -6989,7 +6689,6 @@ const Render = {
     } else if (b.key === 'torch') spr = Art.s['torch' + animF];
     else if (b.key === 'lair') spr = Art.s['lair' + animF];
     else if (b.key === 'windmill') spr = Art.s['windmill' + animF];
-    else if (b.key === 'brazier') spr = Art.s[b.lit ? 'brazierOn' + animF : 'brazier'];
     else if (b.key === 'herbalistHut') spr = Art.s.herbalist;
     else spr = Art.s[b.key];
 
@@ -7287,7 +6986,6 @@ const Render = {
       for (const b of G.buildings) {
         if (!b.built) continue;
         let r = b.def.light;
-        if (b.key === 'brazier') r = b.lit ? CONFIG.BRAZIER.light + Math.sin(this._t * 6 + b.id) * 0.2 : 0;
         if (!r) continue;
         if (b.key === 'torch') r = (oilDry ? 1.7 : 3.4) + Math.sin(this._t * 7 + b.id) * (oilDry ? .04 : .12);
         hole(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, r, 0.92);
@@ -7319,11 +7017,10 @@ const Render = {
       };
       for (const b of G.buildings) {
         if (!b.built) continue;
-        const isBrz = b.key === 'brazier' && b.lit;
-        if (!b.def.light && !isBrz) continue;
+        if (!b.def.light) continue;
         const dim = b.key === 'torch' && oilDry;
-        const wob = (b.key === 'torch' || isBrz) ? 1 + Math.sin(this._t * 9 + b.id * 1.7) * 0.09 : 1;
-        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, (isBrz ? 3.4 : b.key === 'torch' ? (dim ? 1.0 : 2.2) : b.def.light * 0.8) * wob);
+        const wob = b.key === 'torch' ? 1 + Math.sin(this._t * 9 + b.id * 1.7) * 0.09 : 1;
+        warmGlow(b.x + b.w / 2, b.y + b.h / 2 - (b.def.tall || 0) / 32, (b.key === 'torch' ? (dim ? 1.0 : 2.2) : b.def.light * 0.8) * wob);
       }
       if (G.beaconLit) {
         const b = G.buildings.find(bb => bb.key === 'beacon' && bb.built);
@@ -7953,28 +7650,12 @@ const UI = {
           if (hands <= 0) benchNote = 'No warm hands left today — they refill at dawn.';
         }
         if (b.key === 'mine' && !Bench.seam) benchActs += `<button id="selSeam">\u2b07 Dig Deeper</button>`;
-        if (b.key === 'brazier' && !b.lit) {
-          const can = G.res.wood >= CONFIG.BRAZIER.kindleWood && G.res.essence >= CONFIG.BRAZIER.kindleEss;
-          benchActs += `<button id="selKindle" ${can ? '' : 'style="opacity:.55"'}>Kindle${Bench.handsLeft() > 0 ? ' \u270b' : ''}</button>`;
-          if (!can) benchNote = `Kindling needs ${CONFIG.BRAZIER.kindleWood} wood + ${CONFIG.BRAZIER.kindleEss} essence in store.`;
-        }
-        if (b.key === 'muster') {
-          const types = [['runner', 'shields'], ['brute', 'pikes'], ['stalker', 'scatter']];
-          benchNote = 'Pick the drill — guards near the yard drill it in about a minute. Stacks to +30%.';
-          for (const [t, nm] of types) {
-            const cur = (G.drill[t] || 0), capped = cur >= CONFIG.MUSTER.bonusCap;
-            benchActs += `<button id="selDrill_${t}" style="${capped ? 'opacity:.5;' : ''}${b.drillType === t ? 'border-color:var(--amber);color:var(--amber2)' : ''}">${nm}${capped ? ' \u2713' : ''} +${Math.round(cur * 100)}%</button>`;
-          }
-          benchActs += `<button id="selRally">\ud83d\udd14 Rally</button>`;
-        }
       }
       el.innerHTML = `
         <h3>${U.esc(b.def.name)}</h3>
         <div class="sub">${U.esc(b.def.desc || '')}</div>
         <div class="row"><span class="mLbl">HP</span><div class="meter mHP"><div style="width:${U.clamp(b.hp / b.maxHp * 100, 0, 100)}%"></div></div></div>
         ${extra}
-        ${b.built && b.key === 'brazier' && b.lit ? `<div class="sub" style="color:var(--amber2)">Burning — ${Math.max(0, Math.ceil(b.fuel || 0))}s of fuel left.</div>` : ''}
-        ${b.built && b.key === 'muster' && b.drillType ? `<div class="sub">Drilling <b style="color:var(--amber2)">${{ runner: 'shields', brute: 'pikes', stalker: 'scatter' }[b.drillType]}</b> — ${(100 * U.clamp((b.drillT || 0) / CONFIG.MUSTER.drillT, 0, 1)).toFixed(0)}% done</div>` : ''}
         ${b.built && b.key === 'mine' ? `<div class="sub">Seam depth ${b.seamDepth || 0}${b.seamDay === G.day ? ' — dug out today' : ''}</div>` : ''}
         ${nd ? `<div class="sub" style="color:var(--amber2)">Upgrade in place: ${U.esc(nd.name)} — ${upCost}</div>` : ''}
         ${benchNote ? `<div class="sub" style="color:var(--amber)">${U.esc(benchNote)}</div>` : ''}
@@ -7987,18 +7668,6 @@ const UI = {
       };
       const ss = document.getElementById('selSeam');
       if (ss) ss.onclick = () => { Seam.start(b); };
-      const sk = document.getElementById('selKindle');
-      if (sk) sk.onclick = () => {
-        if (Bench.handsLeft() > 0 && isDayLike()) { Bench.start('spark', { b }); return; }
-        if (Sim.kindle(b, false)) this.updateHUD();
-        else this.toast(`Kindling needs ${CONFIG.BRAZIER.kindleWood} wood + ${CONFIG.BRAZIER.kindleEss} essence.`, 'bad');
-      };
-      for (const t of ['runner', 'brute', 'stalker']) {
-        const db = document.getElementById('selDrill_' + t);
-        if (db) db.onclick = () => { b.drillType = t; b.drillT = 0; this.toast(`The yard drills ${ { runner: 'shields', brute: 'pikes', stalker: 'scatter' }[t]}.`, ''); this.selRender(); };
-      }
-      const sr = document.getElementById('selRally');
-      if (sr) sr.onclick = () => { Sim.rally(b); };
       if (up) document.getElementById('selUp').onclick = () => {
         if (Buildings.upgrade(b)) {
           this.toast(`${nd.name} raised in place of the old ${oldName}.`, 'good');
@@ -8933,12 +8602,10 @@ const UI = {
         <li><b>Cook</b> — simmers berries into proper meals at the Kitchen (3 food + 1 wood \u2192 2 meals).</li>
         <li><b>Brewer</b> — brews ale at the Tavern (food + herbs); a dusk drink speeds the whole village tomorrow.</li>
         <li><b>Builder</b> — raises construction, repairs damage (costs materials), clears marked wild tiles and <b>fills shore water with stone</b> to make new land.</li>
-        <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage; the Muster Yard drills +10% per monster type.</li>
+        <li><b>Guard</b> — patrols, fights, and raids monoliths. A Barracks makes all guards +30% damage.</li>
       </ul>
       <h2>The Bench — lend a hand</h2>
-      <p>You are no spectator by day. Six <b>warm hands</b> a day (the little hand-meter by the dock) buy a few seconds of touch-work at any ready worksite — tap a tree, boulder, berry bush or a built workplace and press the <b>\u270b</b> button. Every game pays a real stock: split logs on the swing\u2019s sweet band, hook the bobber\u2019s dip, trace a boulder\u2019s glowing fault, circle a berry bush past its thorns, swipe wheat with the wind, knead and stir on the bounce, strike when the forge bar flares, match feather patterns, tap cresting brew-bubbles, dip wicks on the wave, suture without crossing the red, strike sparks until a brazier catches, call the straw effigy\u2019s drill-shape. A player who never touches the bench loses nothing — but busy hands end the day ahead.</p>
-      <h2>The Kindling & the Muster Yard</h2>
-      <p>A <b>Brazier</b> kindled with wood and essence burns all night as a great light — and set beside a Dark Monolith it slowly <b>cleanses</b> it: no mending, no defenders, until the stone cracks into salvageable dawn-stone. No raid, no graves. The <b>Muster Yard</b> drills your guards against a straw effigy: pick shields (runners), pikes (brutes) or scatter (stalkers) for a permanent +10% damage per drill (stacks to +30%), ring the horn to rally off-duty guards — or play the drill for real and the bonus lands a day early.</p>
+      <p>You are no spectator by day. Six <b>warm hands</b> a day (the little hand-meter by the dock) buy a few seconds of touch-work at any ready worksite — tap a tree, boulder, berry bush or a built workplace and press the <b>\u270b</b> button. Every game pays a real stock: split logs on the swing\u2019s sweet band, hook the bobber\u2019s dip, trace a boulder\u2019s glowing fault, circle a berry bush past its thorns, swipe wheat with the wind, knead and stir on the bounce, strike when the forge bar flares, match feather patterns, tap cresting brew-bubbles, dip wicks on the wave, suture without crossing the red. A player who never touches the bench loses nothing — but busy hands end the day ahead.</p>
       <h2>The Deep Seam</h2>
       <p>Order <b>Dig Deeper</b> on a Mine Shaft and a miner spends the day below while you watch the wheel. Each level the seam gets richer — stone, double stone, flint (tools last +25% for days), then crystal flecks of essence — but every level spins the wheel: <b>okay, injured, or dead</b>. Injured miners crawl out hurt and the tunnel seals; dead ones are lost to the dark. If the worst happens you get one chance at the <b>rescue</b>: steer the ropeline through falling rock, and the injured walk away clean while the dead come up hurt but alive. Climb out any time to bank the haul.</p>
       <h2>Supply Lines</h2>

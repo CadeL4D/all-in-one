@@ -28,7 +28,6 @@ const Sim = {
     G.tut = 0; G.tutOn = true;
     G.shake = 0; G.sel = null; G.follow = null;
     G.handsUsed = 0; G.buffs = {};
-    G.drill = { runner: 0, brute: 0, stalker: 0 };
     G.endless = false;
 
     Buildings.byIdMap.clear();
@@ -432,15 +431,14 @@ const Sim = {
   },
 
   // monoliths shrug off old wounds, and a raided one calls its brood to defend it.
-  // A lit brazier nearby (b.cleansed, set in Buildings.update) silences both.
   lairTick(dt) {
     const rt = G.raidTarget;
     for (const b of G.buildings) {
       if (b.key !== 'lair') continue;
       if (b.hitT > 0) b.hitT = Math.max(0, b.hitT - dt);
-      else if (b.hp < b.maxHp && !b.cleansed) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * CONFIG.LAIR.regenPct * (G.diffM.lairRegenMul || 1) * dt);
+      else if (b.hp < b.maxHp) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * CONFIG.LAIR.regenPct * (G.diffM.lairRegenMul || 1) * dt);
       // struck within the last ~2.5s → the raid is live, the brood answers
-      if (b === rt && !b.cleansed && b.hitT > CONFIG.LAIR.regenDelay - 2.5) {
+      if (b === rt && b.hitT > CONFIG.LAIR.regenDelay - 2.5) {
         b.defT = (b.defT == null ? 1.2 : b.defT) - dt;
         if (b.defT <= 0) {
           b.defT = CONFIG.RAID.defEvery;
@@ -449,7 +447,6 @@ const Sim = {
       } else if (b === rt) {
         b.defT = null; // guards stopped hacking — the brood settles
       }
-      b.cleansed = false; // braziers re-light this flag each frame they burn
     }
   },
 
@@ -1516,61 +1513,6 @@ const Sim = {
     }
   },
 
-  // a kindled brazier has burned a monolith down to clean stone — no raid,
-  // no graves: the lair cracks into salvageable dawn-stone (The Kindling)
-  lairCleansed(b) {
-    const idx = G.buildings.indexOf(b);
-    if (idx < 0) return;
-    G.buildings.splice(idx, 1);
-    Buildings.byIdMap.delete(b.id);
-    World.occ[World.idx(b.x, b.y)] = 0;
-    if (G.raidTarget === b) G.raidTarget = null;
-    if (G.sel && G.sel.ref === b) { G.sel = null; UI.selHide(); }
-    this.gain('stone', CONFIG.BRAZIER.dawnStone);
-    G.res.essence = Math.min(CONFIG.ESSENCE.max, G.res.essence + CONFIG.BRAZIER.dawnEss);
-    this.fx('smoke', b.x + .5, b.y + .5, 1.2);
-    for (let k = 0; k < 6; k++) this.fx('spark', b.x + (Math.random() - .5), b.y - Math.random() * .8, .5);
-    G.shake = Math.max(G.shake, 5);
-    UI.toast(`The monolith cracks into clean dawn-stone! +${CONFIG.BRAZIER.dawnStone} stone, +${CONFIG.BRAZIER.dawnEss} essence`, 'good');
-    this.log('The light burned a Dark Monolith clean away. Dawn-stone for the taking.', 'good');
-    if (!Buildings.lairs().length) {
-      UI.toast('The last monolith has fallen — the nights grow thin!', 'good');
-      this.log('No lairs remain. The dark must now crawl in from the wilds.', 'good');
-    }
-  },
-
-  // The Kindling: pay wood + essence and a brazier burns through the night.
-  // A strong kindle (lit fast at the striker) carries a night and a half.
-  kindle(b, strong) {
-    if (!b || !b.built || b.key !== 'brazier' || b.lit) return false;
-    if (G.res.wood < CONFIG.BRAZIER.kindleWood || G.res.essence < CONFIG.BRAZIER.kindleEss) return false;
-    G.res.wood -= CONFIG.BRAZIER.kindleWood;
-    G.res.essence -= CONFIG.BRAZIER.kindleEss;
-    b.lit = true;
-    b.fuel = CONFIG.NIGHT_LEN * (G.diffM.night || 1) * (strong ? 1.5 : 1);
-    this.fx('ring', b.x + .5, b.y + .5, .5, { col: '#ffb057' });
-    UI.toast(strong ? 'The brazier ROARS — a strong kindle burns a night and a half!' : 'The brazier catches — it will burn till dawn.', 'good');
-    this.log('A brazier was kindled against the coming dark.', 'good');
-    return true;
-  },
-
-  // ring the muster-yard horn: off-duty guards run to the yard
-  rally(b) {
-    let n = 0;
-    for (const v of G.villagers) {
-      if (v.job !== 'guard' || v.below) continue;
-      if (U.dst2(v.x, v.y, b.x + 1, b.y + 1) < 25) continue;
-      const p = Path.find(v.x | 0, v.y | 0, b.x + 1, b.y + 1, { adjacent: true });
-      if (p) { v.path = p; v.pi = 0; v.tgt = null; n++; }
-    }
-    if (n) {
-      this.fx('ring', b.x + 1, b.y + 1, .8, { col: '#e8a94b' });
-      UI.toast('The horn rings — the guards muster at the yard!', '');
-    }
-    return n;
-  },
-
-
   lairDestroyed(b) {
     const idx = G.buildings.indexOf(b);
     if (idx >= 0) G.buildings.splice(idx, 1);
@@ -1593,7 +1535,6 @@ const Sim = {
   guardDmg(mType) {
     let d = CONFIG.GUARD.dmg;
     if (G.buildings.some(b => b.built && b.key === 'barracks')) d *= CONFIG.BARRACKS.dmgMult;
-    if (mType && G.drill && G.drill[mType]) d *= 1 + G.drill[mType]; // muster-yard drills
     if (G.res.arrows <= 0) d *= CONFIG.AMMO.dryMult; // no resupply for the quivers
     return d;
   },

@@ -154,13 +154,6 @@ const CONFIG = {
     sessionT: 8,        // seconds a session may run (real time; the world keeps simulating)
     chopMax: 6,         // wood cap per Chop session
   },
-  BRAZIER: {            // The Kindling: a lit brazier burns all night as a
-    kindleWood: 4, kindleEss: 8,   // super-torch — and beside a monolith it
-    light: 5.2,          // slowly cleanses it: no mending, no defenders,
-    cleanseDps: 4,       // until it cracks into dawn-stone
-    cleanseR: 3.5, dawnStone: 30, dawnEss: 12,
-  },
-  MUSTER: { drillT: 60, bonus: 0.10, bonusCap: 0.30 }, // one drill = +10% vs a monster type, capped
   SEAM: {   // The Deep Seam: push-your-luck mining below a Mine Shaft
     // per-level pay (stone, and essence at the crystal flecks);
     // level 3 also yields flint (tools last +25% for 3 days)
@@ -273,7 +266,6 @@ const G = {
   dryWarned: false,        // one "towers are dry" notice per night
   handsUsed: 0,            // warm hands spent today (Bench.handsPerDay resets at dawn)
   buffs: {},               // daycraft day-scopes: brightAle, handDip, suture, trueTools, flintDays
-  drill: { runner: 0, brute: 0, stalker: 0 }, // muster-yard drills: +dmg vs each monster type
   endless: false,          // set after the Beacon victory — waves may cap at 38
   tut: 0, tutOn: true,
   shake: 0,
