@@ -724,6 +724,45 @@ is stable, and nothing ever demands a bigger village.
    the rejected Restless-Dark blight stains: the line moves at dawn scale and
    clearing it is conquest, not weeding.)
 
+### The second tier — what else the great builders have
+
+Seven more gaps, named 2026-09-01; none overlap the five above:
+
+6. **Show the machine.** Placement ghosts with real radii — the windmill's
+   6-tile breeze, tower range, well draw-radius — plus a walk-time overlay
+   once real hauling lands. The five fixes above only pay off if the game
+   teaches placement; this is the cheapest item and multiplies all of them.
+7. **Dawn-stone miracles — essence that builds, not just burns.** Monoliths
+   crack into dawn-stone, spendable on overnight blessings: a plot ripens at
+   first light, the kiln draws no wood tonight, a sun-wrought hauler works one
+   full day, a breached wall stands whole at dawn. Raids start feeding the
+   city and the Long Night leaves something behind — closes the
+   "essence as villager-visible things" gap named above.
+8. **Villagers who remember (growth, not wants).** Event-written titles: the
+   guard who held the breach becomes a Warden (won't flee, strikes harder),
+   the first baker earns the Master's apron (teaches faster than the
+   schoolhouse). History, not the rejected villager-wants — the chronicle
+   gains protagonists and the city gains a face.
+9. **Wear & the warden's round.** Tool wear is the best-tuned sink; buildings
+   never age. Slow, visible wear (walls grey, roads rut, crack sprites)
+   patched by a staffed maintainer walking a daily round — churn becomes a
+   labor decision, not a resource tax. (Upkeep sat on the endorsed v1.2
+   shortlist, never built, never rejected.)
+10. **Runs that diverge — conquest relic picks.** Breaking a monolith offers
+    pick-1-of-3 carved relics that rewrite one rule for the rest of the run:
+    towers fire twice as fast but 2 arrows a shot, farmers tend a neighbor's
+    plot, wells draw at dusk too. Earned mid-run by raiding — unlike the
+    rejected opening-boon handed out at minute one.
+11. **The valley's bones.** Worldgen occasionally lays a boulder spine, a dry
+    ravine or an ancient causeway the horde must bend around, so every map
+    asks a different wall line. (They Are Billions lets the map design the
+    wall; Dawnhold's valley is open lawn and every map plays the same.)
+12. **A face for the ladder — Hamlet → Village → Town.** The
+    escalating-demand thresholds also visibly promote the village: a banner
+    by the camp, a bell at the well, the chronicle renames the place,
+    arrivals come faster. Makes the need-ladder legible and gives a run a
+    shape you can see from across the valley.
+
 ### Guardrails, restated
 
 No villager hiding indoors; no villager-versus-villager collision; no
