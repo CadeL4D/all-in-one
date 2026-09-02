@@ -817,6 +817,60 @@ where one extends an earlier item it says so openly:
     the two stores. The same machine-in-space levers, doubled and stretched to
     caravan distance, with two fires holding the shadow-line instead of one.
 
+### The fourth tier — feel & pressure, named 2026-09-02
+
+Eight more, pitched at the guardian's ask and grounded in the same day's code
+pass (zero audio calls, no villager name field, day-number unlock gates, blood
+moons announced only at dusk, waves from pre-picked sides, villager deaths
+leave nothing behind); none re-pitch the nineteen above. First four are cheap
+feel, last four are systemic:
+
+20. **The roster gets names.** Villagers are anonymous — no name field
+    anywhere in `entities.js`. Give every arrival a name and everything
+    downstream gains a face: the roster reads like people, the chronicle
+    narrates them, and the villagers-who-remember titles get protagonists to
+    pin themselves on. Smallest item on the whole list, biggest per-line
+    feel.
+21. **Graves for the village dead.** The object system already has graves
+    (`OBJ.GRAVE` — raid debris where monsters fall), but a villager who dies
+    at night just vanishes. Give the village's dead the same stone: a body
+    must be hauled to rest (a CARRY trip once real hauling lands) or nearby
+    comfort sags, and the chronicle gains their line. The fallen Warden's
+    grave by the gate is the story item 8 wants.
+22. **The valley gets loud.** Not one audio call in the codebase. Ambient
+    loops per working building — the mill's whoosh, the anvil, the chop —
+    and night howls drifting in from outside the walls, so you *hear* the
+    machine running and hear it stop. Zero simulation cost; the most
+    untouched feel lever left.
+23. **The dark calendar.** Blood moons already fire on
+    `G.day % CONFIG.WAVE.bloodEvery` and multiply the wave, but the cycle is
+    only announced at dusk. A moon dial on the HUD shows the month ahead —
+    fat moon to plan under, blood moon to brace for — and the week gets a
+    heartbeat: expansion becomes a gamble against a readable clock.
+24. **The dark learns.** Waves arrive from pre-picked sides (`G.nextSides` →
+    `World.edgePoint`) no matter where you're weak. Each raid remembers where
+    the last one bled: the side that took the worst hits sends the next wave
+    harder until you re-fortify or bait it. Walls stop being a ring you draw
+    once and become a conversation — the RtR land-war feeling on the threat
+    side, no Restless Dark anywhere near it.
+25. **Unlocks by feat, not by date.** The build menu gates on day counters
+    today (`def.unlock` — "Unlocks day 3"). Gate on feats instead: towers
+    when the palisade ring closes, the windmill when the granary fills once,
+    the Barracks after surviving a blood moon. Closes structural reason 3 —
+    the one gap no earlier item fixed: the menu keeps changing all run and
+    rewards play, not the clock.
+26. **The circuit peddler.** Nothing exists outside the valley. A peddler's
+    wagon arrives on schedule with contracts — 12 ale by second dawn, 20
+    bread before the blood moon — paying tools, essence or dawn-stone.
+    Surplus gets an export and the machine a deadline; distinct from
+    escalating demand (what arrivals need) — this is what the outside world
+    pays for.
+27. **Three crowns.** One win exists — light the Beacon, survive the Long
+    Night. Alternates: the Purge (every monolith down, the long-shadow
+    rolled back) and the Charter (Town rank held a full season). Each run
+    leans toward a different crown — replay variance aimed at the "every
+    build order is deterministic" RtR gap.
+
 ### Guardrails, restated
 
 No villager hiding indoors; no villager-versus-villager collision; no
