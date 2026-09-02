@@ -763,6 +763,60 @@ Seven more gaps, named 2026-09-01; none overlap the five above:
     arrivals come faster. Makes the need-ladder legible and gives a run a
     shape you can see from across the valley.
 
+### The third tier — fresh angles, named 2026-09-02
+
+Seven more, named at the guardian's ask; none re-pitch the twelve above —
+where one extends an earlier item it says so openly:
+
+13. **Desire paths.** The ground keeps score of footfall: tiles crossed often
+    trample from grass to dirt to a worn path, and a path underfoot lifts walk
+    speed a notch — haulers included, so the village's own traffic starts
+    writing its streets before the player touches anything. Paving the busiest
+    lines with stone buys the full bonus, but the map shows where the roads
+    want to be. No new UI and no collision change (bodies still pass through
+    each other; only the ground remembers) — the terrain half of eager hands,
+    and two day-10 villages end up with visibly different scarring.
+14. **The walk home.** Once real hauling makes distance a rate, housing makes
+    it a tax: each villager claims the free bed nearest their workplace, and a
+    long commute sags COMFORT and delays the morning's first chore. Cottages
+    stop being a count ("+4 cap") and become placement — a bed by the mill, a
+    bed by the palisade — and the leave-chance gets a cause the player can
+    see: the poor hauler sleeping clear across the valley. (Distinct from
+    escalating demand, which is about how many beds; this is where they
+    stand.)
+15. **The valley keeps one secret.** Every worldgen roll buries exactly one
+    restorable ancient site — the Deep Well (its bend never draws down), the
+    Sun Stair (terraced plots that never exhaust), the Old Span (the one safe
+    crossing of a dry ravine), the Hollow Court (a light-well that shoves the
+    shadow-line back a tile) — and restoring it is a heavy mid-run goal. The
+    site is different every map, so every valley offers a different
+    build-around: variance from the land you chose, not a minute-one boon
+    (that's why it's a place to restore, not a perk handed out).
+16. **The land keeps score.** Use depletes: farmed rows slowly exhaust and lie
+    fallow, clay and surface stone run out, and a bend's wells share one water
+    table that sags if over-clustered — territory becomes consumable,
+    rotation becomes a verb, and even a warless valley reshapes itself over a
+    long run. The use-driven twin of the long-shadow's conquest-driven
+    thinning; regrowth of the wild is slow and passive only — no nursery
+    building (Wildcraft stays dead).
+17. **Weather writes on the valley.** The worldgen bones go live: rain swells
+    the dry ravine and closes its crossings for a day so hauls and guards
+    detour, a dry fortnight sags every well's bend, a storm dawn slows work
+    outside the walls. A readable two-day sky line keeps it a routing puzzle,
+    not an ambush — the map you settled keeps arguing with your layout, and
+    the valley's bones and the land's depletion start to move.
+18. **Meat has a clock.** Kills and pressed goods decay where they lie — gone
+    by dusk unless hauled — so the hunt, the weir and the press become races
+    against the granary's distance, and a cheap smokehouse at the far camp is
+    the difference between a feast and a loss. The urgency lever on top of
+    real hauling: hauling makes distance a rate, spoilage makes it a deadline.
+    (Ships with hauling or after it, never instead of it.)
+19. **The second clearing.** The endgame of the land-grab: past Town, the
+    valley allows a second settlement — a claimed clearing with its own well
+    and bed-count and one caravan hauler walking the provisioning loop between
+    the two stores. The same machine-in-space levers, doubled and stretched to
+    caravan distance, with two fires holding the shadow-line instead of one.
+
 ### Guardrails, restated
 
 No villager hiding indoors; no villager-versus-villager collision; no
