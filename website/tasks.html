@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="A focused daily task list from One Hub." />
+    <meta name="theme-color" content="#335cff" />
+    <title>Tasks — One Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="tasks.css" />
+    <script src="tasks.js" defer></script>
+  </head>
+  <body class="tasks-page">
+    <div class="task-shell">
+      <header class="task-header">
+        <a class="back-link" href="index.html">
+          <span aria-hidden="true">←</span>
+          All tools
+        </a>
+        <a class="brand task-brand" href="index.html" aria-label="One Hub home">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </span>
+          <span>ONE HUB</span>
+        </a>
+        <button class="icon-button" id="theme-toggle" type="button" aria-label="Switch to dark mode">
+          <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3.5"></circle>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+          </svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20.2 15.3A8.5 8.5 0 0 1 8.7 3.8 8.5 8.5 0 1 0 20.2 15.3Z"></path>
+          </svg>
+        </button>
+      </header>
+
+      <main class="task-main">
+        <section class="task-intro">
+          <p class="task-date" id="task-date">Thursday, September 3</p>
+          <h1>Today’s<br /><em>short list.</em></h1>
+          <p>Decide what matters. Leave the rest for later.</p>
+        </section>
+
+        <section class="task-board" aria-labelledby="task-board-title">
+          <div class="task-board-heading">
+            <div>
+              <p class="section-kicker">Your priorities</p>
+              <h2 id="task-board-title">Make today count</h2>
+            </div>
+            <p class="progress-copy"><strong id="done-count">0</strong>/<span id="total-count">0</span> done</p>
+          </div>
+
+          <div class="progress-track" aria-hidden="true">
+            <span id="progress-bar"></span>
+          </div>
+
+          <form class="task-form" id="task-form">
+            <label class="sr-only" for="new-task">New task</label>
+            <input id="new-task" maxlength="120" placeholder="What needs your attention?" required />
+            <button type="submit"><span aria-hidden="true">+</span> Add task</button>
+          </form>
+
+          <div class="task-toolbar">
+            <div class="filter-tabs" role="group" aria-label="Filter tasks">
+              <button class="active" type="button" data-filter="all">All</button>
+              <button type="button" data-filter="open">Open</button>
+              <button type="button" data-filter="done">Done</button>
+            </div>
+            <button class="clear-button" id="clear-completed" type="button">Clear completed</button>
+          </div>
+
+          <ol class="task-list" id="task-list"></ol>
+          <div class="task-empty" id="task-empty" hidden>
+            <span aria-hidden="true">✓</span>
+            <h3>All clear</h3>
+            <p>Add something above when you’re ready.</p>
+          </div>
+        </section>
+      </main>
+
+      <footer class="task-footer">
+        <p>Saved automatically in this browser.</p>
+        <a href="index.html">Back to One Hub <span aria-hidden="true">↗</span></a>
+      </footer>
+    </div>
+  </body>
+</html>

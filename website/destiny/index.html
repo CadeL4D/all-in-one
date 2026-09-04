@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#172f2b" />
+    <title>Destiny To Yours · The first hearth</title>
+    <link rel="stylesheet" href="game.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="back" href="../">← ONE HUB</a>
+      <div class="wordmark">
+        DESTINY <i>TO</i> YOURS <small>THE FIRST HEARTH · PROTOTYPE</small>
+      </div>
+      <div class="top-actions">
+        <button id="sound" aria-pressed="false">Sound off</button
+        ><button id="help">Guide</button><button id="save">Save</button
+        ><button id="atlas">Island</button>
+      </div>
+    </header>
+    <main id="play" hidden>
+      <section
+        class="resourcebar"
+        id="resources"
+        aria-label="Settlement resources"
+      ></section>
+      <div class="workspace">
+        <aside class="sidebar">
+          <div class="region-label">YOUR SETTLEMENT</div>
+          <h1 id="village-name">A new beginning</h1>
+          <p id="region-copy"></p>
+          <div class="daycard">
+            <div><b id="day">Day 1</b><span id="clock">Morning</span></div>
+            <div class="daytrack"><i id="day-progress"></i></div>
+            <div class="speed">
+              <button id="pause" aria-label="Pause simulation">Ⅱ</button
+              ><button data-speed="1" class="active">1×</button
+              ><button data-speed="2">2×</button
+              ><button data-speed="4">4×</button>
+            </div>
+          </div>
+          <div class="section-title">THE NEXT LITTLE THING</div>
+          <div class="objective" id="objective"></div>
+          <div class="section-title">BUILD A HOME</div>
+          <div id="buildings" class="buildings"></div>
+          <div class="tools">
+            <button id="harvest">♧ Harvest</button
+            ><button id="inspect" class="active">⌖ Inspect</button
+            ><button id="rotate">↻ Rotate · R</button
+            ><button id="demolish">⌫ Remove</button>
+          </div>
+          <p class="tip" id="tool-tip">
+            Place your Hearthhold on open grass to begin.
+          </p>
+        </aside>
+        <section class="world-wrap" aria-label="Settlement map">
+          <canvas
+            id="world"
+            width="960"
+            height="720"
+            tabindex="0"
+            aria-label="Settlement map. Arrow keys move the cursor, Enter places, R rotates, Escape inspects."
+          ></canvas>
+          <div class="map-title">
+            <span class="live-dot"></span><span id="map-label">THE WILDS</span>
+          </div>
+          <div class="map-controls">
+            <button id="zoom-out" aria-label="Zoom out">−</button
+            ><button id="zoom-in" aria-label="Zoom in">+</button
+            ><button id="center">Center</button>
+          </div>
+          <div id="notice" role="status" aria-live="polite"></div>
+          <div class="map-footer">
+            <span>Drag / WASD pan · wheel zoom · R rotate · space pause</span
+            ><span id="weather">✦ Clear skies</span>
+          </div>
+        </section>
+        <aside class="journal">
+          <div class="section-title">VILLAGE LIFE</div>
+          <div id="population" class="population"></div>
+          <div class="section-title">UNDER YOUR CURSOR</div>
+          <div id="inspector" class="inspector">
+            Select a citizen or building to see what is happening.
+          </div>
+          <div class="section-title">THE VILLAGE CHRONICLE</div>
+          <ol id="events"></ol>
+          <div class="promise">
+            <span>YOUR FIRST PROMISE</span>
+            <h3>A place for everyone.</h3>
+            <p>
+              Shelter eight villagers, grow a garden, and reach day 4 with food
+              and water.
+            </p>
+            <div id="promise-state">A story waiting to begin.</div>
+          </div>
+        </aside>
+      </div>
+    </main>
+    <section id="island-screen" class="island-screen">
+      <div class="island-intro">
+        <p class="eyebrow">EVERY BEGINNING BELONGS SOMEWHERE.</p>
+        <h1>Find your little<br />corner of the world.</h1>
+        <p>
+          One island. Three places to begin.<br />Choose the land, then choose
+          where your village takes root.
+        </p>
+        <div class="seed-control">
+          <label for="seed">ISLAND SEED</label
+          ><input id="seed" value="HEARTH-742" maxlength="40" /><button
+            id="generate"
+          >
+            ↻ Generate
+          </button>
+        </div>
+        <label class="peaceful"
+          ><input type="checkbox" id="peaceful" /> Peaceful — just you and the
+          village</label
+        ><button id="resume" hidden>Continue saved village →</button>
+        <p class="prototype-note">
+          A first playable: one settlement, eleven buildings, working citizens,
+          local saves, and a little danger. Regional trade and migration between
+          towns are still on the horizon.
+        </p>
+      </div>
+      <div class="island-right">
+        <div class="island-map">
+          <canvas
+            id="island"
+            width="660"
+            height="420"
+            aria-label="Generated island with three settlement regions"
+          ></canvas
+          ><span class="compass">N<br />✧</span>
+        </div>
+        <div id="regions" class="regions"></div>
+      </div>
+    </section>
+    <dialog id="guide">
+      <button id="close-guide" class="close" aria-label="Close guide">×</button>
+      <p class="eyebrow">A FIELD GUIDE TO SMALL BEGINNINGS</p>
+      <h2>Build a place worth protecting.</h2>
+      <p>
+        Place a <b>Hearthhold</b> on clear ground. Six villagers will build it.
+        Add houses, a well, a field, and a timber yard. Citizens choose jobs,
+        walk real paths, and carry their harvest back to the hearth.
+      </p>
+      <p>
+        <b>Harvest:</b> click trees or rocks to mark them. Timber yards mark
+        nearby trees automatically. Paths speed walking. Buildings need a
+        reachable edge.
+      </p>
+      <p>
+        <b>Build:</b> select a card, rotate with R, and click. Materials are
+        paid up front; workers then construct it. Removing a structure returns
+        half its cost. The hearth cannot be removed.
+      </p>
+      <p>
+        <b>Stay ready:</b> from day 3, small raids approach at dusk every other
+        day. Towers spend stone to fire. Walls divert enemies but can trap
+        workers. Food and water are consumed each day; shortage reduces morale
+        and work speed.
+      </p>
+      <p>
+        <b>Milestone:</b> shelter eight villagers, build a well, field, and
+        garden, and reach day 4. Continue growing afterward.
+      </p>
+      <p>
+        <b>Controls:</b> drag / WASD to pan, wheel or +/− to zoom, R rotates,
+        Space pauses, Escape inspects. Arrow keys move a tile cursor; Enter
+        places or selects. Touch: tap to place, drag to pan. Save locally with
+        the Save button; autosave runs every 20 seconds.
+      </p>
+      <button id="start-guide" class="primary">Let’s make a home →</button>
+    </dialog>
+    <script type="module" src="game.js"></script>
+  </body>
+</html>

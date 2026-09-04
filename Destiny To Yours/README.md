@@ -4,6 +4,8 @@ Design research and planning notes for an original city-builder inspired by the 
 
 ## Start here
 
+The [browser prototype](../website/destiny/index.html) now implements the first settlement loop. Run it through the local server described in the [website README](../website/README.md). The full campaign and several advanced systems below remain design work.
+
 Read [Why *Rise to Ruins* Is Fun — and How *Destiny To Yours* Can Learn From It](CITY_BUILDER_FUN_DESIGN_GUIDE.md).
 
 Then use the [Mechanic-to-Fun Atlas](MECHANIC_TO_FUN_ATLAS.md) to trace each planned mechanic from player choice through tradeoff, feedback, failure diagnosis, connected systems, procedural variation, and prototype testing.
