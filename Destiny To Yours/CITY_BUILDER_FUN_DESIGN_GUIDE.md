@@ -5,6 +5,8 @@
 **Research date:** September 3, 2026<br>
 **Purpose:** Explain the small-scale details that make *Rise to Ruins* compelling, map those details to general city-builder design principles, and turn the analysis into an actionable plan for *Destiny To Yours*.
 
+For the mechanic-level implementation audit, read the companion [Mechanic-to-Fun Atlas](MECHANIC_TO_FUN_ATLAS.md).
+
 ---
 
 ## The short answer
@@ -31,6 +33,8 @@ The player is never *only* designing a pretty town, *only* maintaining productio
 - Regional and account-level progression makes individual settlements feel like chapters in a larger undertaking.
 
 The result is a game that alternates between calm authorship and urgent intervention. That contrast is its central pleasure.
+
+For *Destiny To Yours*, city building takes priority within that relationship. The settlement must be fun to shape and operate without enemies; defense then becomes a deep test of land use, routes, reserves, labor, services, and attachment rather than a separate game competing for attention.
 
 ---
 
@@ -627,41 +631,57 @@ Critical perspective: [top negative Steam reviews](https://steamcommunity.com/ap
 
 Do not begin with a list of 80 buildings. Begin with promises about the player experience.
 
-### Pillar 1: A settlement is a visible chain of causes
+### Pillar 1: City building is the main game
+
+The settlement must be satisfying when enemies are disabled. Reading land, fitting buildings together, assigning work, shortening routes, balancing needs, processing materials, expanding services, and watching citizens use the result form the primary game.
+
+Defense is a demanding customer of those systems. It consumes city-made goods, occupies valuable city land, uses city roads, draws from the city workforce, and protects the city the player already values. It supplements city building rather than competing with it for the game's identity.
+
+**Test:** Run a 45-minute playtest with threats disabled. Do players still make difficult spatial and economic choices, change their plans, and enjoy watching the settlement? If not, improve the city simulation before adding more enemies.
+
+### Pillar 2: A settlement is a visible chain of causes
 
 The player should be able to follow a material from landscape to finished purpose. If a system matters, its state and movement should be inspectable.
 
 **Test:** Select any finished object. Can the interface explain where its materials came from, who transported them, and what is blocking its replacement?
 
-### Pillar 2: Calm preparation earns dramatic survival
+### Pillar 3: Calm preparation earns dramatic survival
 
 Construction and crisis use the same space and economy. Peace gives the player time to form a plan; pressure reveals its consequences.
 
 **Test:** Remove the threat system. Does town planning lose an important reason? Remove town planning. Does the threat become impossible or shallow? If either half survives unchanged, the hybrid is insufficiently connected.
 
-### Pillar 3: The player directs; citizens perform
+### Pillar 4: The player directs; citizens perform
 
 The player sets goals, zones, job limits, routes, and emergency policies. Citizens choose individual tasks. Direct powers exist for exceptional moments.
 
 **Test:** Can the player solve routine work without clicking individuals? Can they still intervene when a beloved citizen or critical chain is in danger?
 
-### Pillar 4: Every failure leaves a usable lesson
+### Pillar 5: Every failure leaves a usable lesson
 
 Loss should be painful, legible, and generative.
 
 **Test:** After a playtest defeat, ask the player what they will change. A healthy answer names a system or layout. “I guess I needed more stuff” is a warning sign.
 
-### Pillar 5: Growth creates new vulnerability
+### Pillar 6: Growth creates new vulnerability
 
 Population and technology should not be pure power. Density increases disease risk; territory lengthens routes; advanced industry consumes scarce inputs; prestige attracts stronger threats.
 
 **Test:** Is there ever a rational reason to delay growth? If not, expansion may be automatic rather than strategic.
 
-### Pillar 6: Strategies are spatially visible
+### Pillar 7: Strategies are spatially visible
 
 Players should recognize a food district, defensive funnel, market center, or distributed village by looking at the map.
 
 **Test:** Hide the statistics. Can an experienced player infer what this town is optimized for?
+
+### Pillar 8: Compact construction is a spatial puzzle
+
+The placement grid is much finer than a conventional one-building-per-tile city-builder grid. Buildings use varied rectangular, L-shaped, stepped, courtyard, and thin footprints. Entrances, delivery edges, operating clearance, roads, terrain, and future upgrades make packing a town an ongoing Tetris-like problem.
+
+Compactness is valuable but never automatically correct. A dense town shortens travel and defense perimeters, yet also creates congestion, fire spread, disease concentration, blocked expansion, and difficult evacuation. Open space costs walking time and wall length, but provides safety and flexibility.
+
+**Test:** Give three players the same small site and building list. Their towns should have visibly different arrangements with credible advantages—not one obviously optimal packing pattern.
 
 ---
 
@@ -685,7 +705,7 @@ This retains the appeal of interconnected planning and pressure while creating a
 
 ### Original pressure system
 
-Instead of copying corruption and nightly monster waves, use **Convergences**: periodic regional crises created by geography and prior decisions.
+Instead of copying corruption and nightly monster waves, use **Convergences**: forecast periods when geographic, civic, or hostile pressures align. A Convergence is the event framework, not the name of every danger.
 
 Examples:
 
@@ -693,9 +713,48 @@ Examples:
 - A caravan surge tests housing, food reserves, and disease control.
 - A political schism divides work preferences and access to civic buildings.
 - A wildfire reads wind, dry vegetation, roadbreaks, and water logistics.
+- A hostile incursion follows observed routes, attacks a legible kind of target, and consumes city-made defensive supplies.
 - A “destiny storm” temporarily makes spoken civic Promises physically binding.
 
 Each crisis must read the normal city rather than launching a separate minigame.
+
+### Original hostile pressure: the Fray
+
+One possible working direction is **the Fray**, a condition that takes root in neglected land, abandoned construction, discarded materials, and broken civic bonds. Its creatures are called **Ravelers**. These are provisional names to test the concept, not locked production terminology.
+
+The Fray is not a recolored corruption carpet. It behaves through recognizable activity:
+
+- Ravelers scout paths and observe frequently traveled routes.
+- They take loose or poorly protected materials to build temporary **Snarls**.
+- Snarls change nearby movement, visibility, wildlife, or resource safety rather than merely producing units.
+- Broken roads, abandoned buildings, battle rubble, and isolated works give them opportunities.
+- Maintained public space, active routes, lookouts, patrols, and fulfilled Promises make territory harder for them to exploit.
+- They may retreat, reroute, raid a shipment, or establish themselves elsewhere rather than always charging the town center.
+
+Working enemy roles should have strong pixel silhouettes and distinct planning questions:
+
+| Working name | Readable behavior | City assumption tested |
+|---|---|---|
+| Skipling | Small, quick, crosses shallow water and narrow gaps | Reliance on one boundary type |
+| Raveler | Carries exposed supplies toward a Snarl | Poor storage and overextended extraction |
+| Husher | Obscures warnings and disrupts lookout coverage | Reliance on centralized detection |
+| Breachback | Slow, broad, follows usable routes and damages gates | Weak entrances and direct roads |
+| Ashwake | Spreads fire through tightly packed structures | Maximum density without breaks or water access |
+
+The names and fiction should change if playtesting reveals a stronger identity. The behavioral jobs matter first: the player should recognize a silhouette, predict its likely objective, and adapt the city.
+
+### A complete defense has six layers
+
+Defense should not lack depth, even though it is secondary to city building:
+
+1. **Detect:** scouts, tracks, watch coverage, citizen reports, and regional information reveal likely behavior.
+2. **Forecast:** the player learns the threat family, approximate strength, and possible routes before committing resources.
+3. **Shape:** walls, gates, terrain, roads, bridges, light, and deliberately empty land alter movement.
+4. **Sustain:** workshops, carriers, local stores, medical services, food, and replacement parts keep defenses operating.
+5. **Respond:** trained citizens, mobile teams, fallback positions, shelters, and Mandates handle surprises and breaches.
+6. **Recover:** rescue, treatment, rubble clearing, rebuilding, salvage, mourning, and investigation return the player to city building.
+
+An attack is deep when these layers can compensate for one another. Excellent warning can make modest defenses viable. Strong walls can buy time for weak responders. Distributed supplies can preserve a breached district. No single layer should be sufficient by itself.
 
 ### Original direct-intervention resource
 
@@ -708,6 +767,391 @@ Replace god spells with **Mandates**. The player accumulates public trust by kee
 - Suspend a Promise—with a lasting trust cost.
 
 This creates the same macro/micro oscillation while fitting a different fantasy.
+
+---
+
+## Main game architecture: city first, defense second
+
+The game should be designed in this order:
+
+```text
+interesting land
+→ difficult placement
+→ living citizens
+→ physical logistics
+→ moving economic bottlenecks
+→ growth and specialization
+→ attachment to the city
+→ defensive preparation
+→ an attack that tests the city
+→ repair, learning, and better building
+```
+
+This ordering is a product rule, not merely a tutorial order. No defense feature should be approved unless it makes an existing city-building decision more meaningful.
+
+### The three layers of city-building fun
+
+#### Layer A: Shape the place
+
+The player reads terrain, selects a starting point, fits differently shaped buildings together, lays narrow and wide routes, preserves useful gaps, assigns land, and decides where future expansion can occur.
+
+The key questions are spatial:
+
+- Can housing fit close to food without occupying fertile soil?
+- Should industry sit near raw materials or near the people who operate it?
+- Is the shortest road worth creating a congested central intersection?
+- Should an awkward gap become a garden, cache, well, shrine, or emergency access lane?
+- Is a compact district worth the increased fire, disease, or evacuation risk?
+- Will today's perfect fit prevent tomorrow's building upgrade?
+
+This layer produces authorship. A screenshot of the town should reveal the player's decisions.
+
+#### Layer B: Make the place work
+
+Citizens turn the layout into behavior. They walk, claim jobs, carry inputs, satisfy needs, wait, reroute, rest, and respond to policies. The player adjusts priorities and watches the effects propagate.
+
+The key questions are systemic:
+
+- Is production slow because of labor, input, travel, storage, or demand?
+- Does another workshop help, or would it compete for the same workers?
+- Is a distant resource deposit truly valuable after transport time?
+- Which reserve should be consumed now and which must survive the season?
+- Is population growth increasing capacity faster than needs?
+- Which service is the settlement's current limiting factor?
+
+This layer produces competence. The player feels clever because the simulation visibly improves after a good diagnosis.
+
+#### Layer C: Care about what was built
+
+Named citizens, lived-in buildings, neighborhood history, seasonal Promises, visible repairs, and local traditions turn an efficient arrangement into a home.
+
+The key questions are emotional:
+
+- Who lives and works in this district?
+- Which family or work crew depends on this route?
+- What did this building survive?
+- Which Promise shaped this neighborhood?
+- What would be painful to lose even if it could be rebuilt efficiently?
+
+This layer creates stakes before enemies appear. Defense becomes meaningful because the player protects something they authored, understand, and value.
+
+### The city systems that create the juggling
+
+The player should usually face three to five active concerns, not twenty simultaneous emergencies. These systems create that workload:
+
+1. **Land:** footprint space, soil, slope, water, vegetation, hazards, and expansion room.
+2. **People:** population, housing, health, morale, safety, family or community ties, and availability.
+3. **Work:** profession targets, task priorities, shifts, travel time, and emergency reassignment.
+4. **Materials:** extraction, processing, storage, hauling, spoilage, and competing uses.
+5. **Services:** food, water, rest, sanitation, medicine, civic access, and maintenance.
+6. **Movement:** roads, alleys, bridges, entrances, congestion, delivery access, and evacuation.
+7. **Time:** daily work windows, weather, seasons, construction deadlines, and recovery periods.
+8. **Commitments:** Promises, trust, migration policy, trade agreements, and cultural consequences.
+9. **Growth:** new citizens, district expansion, advanced production, specialization, and increased fragility.
+10. **Preparedness:** reserves, shelters, guards, walls, lookout coverage, equipment, and contingency routes.
+
+Each concern must touch at least two others. Sanitation should not be an isolated happiness meter; it should read density, water routes, worker availability, illness, and waste logistics. Preparedness should not be an isolated military score; it should read roads, materials, staffing, storage, and city geometry.
+
+### How bottlenecks should move
+
+A satisfying city never becomes permanently solved, but it also does not randomly invalidate good work. Progress changes the current limiting problem:
+
+```text
+secure water
+→ population can grow
+→ food demand rises
+→ farms consume land and labor
+→ hauling becomes inefficient
+→ roads and local storage matter
+→ dense growth creates sanitation pressure
+→ advanced services need processed materials
+→ regional imports become attractive
+```
+
+Every solution should provide a period of relief before revealing the next constraint. If a new problem appears instantly, progress feels fake. If no new problem develops, the game becomes idle observation.
+
+### The defense contract
+
+Defense receives roughly one quarter of the player's normal planning attention and becomes more prominent during clearly forecast danger. It must remain deep, but its depth comes from interacting with the city rather than from becoming a separate unit-control game.
+
+Defense must use:
+
+- City-produced construction materials.
+- City-produced weapons, ammunition, supplies, or protective equipment.
+- Citizens drawn from normal labor pools.
+- Roads used by workers and emergency responders.
+- Storage and delivery rules shared with the economy.
+- Terrain and building footprints already relevant to city layout.
+- Shelters, clinics, food, water, and repair capacity.
+- Trust-funded Mandates for rare intervention.
+
+Defense must test:
+
+- Whether important districts were placed safely.
+- Whether the town has redundant routes and stores.
+- Whether compact construction created dangerous congestion.
+- Whether outer industries can evacuate or hold.
+- Whether the economy can sustain defensive consumption.
+- Whether the player preserved enough flexible labor and reserve stock.
+
+Defense must not:
+
+- Teleport in resources that bypass the city economy.
+- Take place on a disconnected battle screen.
+- Require constant individual-unit micromanagement.
+- Make one maze or wall pattern solve every threat.
+- Attack so frequently that rebuilding and peaceful optimization disappear.
+- Make peaceful-mode city building feel like a stripped-down game.
+
+### Enemy design as planning pressure
+
+Enemy families should ask different city-building questions:
+
+| Enemy behavior | City-building question it tests |
+|---|---|
+| Follows roads quickly | Did efficient roads also create a direct hostile route? |
+| Damages isolated production | Did the town overextend toward resources? |
+| Avoids walls but crosses shallow water | Are natural boundaries truly secure? |
+| Disrupts storage or deliveries | Does the economy have local buffers and redundancy? |
+| Creates fire or contamination | Is the city too densely packed? |
+| Frightens civilians | Are shelters and evacuation paths accessible? |
+| Attacks infrastructure instead of people | Can the town prioritize repairs while operating? |
+| Establishes camps in unused land | Did expansion leave important territory unobserved? |
+
+The player should learn what an enemy tends to do, receive a forecast about likely danger, and still face uncertainty about exact timing, route, or composition. Preparation must matter more than reflexes.
+
+### The desired emotional rhythm
+
+City building occupies the long, satisfying middle of the experience:
+
+```text
+explore and plan
+→ place and construct
+→ watch the town become efficient
+→ solve a moving bottleneck
+→ enjoy a period of stability
+→ receive a danger forecast
+→ adapt the existing city
+→ endure a short, intense defense
+→ rescue selectively
+→ repair and improve
+→ return to building with a new story
+```
+
+The crisis should be memorable precisely because it interrupts a town that was already enjoyable—not because combat is the only time something happens.
+
+---
+
+## The fine-grid “Tetris city” system
+
+Spatial packing should be one of the game's signature pleasures. The player is not filling large square lots. They are fitting a growing collection of differently sized structures, yards, paths, resources, and defenses into imperfect terrain.
+
+### Grid scale
+
+Use a small logical **plot cell** as the shared placement and harvesting unit. A useful prototype target is:
+
+- One plot cell represents roughly one quarter of a conventional city-builder tile.
+- One plot cell renders as approximately 8×8 native art pixels before display scaling.
+- A local section contains roughly 192×192 to 256×256 plot cells during early tests.
+- Citizens move continuously or on a separate navigation graph; their feet do not need to jump visibly from cell center to cell center.
+- Terrain, resource designation, roads, building masks, operating space, and defensive collision all agree on the same plot coordinates.
+
+The exact numbers remain prototype variables. The test is whether a one-cell adjustment can produce a meaningfully better fit without forcing pixel-perfect mouse control.
+
+### Footprints are masks, not only rectangles
+
+Every placeable structure owns a footprint mask containing several cell types:
+
+- **Solid:** occupied by the building and impassable.
+- **Walkable:** courtyard, covered passage, interior lane, or bridge-through space.
+- **Entrance:** a cell citizens use to enter or receive services.
+- **Delivery:** an edge or cell where carried inputs must arrive.
+- **Operating:** space needed while the building runs, such as a saw yard.
+- **Clearance:** optional space required for safety, light, airflow, or an upgrade.
+- **Connector:** an attachment point for a later wing, wall, pipe, canal, or road.
+
+That permits shapes such as:
+
+```text
+small cache       narrow workshop       courtyard hall       stepped kiln
+
+##                ####                  #####                ###
+##                ##E#                  #...#                ###
+                  ##D#                  #.E.#                 ##D
+                  ####                  ##D##
+
+# solid   . walkable court   E entrance   D delivery
+```
+
+Rotation should usually be allowed. Mirroring should be allowed when the art and function support it. A few landscape-bound structures may have directional constraints, such as a waterwheel facing flowing water.
+
+### Footprint families
+
+The building library should deliberately mix shapes and scales:
+
+- **Tiny fillers:** 1×1 to 2×3 lamps, caches, gardens, pumps, shrines, stairs, and guard posts.
+- **Small civic fabric:** 3×3 to 5×6 homes, kitchens, clinics, workshops, and neighborhood stores.
+- **Long structures:** ropewalks, drying racks, markets, barracks, walls, and covered passages.
+- **Yard structures:** a small solid building with a larger operating-space mask.
+- **Courtyard structures:** buildings whose useful center remains walkable or plantable.
+- **Large anchors:** halls, mills, foundries, reservoirs, theaters, and major defensive works.
+- **Terrain-fit structures:** bridges, hillside buildings, cliff stores, river intakes, and watch platforms.
+
+Large buildings should not simply replace small ones. They can be more labor-efficient but harder to fit, slower to build, more vulnerable to disruption, and less adaptable when a district changes.
+
+### Why packing is fun
+
+The placement problem works when several benefits conflict:
+
+```text
+short travel
+versus operating clearance
+versus future expansion
+versus hazard separation
+versus defensive perimeter
+versus road capacity
+versus terrain quality
+```
+
+A perfect geometric fit should not automatically be a perfect city. Squeezing houses beside a foundry may shorten commutes but worsen noise, smoke, fire exposure, and evacuation. Leaving space may look inefficient today but accept a future clinic wing or emergency reservoir.
+
+Awkward leftover spaces must remain useful. Tiny fillers, trees, footpaths, drains, storage racks, gardens, wells, public art, and defense attachments turn gaps into opportunities. Otherwise the player experiences irregular footprints as wasted land rather than a creative puzzle.
+
+### Placement tools that prevent frustration
+
+The challenge should come from planning, not fighting the controls. Building placement needs:
+
+- Strong grid snapping with a crisp footprint outline.
+- Rotate and, where supported, mirror controls.
+- Valid, warning, and blocked cells shown separately.
+- Entrance, delivery, operating-space, and future-upgrade overlays.
+- Estimated walking routes to likely inputs and destinations.
+- A temporary planning mode that places uncommitted ghost buildings.
+- Multi-building blueprints for rearranging a district before construction.
+- Free cancellation until materials are delivered.
+- Partial material recovery after construction, with the loss stated before demolition.
+- A replace-in-place preview for upgrades.
+- Small, medium, and large brushes for harvesting designations.
+- Drag-to-paint and drag-to-erase rather than requiring individual cell clicks.
+- Keyboard-accessible rotation and brush resizing.
+
+The player should be able to create a dense, complicated district comfortably even when the underlying grid is fine.
+
+### Roads should also be a packing decision
+
+Do not require every cell to touch a full road. Support a hierarchy:
+
+- **Foot trails:** one cell wide, cheap, low capacity.
+- **Lanes:** two cells wide, normal delivery access.
+- **Ways:** three or more cells wide, high capacity and fast emergency movement.
+- **Service gaps:** walkable spaces between compatible structures, but poor for carts.
+
+Buildings can require different access. A home may function from a foot trail; a large workshop may require a lane beside its delivery edge; a market or defensive depot may become inefficient without a Way.
+
+This lets roads consume meaningful space without forcing every town into a uniform street grid.
+
+### Harvesting on the same fine grid
+
+Harvest designations should feel like land management rather than deleting resource nodes:
+
+- Paint individual plot cells or larger brush areas.
+- Choose gather-only, clear-land, preserve-seed, or emergency-strip rules.
+- Show which resources are already claimed by workers.
+- Preview estimated yield and travel cost for the marked area.
+- Allow protected groves and regeneration zones.
+- Preserve stumps, disturbed soil, quarry cuts, or other visible history after extraction.
+
+Fine-grained harvesting lets the player clear precisely around irregular construction while choosing which natural shapes remain part of the town.
+
+### Spatial consequences that keep packing strategic
+
+The simulation should read the player's compactness:
+
+- Shorter trips improve normal productivity.
+- Crowded junctions reduce carrying speed.
+- Fire and illness spread more easily through dense districts.
+- Noise or smoke affects nearby uses.
+- Wide roads and courtyards improve evacuation and fire response.
+- Wall length decreases around compact towns.
+- Large enemies or emergency carts need wider routes.
+- Rubble from one destroyed structure can block a tight lane.
+- Distributed caches provide resilience but require more total labor to stock.
+
+This creates multiple valid urban forms instead of one mathematically optimal packing ratio.
+
+---
+
+## Original visual and naming direction
+
+The working art direction is **a living pixel-art survey map stitched together by civic destiny**. It should feel readable and lightly storybook-like rather than grim, hyper-detailed, or visually noisy.
+
+### Pixel-art principles
+
+- Use a three-quarter or high top-down camera that keeps footprints and entrances readable.
+- Build art at one intentional native resolution and scale it by whole-number increments.
+- Use compact color ramps and strong value separation rather than heavy texture.
+- Give every building family a clear roof shape and silhouette.
+- Reserve the brightest colors for current work, warnings, Promises, and player commands.
+- Animate citizens with a few expressive frames rather than fluid but ambiguous motion.
+- Let construction visibly advance through foundation, frame, roof, and finishing stages.
+- Show carried resources on citizens, carts, racks, and delivery cells.
+- Keep terrain shapes broad enough that the fine placement grid remains legible.
+- Use weather, flags, chimney smoke, lamps, gardens, and moving water to make a stable town feel alive.
+
+### The distinctive “thread” motif
+
+Destiny should appear subtly throughout the visual language:
+
+- Survey borders and region connections resemble stitched seams.
+- Promise markers use knots, ribbons, and woven emblems.
+- Important citizen routes can briefly appear as faint threads when inspected.
+- A neighborhood's history can add small banners, roof trims, or pavement patterns.
+- Mandates pull visible lines of trust from civic places toward the affected district.
+- Broken commitments fray or recolor civic banners rather than filling a generic morality bar.
+
+The motif must remain restrained. The town should still look constructed from timber, stone, soil, cloth, water, and metal—not like every object is literally made from magical string.
+
+### Naming rules
+
+Original names should emerge from the setting's culture and remain understandable in play:
+
+1. Give every object a clear functional category in its tooltip.
+2. Use one or two evocative words, not long fantasy compounds.
+3. Name related buildings with a shared cultural pattern.
+4. Avoid renamed equivalents of distinctive *Rise to Ruins* terms.
+5. Prefer names citizens might naturally use.
+6. Test names aloud and in plural form.
+
+Working examples—not locked final names—include:
+
+| Plain function | Possible setting name | Interface clarification |
+|---|---|---|
+| Town center | Hearthhold | Civic center and Promise gathering place |
+| Local warehouse | Keepshed | Neighborhood material storage |
+| Food hall | Commonpot | Prepares meals and feeds nearby citizens |
+| Lumber workshop | Beamwright | Converts timber into structural beams |
+| Mason workshop | Stonefold | Cuts and stores building stone |
+| Clinic | Menders' Nook | Treats injury and illness |
+| Shelter | Wayhouse | Temporary beds and crisis refuge |
+| Defensive depot | Wardstore | Stores equipment and supplies responders |
+| Watchtower | Farwatch | Detects hazards and approaching enemies |
+| Trust intervention | Mandate | Temporary civic emergency order |
+| Seasonal commitment | Promise | Public commitment with lasting consequences |
+
+These names should be replaced whenever the evolving culture, history, or spoken language of the world suggests something stronger. Originality comes from a coherent whole, not unusual spelling.
+
+### Readability budget
+
+At the default zoom, the player must be able to distinguish:
+
+- Ground from harvestable material.
+- Walkable space from blocked space.
+- Homes from production, storage, civic, service, and defense buildings.
+- Citizens who are working, carrying, resting, endangered, or blocked.
+- Normal ambience from actionable danger.
+- A building's front or delivery side.
+
+Decorative pixels are allowed only after these states remain readable in rain, darkness, crowds, and dense construction.
 
 ---
 
@@ -779,85 +1223,551 @@ stabilize one place
 
 ---
 
-## A practical first playable
+## The generated island campaign
 
-The first prototype should prove the emotional loop with very little content.
+The campaign takes place on one large procedurally generated island divided into smaller playable **sections**. The island is the persistent strategic world; a section is the detailed city-building map where citizens live and work.
 
-### Map
+The feature has four purposes:
 
-- One handcrafted 64×64 or similarly modest tile map.
-- Forest, stone, river, fertile ground, blocked terrain.
-- One likely settlement basin and two viable alternative starts.
-- One narrow crossing and one open approach so layout matters.
+1. Give the player a meaningful choice before placing the first building.
+2. Make each settlement solve a different city-building problem.
+3. Let mature settlements remain valuable through specialization and connection.
+4. Turn local successes and failures into island-wide history.
 
-### Citizens
+### The complete player journey
 
-- 12 starting citizens.
-- Needs: food, water, rest, safety.
-- Jobs: builder, gatherer, farmer, carrier, craftsperson, responder.
-- Simple individual names and one visible trait each.
-- Task-state icon and inspectable current destination.
+```text
+generate an island from a seed
+→ study its geography and section boundaries
+→ compare known benefits, burdens, and connections
+→ choose a section to settle
+→ zoom into its generated local map
+→ compare several viable starting locations
+→ place the Hearthhold
+→ build, specialize, and survive locally
+→ connect to neighboring sections
+→ move people, materials, and knowledge
+→ choose the next section
+→ respond to island-wide consequences
+→ establish a network of distinct settlements
+```
 
-### Resources
+The section-selection decision and the village-placement decision must answer different questions. Section selection is about long-term identity and regional relationships. Hearthhold placement is about walking distance, terrain, growth space, and local defensibility.
 
-- Raw: timber, stone, crops, water.
-- Processed: beams, masonry, meals.
-- Emergency: supplies.
-- Civic: trust.
+### What the player sees on the island map
 
-### Buildings
+The initial island overview should reveal enough to support strategy without exposing every local tile:
 
-- Civic hearth / town center.
-- House.
-- Field.
-- Well or pump.
-- Timber yard.
-- Mason.
-- Kitchen.
-- Storehouse.
-- Watch post.
-- Barrier.
-- Clinic or shelter.
+- Section shape, approximate size, elevation, and coast.
+- Dominant biome and climate.
+- Major rivers, lakes, passes, and mountain chains.
+- Two or three notable resource tendencies.
+- Known hazards and seasonal extremes.
+- Neighboring sections and likely connection types.
+- Several broad starting-site candidates.
+- One distinctive opportunity and one accompanying burden.
+- Unknown landmarks represented honestly as unknown, not hidden numerical traps.
 
-Eleven buildings are enough to test a network. Fifty would hide whether the loop works.
+The interface should let the player compare sections side by side. It should describe behavioral consequences rather than rely on modifiers:
 
-### Crisis
+```text
+Weak description:  +20% farming
 
-Implement one flood or wildfire—whichever best matches the desired identity.
+Better description:
+Deep river soil supports two harvests each warm season,
+but spring floods cross low roads and spoil ground-level stores.
+```
 
-For a flood:
+### Section benefits must be paired with burdens
 
-- Water enters from a readable edge or river rise.
-- Elevation and drainage determine flow.
-- Roads improve evacuation but may channel water.
-- Storehouses on low ground risk losing inventory.
-- Citizens prioritize themselves unless an emergency policy changes behavior.
-- Barriers redirect rather than simply delete water.
-- Recovery requires cleanup and replacement of spoiled supplies.
+Every section receives a strategic package, not a free bonus:
 
-This single crisis tests layout, logistics, reserves, citizen behavior, and intervention.
+| Section character | Opportunity | Burden | City form encouraged |
+|---|---|---|---|
+| River delta | Fertile soil, fishing, water transport | Flooding, disease, unstable banks | Raised stores and separated neighborhoods |
+| Mountain basin | Rich stone and metal, natural chokepoints | Cold, little farmland, steep hauling | Dense mining town with imported food |
+| Ancient woodland | Timber, medicine, wildlife | Fire, obstructed sight, slow clearing | Dispersed clearings connected by trails |
+| Wind coast | Fishing, salt, shipping, wind power | Storms, erosion, exposed approaches | Hardened harbor with inland refuge |
+| Open prairie | Fast farming and easy roads | Few barriers, wind and distant resources | Broad agricultural town with planned defenses |
+| Volcanic slope | Fertile ash and rare minerals | Toxic events, tremors, lava channels | Terraced town with evacuation routes |
+| Marsh | Reeds, herbs, peat, concealed waterways | Disease, unstable roads, limited foundations | Raised paths and small specialized districts |
+| Narrow pass | Trade control and strong defensive terrain | Congestion and scarce building room | Extremely compact vertical settlement |
 
-### Promise
+The pair must change how the player places and operates a city. A section tag that only modifies output percentages is insufficient.
 
-Use one Promise: “No one will be left without shelter.”
+### Island generation pipeline
 
-- Keeping it generates trust over time.
-- Overcrowding stops the gain and raises illness risk.
-- Refugees arrive shortly before the crisis.
-- Refusing them preserves capacity but breaks the Promise.
-- Accepting them creates a difficult, solvable resource problem.
+Generate the island from causes so its geography feels coherent:
 
-Now the mechanical decision also carries authorship and meaning.
+#### Step 1: Seed and campaign rules
 
-### Definition of success
+Create a reproducible island seed plus the selected campaign settings. The same seed and settings must recreate the same strategic island.
 
-The prototype succeeds if playtesters:
+#### Step 2: Island silhouette
 
-1. Can explain why the crisis caused the damage it did.
-2. Propose a different layout or policy for another run.
-3. Care about at least one citizen or visible town outcome.
-4. Feel relief when the crisis ends.
-5. Voluntarily choose “play again” without an unlock reward.
+Create one recognizable landmass with peninsulas, bays, offshore islets, and a readable overall shape. Reject silhouettes that are excessively fragmented, round, or dominated by unusable coastline.
+
+#### Step 3: Elevation and geology
+
+Place mountain spines, ridges, basins, plateaus, valleys, and geological bands. Mineral distribution should follow geology rather than uniform noise.
+
+#### Step 4: Climate and wind
+
+Determine prevailing wind, temperature gradients, rainfall, and rain shadows. These variables influence vegetation, water, fire, farming, and later hazards.
+
+#### Step 5: Hydrology
+
+Run water downhill to create watersheds, rivers, lakes, deltas, marshes, and floodplains. Rivers should normally connect to a believable source and destination.
+
+#### Step 6: Ecology and resources
+
+Derive soil, forests, grasslands, wetlands, and wildlife from elevation, rainfall, water, and geology. Place common necessities broadly and rare materials in strategically meaningful clusters.
+
+#### Step 7: Section boundaries
+
+Divide the island along rivers, ridge lines, passes, coasts, and ecological transitions. Boundaries should look geographically motivated. Avoid a visible square or hex overlay as the primary fantasy, even if an internal graph represents connections.
+
+#### Step 8: Section identities
+
+Evaluate each section's terrain and assign its opportunity, burden, likely specialties, hazard profile, and connection options. Identity should be derived from the generated land whenever possible.
+
+#### Step 9: Connections
+
+Create adjacency through passes, roads, rivers, coastlines, ferries, or later infrastructure. Every starting candidate needs at least two plausible long-term expansion directions unless an isolated-island challenge is explicitly selected.
+
+#### Step 10: History and landmarks
+
+Place a small number of ruins, old roads, sacred places, abandoned works, and cultural traces. These should alter decisions or Promises, not serve as decorative collectibles alone.
+
+#### Step 11: Strategic validation
+
+Reject or repair islands that lack viable opening choices, contain dominant sections, isolate essential resources unfairly, or create impossible connections.
+
+#### Step 12: Presentation pass
+
+Render a simplified pixel-art survey map with strong silhouettes, readable water flow, section seams, landmarks, and uncluttered comparison information.
+
+### Local section generation
+
+When the player enters a section, generate its detailed map from the island data plus a stable section seed:
+
+```text
+island elevation and rivers
++ section climate and geology
++ neighboring connections
++ section-specific seed
++ campaign history
+= detailed local terrain
+```
+
+The local generator must preserve macro truth. A river crossing a section on the island map must enter and leave the detailed map at compatible points. A mountain pass connection must correspond to an actual route. A burned or invaded section must remember that history when revisited.
+
+Local generation proceeds in this order:
+
+1. Import edge connections and large geographic anchors.
+2. Produce fine elevation, water channels, and buildability.
+3. Grow soil, vegetation, and harvestable clusters.
+4. Place rare deposits and landmarks.
+5. Reserve space for entrances to neighboring sections.
+6. Calculate travel, farming, hazard, and defensive values.
+7. Find potential Hearthhold sites.
+8. Validate early-resource reachability and growth room.
+9. Decorate without obscuring placement information.
+
+### Choosing where to place the first village
+
+Time remains paused until the player places the Hearthhold. Hovering a potential footprint should show:
+
+- Walking time to early timber, stone, food, and water.
+- Nearby buildable area and its fragmentation.
+- Soil and hazard exposure.
+- Likely routes to section exits.
+- Natural barriers and open approaches.
+- An approximate 10-minute expansion envelope.
+- Warnings about seasonally flooded, unstable, or contaminated ground.
+
+The generator must create at least two credible starts with different advantages. One might be compact and defensible but far from fertile soil; another may have excellent water and farmland but require a wider protective perimeter.
+
+Do not label a location “best.” Give evidence and let the player author the decision.
+
+### Regional specialization
+
+No section should contain an effortless version of every resource chain. Each settlement needs:
+
+- A reliable way to meet basic survival needs.
+- One or two naturally strong specializations.
+- One meaningful scarcity that is expensive but locally survivable.
+- A reason to connect with at least one neighbor.
+- A useful role after becoming stable.
+
+A locally scarce resource must have an inefficient fallback. For example, a mountain settlement might maintain costly greenhouse food rather than instantly collapsing when imports stop. Trade disruption then creates a difficult city-building problem instead of an unavoidable failure.
+
+Possible settlement roles include:
+
+- Food basin.
+- Timber and medicinal producer.
+- Stone and metal center.
+- Coastal trade port.
+- Cultural or research center.
+- Defensive frontier.
+- Transport junction.
+- Refuge and recovery settlement.
+
+Roles emerge from land and player choices; they are not rigid character classes selected from a menu.
+
+### Connections create island stories
+
+People, materials, knowledge, danger, and Promises can cross section borders. A useful chain might be:
+
+```text
+coastal storm closes shipping
+→ mountain settlement loses food imports
+→ rationing changes citizen schedules
+→ workers leave mines to operate greenhouses
+→ metal exports decline
+→ frontier equipment cannot be repaired
+→ an enemy force reaches the forest border
+→ the player must redirect trade or issue a costly Mandate
+```
+
+This is fun because one understandable event travels through systems the player built. The response should offer several remedies rather than one scripted solution.
+
+### Migration
+
+Founding a new section requires people to leave an existing settlement or join through a believable migration event. New settlements should not receive a consequence-free population from nowhere.
+
+Migration creates several decisions:
+
+- Which skills can the old settlement spare?
+- How much food and equipment travels with the group?
+- Which route is safest and fastest?
+- Does the old settlement have enough labor afterward?
+- Does the new settlement inherit a Promise or choose a new one?
+- What happens if the expedition must return?
+
+Citizens retain names, skills, relationships, and some history when they move. This makes the island feel inhabited by one connected society rather than independent scenario populations.
+
+### Threats across the island
+
+Enemies and hazards should occupy geography and communicate intent. They may establish camps, move through passes, spread along waterways, raid supply routes, or pressure an exposed frontier.
+
+The player should be able to answer:
+
+- Where did this threat come from?
+- Why is it interested in this location?
+- Which route can it use?
+- What warning signs were available?
+- Which city system will it test?
+- What can change its path or objective?
+
+Threat pressure should not rise merely because a hidden global timer advanced. Time may increase danger, but settlement wealth, observed routes, overharvesting, broken Promises, regional neglect, and enemy-held territory should help explain the specific pressure.
+
+### Section loss and recovery
+
+Losing a local settlement should damage the campaign without automatically deleting the island:
+
+- Surviving citizens may flee to connected sections.
+- Stored materials may be lost, abandoned, or recoverable.
+- Roads and buildings become ruins on future visits.
+- The section may fall under hostile control or ecological collapse.
+- Neighboring trade and safety change immediately.
+- A later expedition can reclaim and rebuild it.
+
+Failure therefore writes history onto the island. Recovery is more meaningful when the player recognizes the streets and remains of the settlement they lost.
+
+### Simulation levels
+
+A giant island must not fully simulate every citizen at full detail simultaneously.
+
+- **Active section:** complete citizens, paths, resources, buildings, combat, and animation.
+- **Connected section:** summarized production, consumption, shipments, population, hazards, and defensive readiness.
+- **Distant section:** coarse seasonal updates and major events only.
+- **Reactivated section:** reconcile summarized changes into visible inventories, citizen states, damage, and history before play resumes.
+
+The summary model must conserve important quantities and explain major changes. A player should never reopen a settlement and find unexplained ruin caused by invisible high-speed simulation.
+
+### Procedural-generation fairness rules
+
+Every generated island must satisfy automated checks:
+
+- At least three viable initial sections.
+- At least two credible Hearthhold sites in each normal section.
+- Essential early resources reachable without crossing lethal terrain.
+- No required connection blocked before the technology needed to open it.
+- No section with every major advantage and no meaningful burden.
+- No single resource layout forcing the same opening build order everywhere.
+- At least two connected expansion routes from the starting area.
+- Hazards telegraphed before they can cause campaign-ending damage.
+- Local fallback for every imported survival necessity.
+- A path to recover from the loss of any one non-final settlement.
+
+Generation telemetry should record why a candidate island was rejected, not just the seed. This makes generator tuning diagnosable.
+
+### Island feature boundaries
+
+Do not initially include:
+
+- Seamless real-time simulation across the entire island.
+- Naval combat.
+- Diplomacy with many fully simulated rival nations.
+- Dozens of biome-specific production chains.
+- Underground maps.
+- Freeform terraforming of the island-level coastline.
+- Random world modifiers that cannot be explained through geography.
+
+Those ideas can be evaluated after the local city loop, section generator, and three-settlement campaign are demonstrably fun.
+
+---
+
+## Enjoyment priorities: reasons to keep improving the town
+
+These additions turn the existing systems into visible rewards, optional ambitions, and memorable consequences. They are design hypotheses to test in small increments. Their inclusion here does not mean they all belong in the first playable.
+
+### 1. Improvements the player can immediately see
+
+A nearby kitchen should reduce meal trips. A second delivery entrance should clear a queue. A cart-capable Lane should change the movement of materials. Every major upgrade should alter at least one observable behavior, with an inspector comparison available when the effect takes time to emerge.
+
+**First test — P1:** Give the player a congested delivery route and tools to improve it. Pass when they notice the resulting change in citizen behavior and can explain why it happened without reading an upgrade description. If an upgrade only changes a hidden percentage, revise its feedback or behavior.
+
+### 2. Several good solutions to the same shortage
+
+A food shortage can be addressed through fields, meal preparation, shorter delivery routes, preservation, labor reassignment, or eventually imports. These solutions must compete through land, time, workers, materials, or dependence. Their suitability depends on the actual cause: another farm will not fix food stranded behind a blocked crossing.
+
+**First test — P1:** Present two different causes of low food. Players should diagnose them and use different remedies. At least two responses should be viable for each scenario. If the same building solves every shortage, revise costs, dependencies, or scenario design.
+
+### 3. Optional ambitions during peaceful periods
+
+Offer attractive projects such as a market courtyard, restored mill, orchard, neighborhood connection, or public bath. Each changes daily life and the appearance of the settlement. Players can postpone or decline these projects while maintaining a healthy city; they are aspirations rather than another stream of emergencies.
+
+**First test — P1:** Offer one courtyard project after basic needs stabilize. It should compete with expansion for land and labor and provide a visible service benefit. Pass when some players pursue it willingly and others choose an equally credible goal. Add more projects only after the first creates voluntary interest.
+
+### 4. Buildings made personal through use
+
+Workshops can support earned extensions, crossroads can become gathering places, and houses that sheltered displaced citizens can retain a small banner. Record simulated events and player choices in restrained visual details. Some recognition can be cosmetic; permanent bonuses for every event would encourage repetitive reward farming.
+
+**First test — VS:** Preserve one building's history across an extension and one civic event. Pass when players recognize its significance later. Keep names, extensions, and commemorations inspectable, and let players decline cosmetic changes.
+
+### 5. Useful spaces inside the packing puzzle
+
+Let an L-shaped kitchen wrap around a garden, storage receive goods through a rear service alley, and houses share a sheltered courtyard. Walkable gaps need actual access and use. Compactness improves travel but can leave insufficient turning, maintenance, evacuation, or expansion space.
+
+**First test — paper placement and P1:** Provide one irregular site and several compatible footprints. Players should produce at least two functioning arrangements with different advantages. If maximum packing is always best, strengthen the benefits of access and flexible space. Keep clearance rules visible before construction.
+
+### 6. Discoveries that change plans
+
+Clearing woodland might reveal an old road; quarry work could uncover a spring; a restored ruin might reveal a building technique or regional route. Each discovery should offer a choice with consequences, such as preserving the spring versus continuing extraction.
+
+Discoveries are generated and saved with the section. They must not silently invalidate a reasonable starting decision or conceal essential survival resources behind a lucky reveal.
+
+**First test — local generation, then P3:** Add one spring discovery with two viable uses. Pass when it changes a player's plan without making them feel their original choice was a trap. Avoid collectible checklists and compulsory excavation of every tile.
+
+### 7. Enemy objectives the player can disrupt
+
+Raiders may seek supplies, a large force may require a camp or crossing, and a creature may be attracted to exposed waste. Observation should reveal these intentions. The player can protect cargo, deny access, intercept scouts, dismantle a camp, prepare alternate deliveries, or strengthen defenses.
+
+Counterplay must carry costs and leave uncertainty. Intercepting scouts can improve warning without guaranteeing that all attacks disappear. Objectives and retreat conditions belong in enemy behavior data and should remain understandable through animation and reports.
+
+**First test — P2:** One supply-seeking enemy can be handled by defended storage or interception along its route. Pass when both approaches work under different town layouts and players can explain the enemy's objective.
+
+### 8. Partial victories and rewarding recovery
+
+Allow attacks to end with a saved population, lost outer workshop, abandoned stockpile, or successful evacuation. Recognize these outcomes through consequences and history rather than a single win/loss score. Preserve enough people, access, and basic supplies to make recovery plausible after a survivable setback.
+
+Recovery priorities include reopening food service, housing displaced people, salvaging materials, clearing important roads, and redesigning the damaged district. Routine repairs should execute through policies and queues.
+
+**First test — P2:** Damage an outer industry while leaving the main town viable. Pass when players identify a recovery order, rebuild differently, and resume elective city improvements. If recovery becomes repeated clicking or a long inevitable decline, adjust salvage, damage scope, and repair controls.
+
+### 9. Useful automation as the island grows
+
+Let mature towns maintain policies such as “keep three days of food,” “export only surplus,” and “request medicine below this reserve.” Capacity still comes from real workers, storage, roads, and connections. Policies need reachable destinations, stock floors, priorities, and visible reasons when they cannot execute.
+
+Unlock or introduce policies as the corresponding infrastructure becomes stable. Start with one reserve rule and one export rule. Prevent circular shipments and repeated aid requests through explicit order state and cooldown or threshold hysteresis.
+
+**First test — P3:** Operate a second settlement while the first maintains reserves and exports. Pass when players can explain what the old town did and return to meaningful decisions without constantly correcting shipments.
+
+### 10. A clear campaign ambition
+
+A proposed campaign direction is restoring a network of old communal works: reservoirs, bridges, harbors, and gathering places. Projects require contributions from specialized towns, accessible routes, labor, and continuing upkeep. They should visibly improve ordinary island life.
+
+Provide alternative project combinations and routes to completion so geography and player preference shape the society. Completing the ambition creates a satisfying milestone and permits continued play. The exact fiction, project count, and victory conditions remain provisional until P3 proves that connected towns are enjoyable.
+
+**First test — P3:** One shared bridge project accepts contributions from two settlements and opens a useful route. Pass when its completion changes trade or migration visibly and players describe why they chose to build it. Expand into a campaign only after this small project works.
+
+### Delivery order and complexity budget
+
+| Stage | Add and test | Keep bounded |
+|---|---|---|
+| Paper placement / P1 | Visible improvements, alternative shortage remedies, useful irregular spaces, one optional courtyard | Small citizen population, short production chains, few service needs |
+| P2 | Disruptable enemy objectives, partial victories, recovery priorities | Two enemy families and one clear attack/recovery cycle |
+| Local generation / P3 | One discovery, reserve/export policies, one shared island project | Few sections, limited shipping rules, no full political simulation |
+| VS and later | Building history, more ambitions and discoveries, broader campaign projects | Expand only relationships already shown to improve play |
+
+Introduce relationships, waste, culture, maintenance, and neighborhood expectations one at a time. For each addition, observe whether it creates an enjoyable choice, how often it interrupts play, and whether players can explain its effects. Simplify, automate, defer, or remove systems that add recurring chores without worthwhile decisions.
+
+The central peaceful-play question is: **When the town is safe and everyone is fed, does the player still want to rearrange, improve, and expand it?** Ask what they wanted to do next and observe whether they actually pursue it. Stated interest alone is weaker evidence than voluntary play.
+
+These priorities extend the [Mechanic-to-Fun Atlas](MECHANIC_TO_FUN_ATLAS.md); use its feature review template to record outcomes and revise this plan after each test.
+
+---
+
+## Three proof builds before full production
+
+The game should earn its scope in three small proof builds. Each build answers one risky question and keeps previously proven systems intact.
+
+### Proof build 1: Is the city fun without enemies?
+
+This is the first playable. It contains no combat and lasts about 30–45 minutes.
+
+#### Map
+
+- One handcrafted 96×96 plot-cell map.
+- Forest, stone, river, fertile ground, slope, and blocked terrain.
+- Two credible Hearthhold locations with different spatial advantages.
+- One cramped buildable pocket and one open but travel-heavy area.
+- Fine-grid harvesting and construction designation.
+
+A handcrafted map comes first because it separates city-design problems from generator problems. Procedural generation begins after the basic spatial loop is enjoyable.
+
+#### Citizens
+
+- 12 starting citizens, growing to roughly 24.
+- Needs: food, water, rest, health, and safety.
+- Jobs: builder, gatherer, farmer, carrier, cook, craftsperson, and mender.
+- Individual names, one visible trait, a home, a workplace, and simple relationships.
+- Inspectable current task, destination, carried item, need, and blocking reason.
+
+#### Resources
+
+- Raw: timber, stone, crops, and water.
+- Processed: beams, masonry, and meals.
+- Flexible reserve: general supplies.
+- Civic resource: trust.
+
+Every major material has at least two credible uses. Timber, for example, competes between housing, processing, storage, road improvements, and reserve construction.
+
+#### Buildings and footprints
+
+- Hearthhold: one large irregular civic anchor.
+- Two house shapes with different capacity and footprint efficiency.
+- Field: paintable growing area rather than a fixed square.
+- Water source: terrain-dependent narrow footprint.
+- Beamwright: long building with an exterior working yard.
+- Stonefold: stepped heavy-industry footprint with a delivery edge.
+- Commonpot: compact service building sensitive to housing distance.
+- Keepshed: several small shapes rather than one universal warehouse.
+- Menders' Nook: small clinic with an upgrade connector.
+- Garden, cache, lamp, and drain as useful gap fillers.
+- Foot trail, Lane, and Way road widths.
+
+The set must contain enough footprint variety to make rotation, access, compactness, and future expansion meaningful.
+
+#### City-building pressure
+
+- One dry period reduces easy water collection.
+- Food spoils slowly without suitable storage.
+- Dense housing raises minor illness pressure.
+- An arrival event offers four additional citizens before housing is ready.
+- A Promise—“No one will be left without shelter”—rewards acceptance but creates a solvable capacity problem.
+
+These are city pressures, not attacks. They prove whether juggling land, work, needs, and commitments is intrinsically enjoyable.
+
+#### Pass criteria
+
+The proof succeeds only if most testers:
+
+1. Continue rearranging or improving the town after meeting basic survival needs.
+2. Create visibly different layouts from the same map.
+3. Correctly diagnose at least two production or service bottlenecks.
+4. Describe one building placement they are proud of.
+5. Care about at least one citizen, district, or civic outcome.
+6. Want another run even though there is no enemy attack or permanent unlock.
+
+If this build is not fun, do not add combat. Improve placement, logistics, citizen behavior, feedback, and moving bottlenecks first.
+
+### Proof build 2: Does defense deepen the city?
+
+Add a short defensive arc to the same city-building sandbox.
+
+#### Defensive content
+
+- One lookout structure that extends warning time.
+- One barrier family with gates and two footprint shapes.
+- One supply-consuming ranged defense.
+- One staffed responder post drawing workers from the normal economy.
+- One shelter using existing food, water, and health services.
+- Two enemy families that test different layouts.
+- One emergency Mandate funded by trust.
+
+Enemy family A follows easy routes and pressures entrances. Enemy family B targets isolated production or supply infrastructure. Neither should be defeated by statistics alone.
+
+#### Defense sequence
+
+```text
+discover tracks or scouts
+→ receive a route and behavior forecast
+→ choose what to protect
+→ produce and deliver supplies
+→ reassign a limited number of citizens
+→ endure a brief attack
+→ inspect the first breach and first shortage
+→ rescue, repair, and resume city growth
+```
+
+#### Pass criteria
+
+The defense proof succeeds only if:
+
+1. A strong city economy noticeably improves defensive readiness.
+2. Defensive preparation creates meaningful economic and spatial sacrifices.
+3. Two different city layouts produce different battle stories.
+4. Players can explain why enemies chose their routes and targets.
+5. At least two defensive plans are viable.
+6. Recovery is interesting and does not require rebuilding the entire town.
+7. Players spend more total time designing and operating the city than fighting.
+
+### Proof build 3: Does the island create a campaign?
+
+Build a small generated archipelago-style test island with seven sections, of which three can be settled during the test.
+
+Include:
+
+- At least three viable opening sections.
+- Deterministic island and local-section seeds.
+- Opportunity-and-burden summaries.
+- Two credible Hearthhold sites per playable section.
+- Section specialization and one inefficient local fallback.
+- Migration from the first settlement to the second.
+- One material shipment and one disrupted route.
+- Summary simulation for the inactive settlement.
+- One island-level threat movement.
+- The ability to lose and later reclaim one settlement.
+
+#### Pass criteria
+
+The campaign proof succeeds only if:
+
+1. Players disagree constructively about the best opening section.
+2. Their selection changes their opening layout and economy.
+3. The first settlement remains useful after the second begins.
+4. A disrupted connection creates several understandable responses.
+5. Players remember which citizens migrated and where they came from.
+6. Generated islands pass fairness checks without feeling interchangeable.
+7. Players can describe their island's history as a sequence of their own decisions.
+
+### Vertical-slice definition
+
+After all three proofs pass, combine their best pieces into a polished 60–90 minute vertical slice:
+
+- One small generated island.
+- Three playable section types.
+- One complete settlement tier with roughly 15–18 buildings.
+- Three citizen services and two production chains.
+- One Promise with multiple legitimate responses.
+- Two enemy families and one environmental hazard.
+- One migration and trade connection.
+- Representative pixel art, sound, interface, save/load, and recovery.
+
+The vertical slice is the first artifact used to estimate full production. Before it exists, feature-count estimates are guesses.
 
 ---
 
@@ -871,26 +1781,43 @@ DestinyToYours/
 │   ├── pillars.md
 │   ├── economy.md
 │   ├── citizens.md
+│   ├── placement.md
+│   ├── defense.md
+│   ├── island-campaign.md
 │   ├── crises.md
 │   ├── promises.md
 │   └── ui-information-hierarchy.md
 ├── data/
 │   ├── buildings/
+│   ├── footprints/
 │   ├── resources/
 │   ├── jobs/
+│   ├── enemies/
+│   ├── biomes/
 │   ├── crises/
 │   └── promises/
+├── generation/
+│   ├── island/
+│   ├── sections/
+│   ├── validation/
+│   └── random-streams/
 ├── simulation/
 │   ├── clock/
-│   ├── world/
+│   ├── grid/
+│   ├── terrain/
 │   ├── pathfinding/
 │   ├── tasks/
 │   ├── citizens/
 │   ├── logistics/
 │   ├── production/
 │   ├── needs/
+│   ├── settlements/
+│   ├── migration/
+│   ├── trade/
+│   ├── defense/
 │   ├── hazards/
-│   └── progression/
+│   ├── promises/
+│   └── island-summary/
 ├── presentation/
 │   ├── rendering/
 │   ├── audio/
@@ -917,6 +1844,39 @@ DestinyToYours/
 - Maintain a small rolling event history for defeat reports and debugging.
 - Test production graphs without rendering.
 - Version save files from the first external playtest.
+
+### Placement representation
+
+A building definition should include data rather than hard-coded placement exceptions:
+
+```text
+building definition
+├── identity and category
+├── rotated footprint masks
+├── entrance cells
+├── delivery cells
+├── operating and clearance cells
+├── connector and upgrade cells
+├── terrain requirements
+├── construction stages and costs
+├── jobs, inputs, outputs, and storage
+├── service range or recipients
+├── hazard properties
+└── art and feedback references
+```
+
+Placement validation should return a collection of precise reasons rather than a single valid/invalid boolean. The interface can then distinguish a hard block from a warning about distance, congestion, flooding, missing road access, or lost upgrade room.
+
+### Generation boundaries
+
+- Generate immutable base geography separately from mutable campaign history.
+- Give island shape, climate, hydrology, sections, resources, and events separate deterministic random streams.
+- Store generator version and seed in every save.
+- Never reroll an already revealed section because the generator changed.
+- Validate macro connections before generating local decoration.
+- Store the reason for every rejected or repaired candidate.
+- Make batch generation runnable without rendering.
+- Keep island summaries independent from active-section citizen simulation.
 
 ### Citizen task selection
 
@@ -1306,87 +2266,242 @@ Avoid “Was it fun?” Ask:
 
 ## Production roadmap
 
-### Phase 0: Paper and spreadsheet prototypes
+The roadmap is ordered by design risk. Each phase ends with a playable artifact or a measurable answer, not merely completed code.
 
-Prove:
+### Phase 0: Lock the product rules
 
-- Four-resource economy has moving bottlenecks.
-- Job allocation creates opportunity costs.
-- One crisis reads the normal economy.
-- One Promise creates a difficult choice.
+Write one-page specifications for:
 
-Do not produce final art.
+- City-first design hierarchy.
+- Fine-grid placement and footprint masks.
+- Citizens and indirect control.
+- Logistics and resource ownership.
+- Defensive integration rules.
+- Island and section hierarchy.
+- Visual readability and naming principles.
 
-### Phase 1: Gray-box simulation
+Also maintain a short “not now” list. Any proposed feature must identify which current proof it helps.
 
-Implement:
+**Exit gate:** the team can explain the game in one sentence, identify its three signature systems, and reject features that conflict with the city-first hierarchy.
 
-- Fixed tick.
-- Tile world.
-- Resource stacks and reservations.
-- Citizen movement and task scoring.
-- Construction.
-- Four needs.
-- Ten or eleven buildings.
-- One hazard.
+### Phase 1: Paper placement prototype
+
+Use a printed or simple digital grid with cutout building shapes.
+
+Test:
+
+- Grid-cell scale.
+- Ten to fifteen footprint masks.
+- Rotation and mirroring.
+- Entrances, delivery cells, yards, and clearance.
+- Foot trail, Lane, and Way widths.
+- Compactness against firebreak and expansion needs.
+- Whether small fillers make awkward gaps satisfying.
+
+Do not implement citizens or final art yet.
+
+**Exit gate:** players voluntarily rearrange districts, produce several credible layouts, and describe placement tradeoffs without prompting.
+
+### Phase 2: Headless economy model
+
+Implement or spreadsheet-test:
+
+- Four raw resources and three processed resources.
+- Citizen-hours as the common labor budget.
+- Travel-time costs.
+- Input reservations and output capacity.
+- Food, water, rest, health, and housing consumption.
+- Construction and maintenance costs.
+- Population growth from 12 to roughly 24.
+
+Run thousands of accelerated simulations with simplified task logic. Tune for moving bottlenecks, recovery windows, and useful reserves.
+
+**Exit gate:** no single resource or job remains the dominant bottleneck throughout a normal session, and at least two economic responses solve each intended shortage.
+
+### Phase 3: Gray-box city simulation
+
+Build Proof 1 with:
+
+- Fixed simulation tick independent from rendering.
+- Fine plot-cell world.
+- Placement, rotation, demolition, and planning ghosts.
+- Foot trails, Lanes, Ways, entrances, and delivery cells.
+- Citizens, movement, task scoring, and job targets.
+- Physical resource stacks, carrying, storage, and production.
+- Construction stages.
+- Needs and services.
+- One Promise and one arrival event.
 - Save/load.
-- Debug overlays for paths, claims, and blockers.
+- Debug overlays for paths, claims, reservations, congestion, and blockers.
 
-Exit criterion: an internal tester can play the complete prepare–crisis–recover loop twice.
+Use primitive shapes and labels. The goal is to expose bad simulation rules cheaply.
 
-### Phase 2: Readability and trust
+**Exit gate:** Proof 1 passes its city-without-enemies criteria with external testers.
+
+### Phase 4: City readability and feel
+
+Add:
+
+- Inspectors that answer “What, where, and why not?”
+- Task, carrying, need, and danger icons.
+- Build footprint and route previews.
+- Production, service, density, and travel overlays.
+- Alert priority levels.
+- Construction, delivery, and completion feedback.
+- Early representative pixel sprites and building silhouettes.
+- Basic sound acknowledgments.
+- A short city-history timeline.
+
+**Exit gate:** a new tester correctly explains most shortages and placement problems without developer help, and can visually distinguish every building family at normal zoom.
+
+### Phase 5: Integrated defense proof
+
+Build Proof 2 with:
+
+- Threat forecasting and lookout coverage.
+- Barriers, gates, shelter, responder post, and one supplied defense.
+- Two enemy behavior families.
+- Worker reassignment and emergency priorities.
+- Defensive supply production and delivery.
+- Evacuation and shelter behavior.
+- One trust-funded Mandate.
+- Damage, rubble, repair, injury, and recovery.
+- A post-attack timeline showing first breach and critical shortages.
+
+Spend more tuning effort on path readability and recovery than on enemy quantity.
+
+**Exit gate:** Proof 2 passes, no universal defensive layout emerges, and the city remains engaging during the long periods between attacks.
+
+### Phase 6: Local procedural section generator
+
+Build the local-map pipeline before the full island generator:
+
+- Deterministic seeds and separate random streams.
+- Fine elevation and water.
+- Terrain and resource growth.
+- Section-edge connections.
+- Resource clusters derived from terrain.
+- Hearthhold candidate detection.
+- Automated reachability and viability checks.
+- Generator debug view and rejection reasons.
+- Batch generation and screenshot capture for review.
+
+Compare generated sections against the handcrafted Proof 1 map. They should create equally strong but different placement questions.
+
+**Exit gate:** at least 90% of accepted sections meet automated viability rules, and testers choose meaningfully different openings across a review set without one repeated build order dominating.
+
+### Phase 7: Island generator and selection interface
 
 Implement:
 
-- Inspectors.
-- Blocking reasons.
-- Alert priorities.
-- Production and hazard overlays.
-- Citizen state icons.
-- Post-crisis report.
-- Input response, sounds, and core effects.
+- Island silhouette, elevation, climate, hydrology, ecology, and geology.
+- Geography-derived section boundaries.
+- Section opportunity-and-burden packages.
+- Passes, rivers, coasts, and connection graph.
+- Island validation and repair.
+- Pixel-art survey-map presentation.
+- Section comparison and seed sharing.
+- Zoom transition from island to local section.
 
-Exit criterion: a new tester can correctly explain the cause of most failures without developer help.
+Start with seven sections. A “giant” island is a content and pacing scale reached after the seven-section structure works.
 
-### Phase 3: Strategic variation
+**Exit gate:** testers disagree about the best starting section for understandable reasons and can predict how their choice will affect city layout.
 
-Add:
+### Phase 8: Three-settlement campaign proof
 
-- Two more map structures.
-- Two more crises that read different systems.
-- Three Promises.
-- At least three viable spatial strategies.
-- Difficulty modifiers that alter relationships rather than only quantities.
+Build Proof 3 with:
 
-Exit criterion: the same player voluntarily uses different plans across three maps.
+- Settlement specialization.
+- Migration preserving citizen identity.
+- Material shipments and route capacity.
+- Inefficient local fallbacks.
+- Active, connected, and distant simulation levels.
+- Regional threats and route disruption.
+- Persistent Promises and cultural history.
+- Settlement loss, refugees, ruins, and reclamation.
+- Island event history and causal explanations.
 
-### Phase 4: Campaign layer
+**Exit gate:** the first settlement remains strategically useful, off-screen results are trusted, and players describe a connected island story rather than three isolated scenarios.
 
-Add:
+### Phase 9: Vertical slice
 
-- Regional map.
-- Migration.
-- Specialized settlements.
-- Intersettlement shipments.
-- Persistent cultural history.
-- Loss and recovery rules.
+Polish the combined 60–90 minute experience:
 
-Exit criterion: a mature settlement has a meaningful role after it is locally stable.
+- Representative final pixel-art quality.
+- Original building and system names.
+- Complete onboarding through one crisis and one migration.
+- Music and layered ambient sound.
+- Accessibility for color, text, speed, pause, camera, and input.
+- Performance budgets for dense cities and large islands.
+- Robust saving, loading, seed storage, and version migration.
+- Crash reporting and privacy-conscious telemetry.
 
-### Phase 5: Content and polish
+**Exit gate:** new players can complete the slice without spoken developer instruction, understand why major outcomes occurred, and express interest in continuing the island.
 
-Only now expand:
+### Phase 10: Strategic breadth
 
-- Building families.
-- Citizen traits.
-- Events.
-- Biomes.
-- Music.
-- Visual variety.
-- Accessibility.
-- Mod or scenario support, if feasible.
+Expand relationships before raw quantity:
+
+- Three or four biome identities.
+- Additional building footprint families.
+- At least three viable urban forms.
+- Three enemy behavior families.
+- Two environmental crises.
+- Several Promises with different constituencies.
+- More regional roles and route types.
+- Mid-game civic choices that change building behavior.
+- Difficulty settings that alter relationships and forecasting.
+
+Every new biome must change placement, logistics, or services. Every new enemy must test a different city assumption. Every new building must create or resolve a meaningful tradeoff.
+
+**Exit gate:** repeat players voluntarily make different plans across islands and can identify why the seed changed their decisions.
+
+### Phase 11: Full-island scale and optimization
+
+Only after the seven-section proof works:
+
+- Increase supported island size.
+- Profile memory, save size, generation time, and pathfinding.
+- Stress-test dense fine-grid towns.
+- Validate summarized simulation over long campaigns.
+- Add campaign pacing for opening, expansion, specialization, setback, and recovery.
+- Prevent stable settlements from becoming maintenance chores.
+- Add tools for quickly revisiting alerts and shipments across many sections.
+
+**Exit gate:** a large campaign remains understandable, performant, and decision-rich without requiring constant settlement switching.
+
+### Phase 12: Content, polish, and release preparation
+
+Only now broaden:
+
+- Building families and upgrades.
+- Citizen traits and relationships.
+- Events and island histories.
+- Biomes, landmarks, and decorative sets.
+- Enemy and crisis combinations.
+- Music and ambient variety.
+- Tutorials, custom settings, and peaceful play.
+- Localization-ready text and UI layouts.
+- Mod or scenario support, if technically feasible.
+- Balance, performance, compatibility, and long-save testing.
 
 Content should multiply proven relationships, not bury unproven ones.
+
+### Work order inside every phase
+
+Use the same small loop for each feature:
+
+```text
+state the player decision
+→ identify the opportunity cost
+→ build the smallest simulation
+→ expose cause and effect
+→ playtest without explanation
+→ measure behavior and collect stories
+→ keep, revise, or cut
+```
+
+A feature is not complete when its code runs. It is complete when players understand the decision it creates and that decision improves the larger city loop.
 
 ---
 
@@ -1420,7 +2535,7 @@ The goal is not to make “*Rise to Ruins* with renamed assets.” The goal is t
 
 ## Final design test
 
-When evaluating any proposed feature, ask five questions:
+When evaluating any proposed feature, ask seven questions:
 
 1. **What decision does it create?**<br>
    If the player always uses it when available, it may be an upgrade rather than a choice.
@@ -1437,13 +2552,19 @@ When evaluating any proposed feature, ask five questions:
 5. **What story can happen because it exists?**<br>
    The best city-builder mechanics produce sentences players want to tell afterward.
 
-If a feature cannot answer at least four, cut it or redesign it.
+6. **Is it still interesting without an enemy present?**<br>
+   A core city system must create a planning or operational decision before defense reads it.
+
+7. **Does it produce a spatially visible consequence?**<br>
+   In this game, a strong strategy should affect footprints, streets, districts, movement, or the use of land.
+
+If a feature cannot answer at least five, cut it or redesign it.
 
 The deepest lesson from *Rise to Ruins* is not “combine city building with tower defense.” It is this:
 
-> **Build a world where preparation becomes drama, drama exposes the truth of the player’s design, and that truth inspires the next design.**
+> **Make the city intrinsically joyful to shape and operate; then let danger expose the strengths, weaknesses, and human meaning of what the player built.**
 
-That loop—not the quantity of buildings—is what can keep *Destiny To Yours* compelling for years.
+That loop—extended across a generated island of connected, specialized settlements—is what can keep *Destiny To Yours* compelling for years.
 
 ---
 
