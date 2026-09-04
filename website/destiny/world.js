@@ -29,6 +29,26 @@ export const REGIONS = [
   },
 ];
 export const DEFS = {
+  quarry: {
+    name: "Stonewright",
+    glyph: "◆",
+    mask: ["111", "110", "100"],
+    wood: 16,
+    stone: 8,
+    time: 8,
+    hp: 110,
+    desc: "Marks stone deposits within 12 tiles. Workers carry stone home for building and defense.",
+  },
+  beacon: {
+    name: "Wishing spire",
+    glyph: "✦",
+    mask: ["11", "11"],
+    wood: 18,
+    stone: 20,
+    time: 10,
+    hp: 120,
+    desc: "Increases influence capacity by 50 and generates a little influence over time.",
+  },
   hearth: {
     name: "Hearthhold",
     glyph: "⌂",
@@ -237,6 +257,8 @@ export function createWorld(seed, region, peaceful = false) {
     day: 1,
     nextId: 1,
     morale: 80,
+    influence: 35,
+    focus: "balanced",
     events: [],
     raided: 0,
     won: false,
@@ -494,6 +516,14 @@ function assign(s, p, grid) {
       priority: 1,
     });
   }
+  for (const job of jobs) {
+    if (
+      (s.focus === "build" && job.kind === "build") ||
+      (s.focus === "harvest" && job.kind === "harvest") ||
+      (s.focus === "food" && ["farm", "well"].includes(job.kind))
+    )
+      job.priority -= 4;
+  }
   jobs.sort(
     (a, b) =>
       a.priority - b.priority ||
@@ -586,14 +616,31 @@ export function raid(s) {
   const grid = occupancy(s),
     r = rng(hash(s.seed + s.day));
   for (let i = 0; i < Math.min(7, 2 + Math.floor(s.day / 3)); i++) {
-    const x = W - 4,
-      y = 6 + Math.floor(r() * (H - 12));
-    if (!grid[y * W + x])
+    // Find an actually reachable entry; a forest must not silently cancel a raid.
+    let entry = null;
+    const target = s.buildings.find((b) => b.type === "hearth");
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const x = W - 4 - (attempt % 6),
+        y = 4 + Math.floor(r() * (H - 8));
+      if (
+        !grid[y * W + x] &&
+        (!target ||
+          accessRoute(s, { x, y }, target, grid) ||
+          s.buildings.some(
+            (b) => b.type === "wall" && accessRoute(s, { x, y }, b, grid),
+          ))
+      ) {
+        entry = { x, y };
+        break;
+      }
+    }
+    if (entry)
       s.enemies.push({
         id: s.nextId++,
-        x: x + 0.5,
-        y: y + 0.5,
-        hp: 36,
+        x: entry.x + 0.5,
+        y: entry.y + 0.5,
+        kind: s.day >= 5 && i % 3 === 0 ? "brute" : "raveler",
+        hp: s.day >= 5 && i % 3 === 0 ? 80 : 36,
         path: [],
         cool: 0,
         age: 0,
@@ -604,6 +651,12 @@ export function raid(s) {
 }
 export function tick(s, dt) {
   if (!s.people.length || s.lost) return;
+  s.influence ??= 35;
+  s.focus ??= "balanced";
+  s.influence = Math.min(
+    influenceCap(s),
+    s.influence + completed(s, "beacon").length * dt * 0.2,
+  );
   s.time += dt;
   const day = Math.floor(s.time / DAY) + 1;
   if (day > s.day) {
@@ -619,11 +672,15 @@ export function tick(s, dt) {
   )
     raid(s);
   const grid = occupancy(s);
-  for (const b of completed(s, "lumber"))
+  for (const b of [...completed(s, "lumber"), ...completed(s, "quarry")])
     for (let y = Math.max(0, b.y - 12); y < Math.min(H, b.y + 13); y++)
       for (let x = Math.max(0, b.x - 12); x < Math.min(W, b.x + 13); x++) {
         const i = y * W + x;
-        if (s.tiles[i] === 3 && !s.marks.includes(i)) s.marks.push(i);
+        if (
+          s.tiles[i] === (b.type === "quarry" ? 4 : 3) &&
+          !s.marks.includes(i)
+        )
+          s.marks.push(i);
       }
   s.marks = s.marks.filter((i) => [3, 4].includes(s.tiles[i]));
   for (const p of s.people) {
@@ -642,6 +699,7 @@ export function tick(s, dt) {
         continue;
       }
       give(s, p.carry.key, p.carry.n);
+      s.influence = Math.min(influenceCap(s), s.influence + 2);
       s.effects.push({
         x: p.x,
         y: p.y,
@@ -724,9 +782,10 @@ export function tick(s, dt) {
     );
     if (near) {
       if (e.cool <= 0) {
-        near.hp -= 8;
+        const damage = e.kind === "brute" ? 15 : 8;
+        near.hp -= damage;
         e.cool = 1.5;
-        s.effects.push({ x: e.x, y: e.y, text: "−8", life: 0.7 });
+        s.effects.push({ x: e.x, y: e.y, text: "−" + damage, life: 0.7 });
       }
       continue;
     }
@@ -750,7 +809,7 @@ export function tick(s, dt) {
       }
       e.cool = 3;
     }
-    move(e, dt * 0.48, s, grid);
+    move(e, dt * (e.kind === "brute" ? 0.34 : 0.48), s, grid);
   }
   for (const b of s.buildings.filter((b) => b.hp <= 0)) {
     log(s, DEFS[b.type].name + " was lost.");
@@ -771,6 +830,97 @@ export function tick(s, dt) {
 }
 export function serialize(s) {
   return JSON.stringify({ ...s, effects: [] });
+}
+export const POWERS = {
+  mend: {
+    name: "Mend",
+    cost: 20,
+    radius: 5,
+    desc: "Restore up to 85 condition to every building within five tiles.",
+  },
+  starfall: {
+    name: "Starfall",
+    cost: 30,
+    radius: 4,
+    desc: "Strike a cluster of enemies for 55 damage within four tiles.",
+  },
+  wildseed: {
+    name: "Wildseed",
+    cost: 25,
+    radius: 3,
+    desc: "Regrow up to six trees on unoccupied grass. Keep routes and yards open.",
+  },
+};
+export function influenceCap(s) {
+  return 100 + completed(s, "beacon").length * 50;
+}
+export function cast(s, power, x, y) {
+  const p = POWERS[power];
+  if (
+    !p ||
+    !Number.isInteger(x) ||
+    !Number.isInteger(y) ||
+    x < 0 ||
+    y < 0 ||
+    x >= W ||
+    y >= H
+  )
+    return "Choose a location on the island.";
+  if (s.lost || !completed(s, "hearth").length)
+    return "Finish your Hearthhold first.";
+  if ((s.influence ?? 35) < p.cost)
+    return "Not enough influence. Villager deliveries replenish it.";
+  let changed = 0;
+  if (power === "mend")
+    for (const b of s.buildings) {
+      if (Math.hypot(b.x - x, b.y - y) <= p.radius && b.hp < DEFS[b.type].hp) {
+        b.hp = Math.min(DEFS[b.type].hp, b.hp + 85);
+        changed++;
+      }
+    }
+  if (power === "starfall")
+    for (const e of s.enemies) {
+      if (e.hp > 0 && Math.hypot(e.x - x, e.y - y) <= p.radius) {
+        e.hp -= 55;
+        changed++;
+      }
+    }
+  if (power === "wildseed") {
+    // Protect occupied cells and all currently planned worker routes.
+    const reserved = new Set(s.roads);
+    for (const person of s.people) {
+      reserved.add(Math.floor(person.y) * W + Math.floor(person.x));
+      for (const [px, py] of person.path || [])
+        reserved.add(Math.floor(py) * W + Math.floor(px));
+    }
+    for (let dy = -2; dy <= 2; dy++)
+      for (let dx = -2; dx <= 2; dx++) {
+        const ax = x + dx,
+          ay = y + dy,
+          i = ay * W + ax;
+        if (
+          changed < 6 &&
+          ax > 2 &&
+          ay > 2 &&
+          ax < W - 3 &&
+          ay < H - 3 &&
+          s.tiles[i] === 0 &&
+          !reserved.has(i) &&
+          !s.buildings.some((b) => Math.hypot(b.x - ax, b.y - ay) < 7)
+        ) {
+          s.tiles[i] = 3;
+          changed++;
+        }
+      }
+  }
+  if (!changed)
+    return power === "wildseed"
+      ? "Choose open grass away from buildings and paths."
+      : "No valid targets in range. Influence was not spent.";
+  s.influence = (s.influence ?? 35) - p.cost;
+  s.effects.push({ x, y, text: POWERS[power].name, ring: p.radius, life: 1.2 });
+  log(s, p.name + " answered the village’s need.");
+  return "";
 }
 export function restore(raw) {
   const s = JSON.parse(raw);
@@ -835,6 +985,19 @@ export function restore(raw) {
         Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.hp),
     )
     .map((e) => ({ ...e, path: [] }));
+  s.influence = Number.isFinite(s.influence)
+    ? Math.max(0, Math.min(influenceCap(s), s.influence))
+    : 35;
+  s.focus = ["balanced", "build", "harvest", "food"].includes(s.focus)
+    ? s.focus
+    : "balanced";
+  if (
+    !Number.isInteger(s.day) ||
+    s.day < 1 ||
+    !Number.isInteger(s.nextId) ||
+    s.nextId < 1
+  )
+    throw Error("Invalid timeline");
   s.effects = [];
   return s;
 }

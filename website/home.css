@@ -1,9 +1,12 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap");
 :root {
-  --ink: #193c36;
-  --paper: #f0eee5;
-  --muted: #65756a;
-  --line: #cad0bf;
+  color-scheme: dark;
+  --bg: #11151e;
+  --panel: #1a202a;
+  --line: #ffffff16;
+  --text: #eeeee6;
+  --dim: #9da8b5;
+  --gold: #dfbd7d;
+  --green: #c4d6a5;
 }
 * {
   box-sizing: border-box;
@@ -13,306 +16,501 @@ html {
 }
 body {
   margin: 0;
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--bg);
+  color: var(--text);
   font:
-    15px "DM Sans",
+    14px system-ui,
+    -apple-system,
     sans-serif;
 }
 a {
   color: inherit;
   text-decoration: none;
 }
-a:focus-visible {
-  outline: 3px solid #cd6e3b;
-  outline-offset: 6px;
+button {
+  font: inherit;
+  background: #222d38;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 17px;
+  min-height: 44px;
+  cursor: pointer;
+}
+button:hover {
+  background: #33413f;
+}
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
 }
 header,
 main,
 footer {
-  max-width: 1240px;
+  max-width: 1230px;
   margin: auto;
 }
 header {
+  padding: 25px 35px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 30px 34px;
   border-bottom: 1px solid var(--line);
 }
 .brand {
-  font-weight: 700;
-  letter-spacing: 2px;
+  font-weight: 800;
+  letter-spacing: 3px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
-.brand > span {
-  font-size: 36px;
-  line-height: 1;
+.brand-grid {
+  display: grid;
+  grid-template-columns: 10px 10px;
+  gap: 4px;
+  transform: rotate(-8deg);
 }
-.brand small {
-  font-size: 8px;
-  letter-spacing: 1px;
-  border-left: 1px solid var(--line);
-  padding-left: 16px;
-  margin-left: 10px;
-  line-height: 1.7;
+.brand-grid i {
+  width: 10px;
+  height: 10px;
+  background: var(--green);
+  border-radius: 2px;
+}
+.brand-grid i:nth-child(2) {
+  background: var(--gold);
+}
+.brand-grid i:nth-child(3) {
+  background: #849fc4;
 }
 nav {
   display: flex;
-  gap: 30px;
+  align-items: center;
+  gap: 28px;
   font-size: 12px;
 }
-main {
-  padding: 0 34px;
+nav button {
+  font-size: 11px;
 }
-.hero {
+main {
+  padding: 0 35px;
+}
+.intro {
+  padding: 62px 0 45px;
   position: relative;
-  padding: 65px 0 50px;
-  overflow: hidden;
-  isolation: isolate;
 }
 .eyebrow {
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 2px;
+  color: var(--gold);
   font-weight: 700;
 }
 h1 {
-  font:
-    clamp(64px, 8.5vw, 110px)/0.98 "DM Serif Display",
-    Georgia,
-    serif;
-  letter-spacing: -4px;
-  margin: 28px 0 32px;
-  font-weight: 400;
+  font: clamp(54px, 7.5vw, 94px)/1.04 Georgia;
+  margin: 20px 0 24px;
+  letter-spacing: -3px;
 }
 h1 em {
   font-weight: 400;
-  color: #7b8c5d;
+  color: var(--green);
 }
-.hero > p:not(.eyebrow) {
-  color: var(--muted);
-  line-height: 1.8;
+.intro > p:not(.eyebrow) {
+  font-size: 13px;
+  color: var(--dim);
+  line-height: 1.9;
 }
-.orbit {
+.collection-count {
   position: absolute;
-  right: 25px;
-  top: 62px;
-  font-size: 300px;
-  color: #c9cdb6;
-  font-family: Georgia;
-  transform: rotate(16deg);
-  z-index: -1;
+  right: 0;
+  bottom: 60px;
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.collection-count span {
+  font: 50px Georgia;
+  color: var(--text);
+  display: block;
+  margin-bottom: 10px;
 }
 .section-line {
-  border-top: 1px solid var(--line);
-  padding: 23px 0;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding: 22px 0;
 }
 .section-line h2 {
-  font-size: 16px;
-  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
 }
-.section-line small {
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 400;
+.filters {
+  display: flex;
+  gap: 6px;
 }
-.section-line > span {
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  color: var(--muted);
+.filters button {
+  font-size: 11px;
+  background: transparent;
+  min-height: 36px;
+  padding: 7px 16px;
+}
+.filters .active {
+  background: #314238;
+  border-color: #71906566;
+  color: #d6dfbb;
 }
 .cards {
   display: grid;
-  grid-template-columns: 1.65fr 1fr;
-  gap: 24px;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 22px;
 }
 .card {
   border: 1px solid var(--line);
-  background: #f8f6ef;
-  transition:
-    transform 0.2s,
-    box-shadow 0.2s;
+  background: var(--panel);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: transform 0.2s;
 }
 .card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 14px 30px #183b3510;
+  transform: translateY(-3px);
+}
+.card[hidden] {
+  display: none;
 }
 .art {
-  height: 300px;
+  height: 330px;
   position: relative;
   overflow: hidden;
-  background: #133b3b;
+  background: #263f33;
 }
 .art canvas {
   width: 100%;
   height: 100%;
   object-fit: cover;
   image-rendering: pixelated;
+  transform: scale(1.07);
+}
+.art-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, #101c22f0, transparent 85%);
 }
 .badge {
   position: absolute;
   top: 20px;
   left: 20px;
-  background: #eff1d9;
-  color: #28463e;
-  font-size: 9px;
-  padding: 8px 12px;
-  letter-spacing: 1px;
+  border: 1px solid #ffffff2b;
+  background: #172428df;
+  color: #dedcc6;
+  padding: 7px 11px;
+  border-radius: 5px;
+  font-size: 8px;
+  letter-spacing: 1.5px;
 }
-.art-label {
+.badge i {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: #b4d69a;
+  margin-right: 6px;
+  border-radius: 50%;
+}
+.art-title {
   position: absolute;
-  bottom: 22px;
   left: 25px;
-  color: #fff4d4;
-  font:
-    38px/0.95 "DM Serif Display",
-    Georgia;
-  text-shadow: 2px 3px #193c36;
+  bottom: 23px;
+}
+.art-title > span {
+  font-size: 8px;
+  letter-spacing: 3px;
+  color: #e7ca91;
+}
+.art-title h2 {
+  font: 47px/0.98 Georgia;
+  margin: 12px 0 0;
+  color: #f5e8c6;
+  text-shadow: 0 2px #1b2c21;
+}
+.art-title h2 span {
+  font-size: 23px;
+  vertical-align: middle;
+  margin-left: 20px;
+  color: #c6cd96;
+}
+.round-play {
+  position: absolute;
+  right: 23px;
+  bottom: 28px;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  background: #e6c389;
+  border-radius: 50%;
+  color: #253429;
+  font-size: 16px;
 }
 .card-bottom {
-  padding: 26px;
+  padding: 23px;
+  position: relative;
   display: flex;
-  justify-content: space-between;
   gap: 12px;
+  align-items: flex-start;
 }
-h3 {
-  font:
-    32px "DM Serif Display",
-    Georgia;
-  margin: 12px 0;
+.card-bottom h3 {
+  font: 24px Georgia;
+  margin: 13px 0;
 }
 .card-bottom p:not(.eyebrow) {
-  color: var(--muted);
   font-size: 12px;
   line-height: 1.8;
-}
-.card-bottom > b {
-  font-size: 26px;
-  padding-top: 25px;
+  color: var(--dim);
 }
 .tags {
   display: flex;
-  gap: 8px;
-  margin-top: 22px;
+  gap: 6px;
+  margin-top: 20px;
+  flex-wrap: wrap;
 }
 .tags span {
   font-size: 9px;
-  padding: 6px 9px;
+  color: #c0c9bb;
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: 4px;
+  padding: 5px 7px;
+}
+.play-button,
+.tool-button {
+  display: block;
+  background: #c2d29e;
+  color: #243129;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 12px 16px;
+  border-radius: 7px;
+  position: absolute;
+  right: 23px;
+  top: 20px;
+}
+.card-bottom .eyebrow {
+  max-width: 65%;
+  font-size: 8px;
+}
+.tool-button {
+  background: #2c3c47;
+  color: #d2ded8;
+}
+.card-status {
+  padding: 11px 23px;
+  background: #122027;
+  font-size: 10px;
+  color: #adc19f;
+  border-top: 1px solid var(--line);
 }
 .task-art {
-  height: 300px;
-  background: #dcd5c0;
-  padding: 26px;
+  height: 330px;
+  background: #28323e;
   position: relative;
   overflow: hidden;
 }
-.task-art > span {
-  font:
-    30px/1.1 "DM Serif Display",
-    Georgia;
-}
-.task-art em {
-  color: #9d633f;
-}
-.paper {
+.task-sheet {
   position: absolute;
-  right: -12px;
-  bottom: 23px;
-  background: #faf7ed;
-  box-shadow: 0 10px 20px #4f483921;
-  transform: rotate(-9deg);
-  padding: 20px;
-  font: 12px/1.6 Georgia;
-  width: 250px;
+  top: 83px;
+  left: 40px;
+  padding: 25px;
+  background: #e4dcc6;
+  color: #343d39;
+  width: 240px;
+  transform: rotate(-7deg);
+  box-shadow: 12px 16px #111c2544;
 }
-.paper hr {
-  border: 0;
-  border-top: 1px solid #deded0;
+.task-sheet small {
+  font-size: 7px;
+  letter-spacing: 2px;
+  color: #737862;
 }
-.note {
+.task-sheet h3 {
+  font: 34px/1.05 Georgia;
+  margin: 18px 0;
+}
+.task-sheet p {
+  font-size: 10px;
+  border-top: 1px solid #92917a44;
+  padding-top: 9px;
+}
+.task-orbit {
+  position: absolute;
+  right: 12px;
+  top: 62px;
+  font-size: 120px;
+  color: #a6bfa7;
+}
+.install-strip {
   display: flex;
-  gap: 26px;
   align-items: center;
-  padding: 48px 0;
+  gap: 22px;
+  padding: 35px 0;
+  margin-top: 35px;
+  border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-.note > span {
-  font-size: 44px;
+.little-icon {
+  font-size: 42px;
+  color: var(--green);
 }
-.note p {
+.install-strip h2 {
+  font: 23px Georgia;
+  margin: 0 0 9px;
+}
+.install-strip p {
+  font-size: 11px;
+  color: var(--dim);
   line-height: 1.8;
-  color: var(--muted);
-  font-size: 13px;
+  max-width: 560px;
+  margin: 0;
 }
-.note p:last-child {
+.install-strip button {
   margin-left: auto;
   font-size: 11px;
-}
-.note strong {
-  color: var(--ink);
-  font-weight: 500;
+  white-space: nowrap;
 }
 footer {
-  padding: 25px 34px;
   display: flex;
   justify-content: space-between;
-  font-size: 9px;
+  padding: 25px 35px;
+  font-size: 8px;
+  color: #8f9d9d;
   letter-spacing: 1px;
-  color: var(--muted);
+}
+dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #ffffff30;
+  border-radius: 12px;
+  padding: 26px;
+  max-width: 400px;
+  width: 90%;
+}
+dialog::backdrop {
+  background: #080e17cc;
+}
+dialog h2 {
+  font: 30px Georgia;
+}
+dialog p {
+  line-height: 1.8;
+  color: var(--dim);
+}
+#hub-close {
+  float: right;
 }
 @media (max-width: 700px) {
-  header,
-  main,
-  footer {
-    padding-left: 20px;
-    padding-right: 20px;
+  header {
+    padding: 20px;
   }
-  .brand small {
-    display: none;
+  .brand {
+    font-size: 13px;
+    letter-spacing: 2px;
   }
   nav {
-    gap: 14px;
+    gap: 10px;
   }
-  .hero {
-    padding-top: 45px;
+  nav > a {
+    display: none;
   }
-  .orbit {
-    font-size: 200px;
-    right: -70px;
-    top: 80px;
+  nav button {
+    font-size: 10px;
+    padding: 9px 12px;
+  }
+  main {
+    padding: 0 20px;
+  }
+  .intro {
+    padding: 34px 0 27px;
   }
   h1 {
+    font-size: 56px;
     letter-spacing: -2px;
+  }
+  .intro > p:not(.eyebrow) {
+    font-size: 11px;
+  }
+  .eyebrow {
+    font-size: 8px;
+  }
+  .collection-count {
+    display: none;
   }
   .cards {
     grid-template-columns: 1fr;
   }
-  .section-line > span {
-    display: none;
+  .section-line {
+    padding: 13px 0;
   }
-  .note p:last-child {
-    display: none;
+  .section-line h2 {
+    font-size: 15px;
   }
-  footer span:nth-child(2) {
-    display: none;
+  .filters button {
+    font-size: 10px;
+    padding: 6px 12px;
   }
   .art,
   .task-art {
-    height: 260px;
+    height: 280px;
+  }
+  .art-title h2 {
+    font-size: 41px;
+  }
+  .card-bottom {
+    padding: 19px;
+  }
+  .card-bottom h3 {
+    font-size: 23px;
+  }
+  .card-bottom p:not(.eyebrow) {
+    font-size: 11px;
+  }
+  .play-button,
+  .tool-button {
+    right: 17px;
+    top: 17px;
+    padding: 10px 12px;
+    font-size: 10px;
+  }
+  .install-strip {
+    flex-wrap: wrap;
+    padding: 26px 0;
+    gap: 15px;
+  }
+  .install-strip > div:nth-child(2) {
+    flex: 1;
+  }
+  .install-strip button {
+    margin-left: 0;
+    width: 100%;
+  }
+  .install-strip h2 {
+    font-size: 21px;
+  }
+  footer {
+    padding: 25px 20px calc(25px + env(safe-area-inset-bottom, 0px));
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  footer span:last-child {
+    display: none;
+  }
+  .task-sheet {
+    left: 50px;
+    top: 65px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
-  * {
-    transition: none !important;
+  .card {
+    transition: none;
   }
 }

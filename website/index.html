@@ -2,112 +2,151 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#152b29" />
-    <title>One Hub · A place for possibilities</title>
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#11151e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta
+      name="description"
+      content="Your pocket collection of worlds and useful little tools."
+    />
+    <title>One Hub · Your pocket universe</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="icon" href="icons/icon-192.png" />
     <link rel="stylesheet" href="home.css" />
   </head>
   <body>
     <header>
       <a class="brand" href="./"
-        ><span>✳</span> ONE HUB
-        <small>INDEPENDENT<br />DIGITAL GARDEN</small></a
+        ><span class="brand-grid"><i></i><i></i><i></i><i></i></span>ONE HUB</a
       >
       <nav>
-        <a href="#collection">The collection ↙</a
-        ><a href="https://github.com/CadeL4D/all-in-one">Source ↗</a>
+        <a href="#library">Your library</a
+        ><button id="hub-install">Install Hub ↗</button>
       </nav>
     </header>
     <main>
-      <section class="hero">
-        <p class="eyebrow">● &nbsp; SMALL TOOLS. ENTIRE WORLDS.</p>
-        <h1>A little space<br />for <em>possibility.</em></h1>
+      <section class="intro">
+        <p class="eyebrow">INDEPENDENT WORLDS. ALWAYS WITH YOU.</p>
+        <h1>Your next<br /><em>little obsession.</em></h1>
         <p>
-          Build a village. Clear your mind. Follow a curiosity.<br />A growing
-          collection of things worth spending time with.
+          A place to play, make, and get a little lost.<br />Small enough for
+          your pocket. Big enough for your imagination.
         </p>
-        <span class="orbit" aria-hidden="true">✳</span>
+        <div class="collection-count">
+          <span>02</span> experiences &nbsp; / &nbsp; no account needed
+        </div>
       </section>
-      <section id="collection">
+      <section id="library">
         <div class="section-line">
-          <h2>The collection <small> / 02</small></h2>
-          <span>HANDMADE FOR YOUR BROWSER</span>
+          <h2>Your library</h2>
+          <div class="filters">
+            <button data-filter="all" class="active">All</button
+            ><button data-filter="game">Games</button
+            ><button data-filter="tool">Tools</button>
+          </div>
         </div>
         <div class="cards">
-          <a class="card game-card" href="destiny/"
-            ><div class="art">
-              <canvas
-                id="cover"
-                width="768"
-                height="360"
-                aria-label="Pixel art village on a green island"
-              ></canvas
-              ><span class="badge">PLAYABLE PROTOTYPE · 01</span
-              ><span class="art-label">A WORLD<br />TO CALL YOURS.</span>
-            </div>
+          <article class="card game-card" data-kind="game">
+            <a class="art-link" href="destiny/"
+              ><div class="art">
+                <canvas
+                  id="cover"
+                  width="768"
+                  height="360"
+                  aria-label="Original pixel-art settlement"
+                ></canvas>
+                <div class="art-shade"></div>
+                <span class="badge"><i></i> PLAYABLE · OFFLINE READY</span>
+                <div class="art-title">
+                  <span>THE FIRST HEARTH</span>
+                  <h2>Destiny<br />To Yours<span>✦</span></h2>
+                </div>
+                <span class="round-play" aria-hidden="true">▶</span>
+              </div></a
+            >
             <div class="card-bottom">
               <div>
-                <p class="eyebrow">BUILD · BELONG · ENDURE</p>
-                <h3>Destiny To Yours</h3>
+                <p class="eyebrow">VILLAGE BUILDING / SURVIVAL</p>
+                <h3>A whole world in your hands.</h3>
                 <p>
-                  A small village. A wild island. A thousand little
-                  decisions.<br />Shape a home, tend its people, and weather the
-                  night.
+                  Gather timber. Raise a village. Protect the little lives that
+                  call it home. An original city builder, made for touch.
                 </p>
                 <div class="tags">
-                  <span>City builder</span><span>Pixel art</span
-                  ><span>Local saves</span>
+                  <span>Pixel art</span><span>Single player</span
+                  ><span>Install & play</span>
                 </div>
               </div>
-              <b>↗</b>
-            </div></a
-          >
-          <a class="card" href="tasks.html"
-            ><div class="task-art">
-              <span>MAKE ROOM<br />FOR WHAT<br /><em>MATTERS.</em></span>
-              <div class="paper">
-                ✓ &nbsp; One thing at a time.
-                <hr />
-                ✓ &nbsp; A little more clarity.
-                <hr />
-                ○ &nbsp; Your next good idea.
-              </div>
+              <a class="play-button" id="game-link" href="destiny/"
+                >Play now ↗</a
+              >
             </div>
+            <div class="card-status" id="game-status">
+              A new island is waiting for you.
+            </div>
+          </article>
+          <article class="card tool-card" data-kind="tool">
+            <a href="tasks.html" class="tool-link"
+              ><div class="task-art">
+                <span class="badge">A LITTLE MORE HEADSPACE</span>
+                <div class="task-sheet">
+                  <small>YOUR DAY, SIMPLIFIED</small>
+                  <h3>One thing<br />at a time.</h3>
+                  <p>✓ &nbsp; Make a little room.</p>
+                  <p>✓ &nbsp; Find your focus.</p>
+                  <p>○ &nbsp; Start something good.</p>
+                </div>
+                <span class="task-orbit">✳</span>
+              </div></a
+            >
             <div class="card-bottom">
               <div>
-                <p class="eyebrow">LESS NOISE. MORE INTENTION.</p>
+                <p class="eyebrow">FOCUS / EVERYDAY</p>
                 <h3>A clearer day</h3>
                 <p>
-                  A simple space for your tasks.<br />Make a list. Make a little
-                  progress.
+                  Catch a thought. Make a list.<br />Give your next good idea
+                  some space.
                 </p>
                 <div class="tags">
-                  <span>Tasks</span><span>Productivity</span>
+                  <span>Tasks</span><span>Local storage</span>
                 </div>
               </div>
-              <b>↗</b>
-            </div></a
-          >
+              <a class="tool-button" href="tasks.html">Open ↗</a>
+            </div>
+          </article>
         </div>
       </section>
-      <section class="note">
-        <span>✳</span>
-        <p>
-          Good things start small.<br /><strong
-            >This garden is still growing.</strong
-          >
-        </p>
-        <p>
-          Every card opens its own little corner of the web.<br />No account
-          required. Just a little curiosity.
-        </p>
+      <section class="install-strip">
+        <div class="little-icon">▦</div>
+        <div>
+          <h2>Keep your favorites close.</h2>
+          <p>
+            Install One Hub for a home-screen shortcut. Install Destiny
+            separately for a dedicated game window and offline play.
+          </p>
+        </div>
+        <button id="hub-install-secondary">Add to home screen ↗</button>
       </section>
     </main>
     <footer>
-      <span>ONE HUB © 2026</span
-      ><span>MADE TO BE EXPLORED, NOT SCROLLED PAST.</span
-      ><a href="https://github.com/CadeL4D/all-in-one">Open source ↗</a>
+      <span>ONE HUB / MADE FOR CURIOUS PEOPLE</span
+      ><a href="https://github.com/CadeL4D/all-in-one">Source & development ↗</a
+      ><span id="hub-offline">Your pocket universe.</span>
     </footer>
+    <dialog id="hub-install-guide">
+      <button id="hub-close" aria-label="Close install instructions">×</button>
+      <h2>One tap away.</h2>
+      <p id="hub-install-copy"></p>
+    </dialog>
     <script type="module" src="cover.js"></script>
+    <script type="module" src="home.js"></script>
   </body>
 </html>

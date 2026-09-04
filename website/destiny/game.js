@@ -16,8 +16,11 @@ import {
   serialize,
   restore,
   log,
+  POWERS,
+  cast,
+  influenceCap,
 } from "./world.js";
-import { TILE, scene, island } from "./art.js";
+import { TILE, scene, island, structure } from "./art.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("world"),
   ctx = canvas.getContext("2d"),
@@ -40,6 +43,108 @@ let state = null,
   noticeTimer;
 const camera = { x: 0, y: 0, zoom: 1.6 };
 let saved = null;
+let brush = 1,
+  candidate = null,
+  category = "all",
+  pinch = null,
+  gesture = false;
+const pointers = new Map();
+const groups = {
+  hearth: "home",
+  house: "home",
+  garden: "home",
+  kitchen: "home",
+  store: "work",
+  well: "work",
+  farm: "work",
+  lumber: "work",
+  quarry: "work",
+  path: "work",
+  tower: "defense",
+  wall: "defense",
+  beacon: "defense",
+};
+function closeSheets() {
+  document.querySelectorAll(".sheet").forEach((el) => (el.hidden = true));
+}
+function openSheet(id) {
+  const wasOpen = !$(id).hidden;
+  closeSheets();
+  if (!wasOpen) $(id).hidden = false;
+}
+document
+  .querySelectorAll("[data-close-sheet]")
+  .forEach((b) => (b.onclick = closeSheets));
+document
+  .querySelectorAll("[data-close-dialog]")
+  .forEach((b) => (b.onclick = () => b.closest("dialog").close()));
+$("build-open").onclick = () => openSheet("build-sheet");
+$("powers-open").onclick = () => openSheet("powers-sheet");
+$("village-open").onclick = () => openSheet("village-sheet");
+$("open-menu").onclick = () => $("menu").showModal();
+$("choose-land").onclick = () =>
+  $("land-selection").scrollIntoView({ behavior: "smooth", block: "center" });
+$("work-focus").onchange = (e) => {
+  if (state) {
+    state.focus = e.target.value;
+    log(
+      state,
+      "Work priority changed to " + e.target.selectedOptions[0].text + ".",
+    );
+    update();
+  }
+};
+for (const [name, p] of Object.entries(POWERS)) {
+  const b = document.createElement("button");
+  b.dataset.power = name;
+  b.innerHTML =
+    "<strong>✦ " +
+    p.name +
+    " · " +
+    p.cost +
+    " influence</strong><small>" +
+    p.desc +
+    "</small>";
+  b.onclick = () => {
+    setTool(name);
+    closeSheets();
+  };
+  $("powers").append(b);
+}
+document.querySelectorAll("[data-category]").forEach(
+  (b) =>
+    (b.onclick = () => {
+      category = b.dataset.category;
+      document
+        .querySelectorAll("[data-category]")
+        .forEach((v) => v.classList.toggle("active", v === b));
+      document
+        .querySelectorAll("[data-build]")
+        .forEach(
+          (v) =>
+            (v.hidden =
+              category !== "all" && groups[v.dataset.build] !== category),
+        );
+    }),
+);
+document.querySelectorAll("[data-brush]").forEach(
+  (b) =>
+    (b.onclick = () => {
+      brush = Number(b.dataset.brush);
+      document
+        .querySelectorAll("[data-brush]")
+        .forEach((v) => v.classList.toggle("active", v === b));
+      closeSheets();
+      preview();
+    }),
+);
+$("erase-marks").onclick = () => {
+  if (state) {
+    state.marks = [];
+    toast("Harvest marks cleared.");
+    closeSheets();
+  }
+};
 function readSave() {
   try {
     const raw = localStorage.getItem(KEY);
@@ -73,14 +178,16 @@ function beep(freq = 420) {
   } catch {}
 }
 function save(manual = false) {
-  if (!state?.people.length) return;
+  if (!state?.people.length) return true;
   try {
     localStorage.setItem(KEY, serialize(state));
     saved = restore(serialize(state));
     $("resume").hidden = false;
     if (manual) toast("Village saved in this browser.");
+    return true;
   } catch {
     toast("Storage is unavailable or full. Keep this tab open to continue.");
+    return false;
   }
 }
 function enter(s) {
@@ -88,6 +195,9 @@ function enter(s) {
   active = true;
   paused = false;
   selected = null;
+  document.body.classList.add("in-game");
+  closeSheets();
+  $("work-focus").value = s.focus || "balanced";
   $("island-screen").hidden = true;
   $("play").hidden = false;
   setTool(s.people.length ? "inspect" : "hearth");
@@ -119,6 +229,15 @@ new ResizeObserver(() => {
 function setTool(next) {
   tool = next;
   rotation = 0;
+  candidate = null;
+  $("placement").hidden = next === "inspect" || next === "demolish";
+  $("placement-name").textContent =
+    DEFS[next]?.name ||
+    POWERS[next]?.name ||
+    (next === "harvest" ? "Mark a harvest" : "Inspect");
+  $("rotate").hidden = !DEFS[next];
+  $("confirm-placement").disabled = true;
+  $("placement-info").textContent = "Tap the map to choose a location.";
   document
     .querySelectorAll("[data-build]")
     .forEach((b) => b.classList.toggle("active", b.dataset.build === next));
@@ -126,13 +245,29 @@ function setTool(next) {
     $(id).classList.toggle("active", id === next);
   $("tool-tip").textContent =
     DEFS[next]?.desc ||
+    POWERS[next]?.desc ||
     (next === "harvest"
       ? "Click a tree or rock to mark it. Click again to unmark. Workers need a route to its edge."
       : next === "demolish"
         ? "Click a building to remove it and recover half the materials."
         : "Click a building or citizen to inspect.");
 }
-for (const [type, d] of Object.entries(DEFS)) {
+for (const type of [
+  "hearth",
+  "house",
+  "well",
+  "farm",
+  "lumber",
+  "quarry",
+  "kitchen",
+  "store",
+  "garden",
+  "tower",
+  "wall",
+  "path",
+  "beacon",
+]) {
+  const d = DEFS[type];
   const button = document.createElement("button");
   button.dataset.build = type;
   button.title = d.desc;
@@ -149,14 +284,79 @@ for (const [type, d] of Object.entries(DEFS)) {
         ? "Found your village"
         : "") +
     "</small>";
-  button.onclick = () => setTool(type);
+  const icon = document.createElement("canvas");
+  icon.className = "building-icon";
+  icon.width = 64;
+  icon.height = 42;
+  const c = icon.getContext("2d");
+  c.imageSmoothingEnabled = false;
+  c.translate(8, 14);
+  c.scale(0.85, 0.85);
+  structure(c, { type, x: 0, y: 0, rot: 0, progress: 1, hp: d.hp });
+  button.prepend(icon);
+  button.onclick = () => {
+    setTool(type);
+    closeSheets();
+  };
   $("buildings").append(button);
 }
-for (const id of ["harvest", "inspect", "demolish"])
-  $(id).onclick = () => setTool(id);
+$("inspect").onclick = () => {
+  closeSheets();
+  setTool("inspect");
+};
+$("harvest").onclick = () => {
+  setTool("harvest");
+  openSheet("harvest-sheet");
+};
+$("demolish").onclick = () => {
+  if (!selected?.type) {
+    toast("Select a building first.");
+    return;
+  }
+  if (selected.type === "hearth") {
+    toast("The Hearthhold anchors this village.");
+    return;
+  }
+  if (
+    confirm(
+      "Dismantle " + DEFS[selected.type].name + "? Recover half its materials.",
+    )
+  ) {
+    remove(state, selected);
+    selected = null;
+    closeSheets();
+    update();
+  }
+};
 $("rotate").onclick = () => {
   rotation = (rotation + 1) % 4;
   beep(320);
+  preview();
+};
+function preview() {
+  if (!candidate || !state) return;
+  hover = { ...candidate };
+  const reason = DEFS[tool]
+    ? canPlace(state, tool, candidate.x, candidate.y, rotation)
+    : "";
+  $("placement-info").textContent =
+    reason ||
+    (POWERS[tool]
+      ? POWERS[tool].cost + " influence · radius " + POWERS[tool].radius
+      : tool === "harvest"
+        ? brush + " × " + brush + " harvest area"
+        : "Site ready · " + footprint(tool, rotation).length + " plot cells");
+  $("confirm-placement").disabled = !!reason;
+}
+$("cancel-placement").onclick = () => {
+  setTool("inspect");
+  closeSheets();
+};
+$("confirm-placement").onclick = () => {
+  if (candidate) {
+    action(candidate);
+    if (tool !== "inspect") preview();
+  }
 };
 function tileFrom(e) {
   const r = canvas.getBoundingClientRect();
@@ -176,16 +376,39 @@ function action(pos) {
       beep(580);
       if (tool === "hearth") setTool("inspect");
     }
-  } else if (tool === "harvest") {
-    const index = y * W + x;
-    if (![3, 4].includes(state.tiles[index]))
-      toast("Choose a tree or a stone deposit.");
+  } else if (POWERS[tool]) {
+    const reason = cast(state, tool, x, y);
+    if (reason) toast(reason);
     else {
-      state.marks = state.marks.includes(index)
-        ? state.marks.filter((i) => i !== index)
-        : [...state.marks, index];
-      beep(370);
+      beep(170);
+      toast(POWERS[tool].name + " cast.");
     }
+  } else if (tool === "harvest") {
+    let count = 0;
+    const half = Math.floor(brush / 2);
+    for (let dy = -half; dy <= half; dy++)
+      for (let dx = -half; dx <= half; dx++) {
+        const ax = x + dx,
+          ay = y + dy,
+          index = ay * W + ax;
+        if (
+          ax >= 0 &&
+          ay >= 0 &&
+          ax < W &&
+          ay < H &&
+          [3, 4].includes(state.tiles[index]) &&
+          !state.marks.includes(index)
+        ) {
+          state.marks.push(index);
+          count++;
+        }
+      }
+    toast(
+      count
+        ? count + " deposits marked for gathering."
+        : "Choose unmarked trees or stone.",
+    );
+    if (count) beep(370);
   } else if (tool === "demolish") {
     const b = buildingAt(state, x, y);
     if (b) {
@@ -219,37 +442,76 @@ function action(pos) {
         "Stone deposit. Mark it to gather 7 stone.",
       ][t];
     }
+    $("demolish").hidden = !selected?.type;
   }
   update();
 }
+function selectTile(pos) {
+  if (tool === "inspect") {
+    action(pos);
+    closeSheets();
+    $("inspect-sheet").hidden = false;
+    return;
+  }
+  closeSheets();
+  candidate = pos;
+  preview();
+}
 canvas.addEventListener("pointerdown", (e) => {
   canvas.focus({ preventScroll: true });
-  drag = { x: e.clientX, y: e.clientY, cx: camera.x, cy: camera.y };
-  moved = false;
   canvas.setPointerCapture(e.pointerId);
-  hover = tileFrom(e);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    gesture = true;
+    const [a, b] = [...pointers.values()];
+    pinch = { distance: Math.hypot(a.x - b.x, a.y - b.y), zoom: camera.zoom };
+    drag = null;
+    moved = true;
+  } else if (pointers.size === 1) {
+    gesture = false;
+    drag = { x: e.clientX, y: e.clientY, cx: camera.x, cy: camera.y };
+    moved = false;
+  }
 });
 canvas.addEventListener("pointermove", (e) => {
+  if (pointers.has(e.pointerId))
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2 && pinch) {
+    const [a, b] = [...pointers.values()];
+    const distance = Math.hypot(a.x - b.x, a.y - b.y);
+    const desired = Math.max(
+      0.7,
+      Math.min(4, (pinch.zoom * distance) / Math.max(1, pinch.distance)),
+    );
+    zoom(desired / camera.zoom);
+    return;
+  }
   if (drag) {
     const dx = e.clientX - drag.x,
       dy = e.clientY - drag.y;
-    if (Math.hypot(dx, dy) > 5) moved = true;
+    if (Math.hypot(dx, dy) > 6) moved = true;
     if (moved) {
       camera.x = drag.cx + dx;
       camera.y = drag.cy + dy;
     }
   }
-  hover = tileFrom(e);
+  if (!candidate && e.pointerType === "mouse") hover = tileFrom(e);
 });
 canvas.addEventListener("pointerup", (e) => {
-  if (drag && !moved) action(tileFrom(e));
+  if (!gesture && drag && !moved) selectTile(tileFrom(e));
+  pointers.delete(e.pointerId);
   drag = null;
+  pinch = null;
+  if (pointers.size === 0) gesture = false;
 });
-canvas.addEventListener("pointercancel", () => {
+canvas.addEventListener("pointercancel", (e) => {
+  pointers.delete(e.pointerId);
   drag = null;
+  pinch = null;
+  gesture = true;
 });
 canvas.addEventListener("pointerleave", () => {
-  if (!drag) hover = null;
+  if (!drag && !candidate) hover = null;
 });
 function zoom(factor) {
   const old = camera.zoom;
@@ -257,6 +519,7 @@ function zoom(factor) {
   const ratio = camera.zoom / old;
   camera.x = canvas.width / 2 - (canvas.width / 2 - camera.x) * ratio;
   camera.y = canvas.height / 2 - (canvas.height / 2 - camera.y) * ratio;
+  canvas.dataset.zoom = String(camera.zoom);
 }
 canvas.addEventListener(
   "wheel",
@@ -285,7 +548,7 @@ document.querySelectorAll("[data-speed]").forEach(
 document.addEventListener("keydown", (e) => {
   if (
     !active ||
-    $("guide").open ||
+    document.querySelector("dialog[open]") ||
     ["INPUT", "TEXTAREA", "BUTTON"].includes(document.activeElement.tagName)
   )
     return;
@@ -296,8 +559,14 @@ document.addEventListener("keydown", (e) => {
   )
     e.preventDefault();
   if (e.key === " ") pause();
-  if (e.key.toLowerCase() === "r") rotation = (rotation + 1) % 4;
-  if (e.key === "Escape") setTool("inspect");
+  if (e.key.toLowerCase() === "r") {
+    rotation = (rotation + 1) % 4;
+    preview();
+  }
+  if (e.key === "Escape") {
+    setTool("inspect");
+    closeSheets();
+  }
   const pan = { w: [0, 35], s: [0, -35], a: [35, 0], d: [-35, 0] }[
     e.key.toLowerCase()
   ];
@@ -317,6 +586,10 @@ document.addEventListener("keydown", (e) => {
       x: Math.max(0, Math.min(W - 1, hover.x + move[0])),
       y: Math.max(0, Math.min(H - 1, hover.y + move[1])),
     };
+    if (tool !== "inspect") {
+      candidate = { ...hover };
+      preview();
+    }
   }
   if (e.key === "Enter") action(hover);
 });
@@ -327,6 +600,9 @@ $("save").onclick = () => {
 $("atlas").onclick = () => {
   save();
   active = false;
+  document.body.classList.remove("in-game");
+  $("menu").close();
+  closeSheets();
   $("play").hidden = true;
   $("island-screen").hidden = false;
   readSave();
@@ -371,7 +647,12 @@ function generate() {
     $("regions").append(b);
   });
 }
-$("generate").onclick = generate;
+$("generate").onclick = () => {
+  const number = new Uint32Array(1);
+  crypto.getRandomValues(number);
+  $("seed").value = "HEARTH-" + number[0].toString(36).toUpperCase();
+  generate();
+};
 $("seed").addEventListener("keydown", (e) => {
   if (e.key === "Enter") generate();
 });
@@ -380,6 +661,7 @@ $("resume").onclick = () => {
 };
 function update() {
   if (!state) return;
+  if (candidate && active) preview();
   const s = state;
   $("resources").replaceChildren();
   for (const [key, label, icon] of [
@@ -388,6 +670,7 @@ function update() {
     ["food", "FOOD", "❧"],
     ["water", "WATER", "◈"],
     ["morale", "MORALE", "✦"],
+    ["influence", "INFLUENCE", "✧"],
   ]) {
     const el = document.createElement("div");
     el.className = "resource";
@@ -395,7 +678,13 @@ function update() {
       '<span class="icon">' +
       icon +
       "</span><div><b>" +
-      Math.floor(key === "morale" ? s.morale : s.stock[key]) +
+      Math.floor(
+        key === "morale"
+          ? s.morale
+          : key === "influence"
+            ? (s.influence ?? 35)
+            : s.stock[key],
+      ) +
       (key === "morale" ? "%" : "") +
       "</b><small>" +
       label +
@@ -529,7 +818,29 @@ function draw() {
     ctx.fillStyle = valid ? "#e3eabc55" : "#db817b66";
     ctx.strokeStyle = valid ? "#eff2c7" : "#ed9a8d";
     ctx.lineWidth = 1 / camera.zoom;
-    for (const [dx, dy] of type ? footprint(type, rotation) : [[0, 0]]) {
+    if (POWERS[tool]) {
+      ctx.beginPath();
+      ctx.arc(
+        (hover.x + 0.5) * TILE,
+        (hover.y + 0.5) * TILE,
+        POWERS[tool].radius * TILE,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.stroke();
+    }
+    const marks = [];
+    if (tool === "harvest") {
+      const half = Math.floor(brush / 2);
+      for (let dy = -half; dy <= half; dy++)
+        for (let dx = -half; dx <= half; dx++) marks.push([dx, dy]);
+    }
+    for (const [dx, dy] of type
+      ? footprint(type, rotation)
+      : marks.length
+        ? marks
+        : [[0, 0]]) {
       const x = (hover.x + dx) * TILE,
         y = (hover.y + dy) * TILE;
       ctx.fillRect(x, y, TILE, TILE);
@@ -540,7 +851,13 @@ function draw() {
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000 || 0);
   last = now;
-  if (active && state && !paused && !document.hidden && !$("guide").open) {
+  if (
+    active &&
+    state &&
+    !paused &&
+    !document.hidden &&
+    !document.querySelector("dialog[open]")
+  ) {
     const steps = Math.ceil(speed);
     for (let i = 0; i < steps; i++) tick(state, (dt * speed) / steps);
   }
@@ -558,6 +875,62 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 window.addEventListener("pagehide", () => save());
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    save();
+    audio?.suspend();
+  } else {
+    last = performance.now();
+    if (sound) audio?.resume();
+  }
+});
+window.addEventListener("game-save-request", (event) => {
+  if (!save()) event.preventDefault();
+});
+$("fullscreen").onclick = async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen)
+      await document.documentElement.requestFullscreen();
+    else toast("Install to your Home Screen for an app-sized view.");
+  } catch {
+    toast("Use the Home Screen app for a full-screen view.");
+  }
+};
+$("export-save").onclick = () => {
+  if (!state?.people.length) {
+    toast("Start a village first.");
+    return;
+  }
+  const url = URL.createObjectURL(
+    new Blob([serialize(state)], { type: "application/json" }),
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "destiny-village-day-" + state.day + ".json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+$("import-save").onclick = () => $("import-file").click();
+$("import-file").onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    if (file.size > 2_000_000) throw Error("too large");
+    const imported = restore(await file.text());
+    if (saved && !confirm("Replace the current village with this save?"))
+      return;
+    $("menu").close();
+    enter(imported);
+    save(true);
+  } catch {
+    toast(
+      "That file is not a valid village save. Your current village is unchanged.",
+    );
+  } finally {
+    e.target.value = "";
+  }
+};
 readSave();
 generate();
 requestAnimationFrame(frame);

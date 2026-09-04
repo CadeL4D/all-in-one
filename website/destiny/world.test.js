@@ -12,12 +12,48 @@ import {
   serialize,
   restore,
   raid,
+  cast,
+  POWERS,
   W,
   H,
 } from "./world.js";
 const run = (s, seconds) => {
   for (let i = 0; i < seconds * 10; i++) tick(s, 0.1);
 };
+test("powers require targets, spend influence, and repair real damage", () => {
+  const s = setup(),
+    hearth = completed(s, "hearth")[0];
+  s.influence = 60;
+  assert.ok(cast(s, "mend", hearth.x, hearth.y));
+  assert.equal(s.influence, 60);
+  hearth.hp -= 100;
+  assert.equal(cast(s, "mend", hearth.x, hearth.y), "");
+  assert.equal(hearth.hp, 285);
+  assert.equal(s.influence, 40);
+  s.enemies.push({ id: 999, x: 32, y: 25, hp: 36, path: [], age: 0, cool: 0 });
+  assert.equal(cast(s, "starfall", 32, 25), "");
+  assert.ok(s.enemies[0].hp <= 0);
+  assert.equal(s.influence, 10);
+});
+test("wildseed creates harvestable timber away from the city and respects roads", () => {
+  const s = setup();
+  s.influence = 50;
+  for (let y = 5; y < 12; y++)
+    for (let x = 40; x < 47; x++) s.tiles[y * W + x] = 0;
+  s.roads.push(6 * W + 41);
+  assert.equal(cast(s, "wildseed", 43, 8), "");
+  assert.equal(s.tiles[6 * W + 41], 0);
+  assert.ok(s.tiles.slice(6 * W, 11 * W).includes(3));
+  assert.equal(s.influence, 25);
+});
+test("legacy saves acquire influence and priority defaults", () => {
+  const s = setup();
+  delete s.influence;
+  delete s.focus;
+  const restored = restore(serialize(s));
+  assert.equal(restored.influence, 35);
+  assert.equal(restored.focus, "balanced");
+});
 function setup() {
   const s = createWorld("test", 1, true);
   assert.equal(place(s, "hearth", 30, 23), "");

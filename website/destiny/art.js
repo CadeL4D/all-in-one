@@ -5,6 +5,17 @@ const rect = (c, color, x, y, w, h) => {
   c.fillRect(Math.round(x), Math.round(y), w, h);
 };
 export function tree(c, x, y, n = 0) {
+  if (n > 0.62) {
+    rect(c, "#294935", x - 4, y + 5, 18, 5);
+    rect(c, "#836642", x + 4, y - 3, 3, 13);
+    rect(c, "#305838", x - 5, y - 8, 21, 13);
+    rect(c, "#477643", x - 3, y - 13, 17, 17);
+    rect(c, "#64874a", x, y - 16, 10, 14);
+    rect(c, "#839c58", x + 1, y - 15, 5, 4);
+    rect(c, "#547c42", x - 4, y - 7, 8, 7);
+    rect(c, "#71914e", x - 2, y - 10, 5, 3);
+    return;
+  }
   rect(c, "#243f32", x - 3, y + 6, 14, 5);
   rect(c, "#765d3c", x + 4, y, 3, 10);
   rect(c, "#254d3a", x - 3, y - 6, 17, 11);
@@ -45,10 +56,10 @@ export function ground(c, s, time = 0) {
       }
       const colors =
         s.region === 2
-          ? ["#68744e", "#65734c", "#6b7950"]
+          ? ["#68744e", "#67744e", "#69764e"]
           : s.region === 1
-            ? ["#78864c", "#72824a", "#76894e"]
-            : ["#647b49", "#617647", "#697d4b"];
+            ? ["#78864c", "#77854b", "#79884d"]
+            : ["#63794a", "#627849", "#657b4b"];
       rect(c, t === 2 ? "#b9ad72" : colors[Math.floor(n * 3)], px, py, 12, 12);
       if (n > 0.62) {
         rect(c, t === 2 ? "#cdc088" : "#91a262", px + 2, py + 3, 1, 2);
@@ -85,6 +96,12 @@ function roof(c, x, y, w, h, color = "#aa6442") {
   rect(c, "#66664f", x + w - 11, y - 13, 6, 2);
 }
 export function structure(c, b, time = 0) {
+  if (b.type === "path") {
+    rect(c, "#a89d72", b.x * TILE, b.y * TILE, 12, 12);
+    rect(c, "#d0c095", b.x * TILE + 2, b.y * TILE + 3, 5, 2);
+    rect(c, "#7f855d", b.x * TILE + 7, b.y * TILE + 8, 3, 2);
+    return;
+  }
   const cells = footprint(b.type, b.rot),
     minX = b.x * TILE,
     minY = b.y * TILE;
@@ -129,6 +146,15 @@ export function structure(c, b, time = 0) {
     }
     return;
   }
+  if (b.type === "quarry") {
+    for (const [dx, dy] of cells)
+      rock(c, minX + dx * TILE, minY + dy * TILE, 0);
+    rect(c, "#a18c59", minX + 4, minY - 7, 3, 22);
+    rect(c, "#baaa75", minX + 4, minY - 8, 23, 3);
+    rect(c, "#534e39", minX + 21, minY - 5, 1, 14);
+    rect(c, "#c4b996", minX + 17, minY + 8, 9, 6);
+    return;
+  }
   if (b.type === "garden") {
     for (const [dx, dy] of cells) {
       const x = minX + dx * TILE,
@@ -164,6 +190,15 @@ export function structure(c, b, time = 0) {
     rect(c, "#e1ba75", minX + 2, minY - 5, 20, 2);
     return;
   }
+  if (b.type === "beacon") {
+    rect(c, "#667d79", minX + 4, minY + 13, 17, 7);
+    rect(c, "#adbbaa", minX + 7, minY - 9, 10, 26);
+    rect(c, "#546e6c", minX + 13, minY - 8, 4, 24);
+    rect(c, "#d0f0c2", minX + 9, minY - 18, 6, 11);
+    rect(c, "#edebb3", minX + 7, minY - 14, 10, 4);
+    rect(c, "#ffffff", minX + 10, minY - 16, 2, 5);
+    return;
+  }
   if (b.type === "tower") {
     rect(c, "#554f3b", minX + 3, minY - 10, 4, 32);
     rect(c, "#9a8e65", minX + 17, minY - 10, 4, 32);
@@ -175,7 +210,7 @@ export function structure(c, b, time = 0) {
     rect(c, "#e5b46c", minX + 12, minY - 24, 9, 5);
     return;
   }
-  if (["kitchen", "lumber", "house"].includes(b.type)) {
+  if (["kitchen", "lumber", "house", "quarry"].includes(b.type)) {
     const has = (x, y) => cells.some((p) => p[0] === x && p[1] === y);
     const color =
       b.type === "lumber"
@@ -241,6 +276,13 @@ export function person(c, p, t = 0, enemy = false) {
     y = Math.round(p.y * TILE),
     walk = p.path?.length ? Math.sin(t * 13 + p.id) : 0;
   rect(c, "#273c3270", x - 3, y + 2, 7, 3);
+  if (enemy && p.kind === "brute") {
+    rect(c, "#493345", x - 5, y - 9, 11, 12);
+    rect(c, "#927080", x - 4, y - 12, 9, 7);
+    rect(c, "#d6ac93", x - 2, y - 10, 2, 2);
+    rect(c, "#a5a38b", x + 5, y - 6, 5, 7);
+    return;
+  }
   rect(
     c,
     enemy ? "#8d5663" : ["#dad5a2", "#e0ac73", "#a7bed0", "#d8a397"][p.id % 4],
@@ -308,6 +350,19 @@ export function scene(c, s, t = 0) {
       );
     }
   for (const e of s.effects) {
+    if (e.ring) {
+      c.strokeStyle = "#e5d591";
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(
+        e.x * TILE,
+        e.y * TILE,
+        e.ring * TILE * (1.4 - e.life),
+        0,
+        Math.PI * 2,
+      );
+      c.stroke();
+    }
     if (e.tx !== undefined) {
       c.strokeStyle = "#f5db8b";
       c.lineWidth = 1;
