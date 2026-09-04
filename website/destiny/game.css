@@ -253,7 +253,11 @@ a {
   background: #13282bdb;
   border-left: 2px solid var(--gold);
   padding: 12px;
-  pointer-events: none;
+  text-align: left;
+  font-weight: normal;
+}
+#mobile-speed {
+  display: none;
 }
 .mission-label {
   display: block;
@@ -993,6 +997,175 @@ dialog h2 {
   }
   .sheet-heading {
     margin-bottom: 8px;
+  }
+}
+/* Compact HUD for phones, including short landscape screens. */
+@media (max-width: 700px), (max-height: 500px) and (orientation: landscape) {
+  body.in-game .topbar {
+    height: calc(44px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  body.in-game .wordmark small {
+    display: none;
+  }
+  body.in-game .top-actions button,
+  body.in-game .back {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  #play {
+    height: calc(100dvh - 44px - env(safe-area-inset-top, 0px));
+  }
+  .resourcebar {
+    height: 40px;
+    gap: 0;
+    justify-content: space-evenly;
+  }
+  .resource {
+    gap: 3px;
+  }
+  .resource .icon {
+    font-size: 13px;
+  }
+  .resource b {
+    font-size: 12px;
+  }
+  .resource small {
+    font-size: 8px;
+    letter-spacing: 0;
+  }
+  .world-wrap {
+    top: 40px;
+    bottom: calc(62px + var(--safe));
+  }
+  .map-title,
+  .weather {
+    display: none;
+  }
+  .weather.alert {
+    display: block;
+    top: 62px;
+    bottom: auto;
+    left: max(8px, env(safe-area-inset-left, 0px));
+    color: #ffdfab;
+    max-width: calc(100% - 16px);
+  }
+  .time-hud {
+    top: 8px;
+    left: max(8px, env(safe-area-inset-left, 0px));
+    width: 158px;
+    height: 46px;
+    padding: 0 2px 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px #0002;
+  }
+  .time-hud > div:first-child {
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 10px;
+  }
+  .time-hud span {
+    font-size: 9px;
+  }
+  .daytrack {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+  }
+  .speed {
+    gap: 0;
+  }
+  .speed [data-speed] {
+    display: none;
+  }
+  .speed button {
+    min-height: 44px;
+    min-width: 44px;
+    background: transparent;
+    border-color: transparent;
+  }
+  #mobile-speed {
+    display: block;
+    color: var(--gold);
+  }
+  .map-controls {
+    top: 8px;
+    right: max(8px, env(safe-area-inset-right, 0px));
+    flex-direction: row;
+    gap: 0;
+    background: #13282be6;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .map-controls button {
+    min-width: 44px;
+    width: 44px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .mission {
+    top: auto;
+    bottom: 8px;
+    left: max(8px, env(safe-area-inset-left, 0px));
+    max-width: min(360px, calc(100% - 16px));
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+  .mission-label {
+    display: none;
+  }
+  #objective {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  .world-wrap:has(.placement:not([hidden])) .mission {
+    display: none;
+  }
+  .placement {
+    bottom: 8px;
+    border-radius: 12px;
+  }
+  .placement-buttons button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .dock {
+    height: calc(62px + var(--safe));
+    padding: 5px max(8px, env(safe-area-inset-left, 0px))
+      calc(5px + var(--safe)) max(8px, env(safe-area-inset-right, 0px));
+    gap: 3px;
+  }
+  .dock button {
+    padding: 3px;
+    font-size: 10px;
+    border-radius: 10px;
+  }
+  .dock button span {
+    font-size: 20px;
+    line-height: 23px;
+  }
+  .sheet {
+    bottom: calc(62px + var(--safe));
+  }
+  #notice {
+    bottom: calc(158px + var(--safe));
+    padding: 8px 12px;
+    font-size: 11px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

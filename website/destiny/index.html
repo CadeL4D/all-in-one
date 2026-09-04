@@ -64,12 +64,22 @@
             ><button data-speed="1" class="active">1×</button
             ><button data-speed="2">2×</button
             ><button data-speed="4">4×</button>
+            <button
+              id="mobile-speed"
+              aria-label="Simulation speed: 1×. Tap to change"
+            >
+              1×
+            </button>
           </div>
         </div>
-        <div class="mission">
+        <button
+          class="mission"
+          id="goal-open"
+          aria-label="View current objective in Village"
+        >
           <span class="mission-label">YOUR NEXT STEP</span>
-          <div id="objective"></div>
-        </div>
+          <span id="objective"></span>
+        </button>
         <div id="notice" role="status" aria-live="polite"></div>
         <div id="weather" class="weather">Clear skies</div>
         <div id="placement" class="placement" hidden>
@@ -168,6 +178,9 @@
           <button data-close-sheet aria-label="Close village">×</button>
         </div>
         <p id="region-copy"></p>
+        <h3>Your next step</h3>
+        <p id="village-objective"></p>
+        <p id="village-weather" class="sheet-hint"></p>
         <div id="population" class="population"></div>
         <label for="work-focus">WORK PRIORITY</label
         ><select id="work-focus">

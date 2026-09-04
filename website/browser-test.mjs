@@ -32,7 +32,10 @@ async function found(page, touch = false) {
     null,
   );
   await page.locator("#confirm-placement").click();
-  await page.locator('[data-speed="4"]').click();
+  if (await page.locator("#mobile-speed").isVisible()) {
+    await page.locator("#mobile-speed").click();
+    await page.locator("#mobile-speed").click();
+  } else await page.locator('[data-speed="4"]').click();
   await page.waitForFunction(() =>
     document.querySelector("#objective").textContent.includes("cottage"),
   );
@@ -73,13 +76,11 @@ try {
   assert.equal((await save(page)).time, time.time);
   await menu(page);
   const before = await read(page);
-  await page
-    .locator("#import-file")
-    .setInputFiles({
-      name: "broken.json",
-      mimeType: "application/json",
-      buffer: Buffer.from('{"version":1}'),
-    });
+  await page.locator("#import-file").setInputFiles({
+    name: "broken.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"version":1}'),
+  });
   assert.deepEqual(await read(page), before);
   const downloadPromise = page.waitForEvent("download");
   await page.locator("#export-save").click();
@@ -134,6 +135,31 @@ try {
     true,
   );
   const mb = await mobile.locator("#world").boundingBox();
+  assert.ok(
+    mb.height >= 698,
+    "Compact phone HUD leaves at least 698px for the map",
+  );
+  const timeHud = await mobile.locator(".time-hud").boundingBox();
+  assert.ok(timeHud.height <= 46, "Time controls use a single compact row");
+  await mobile.locator("#goal-open").click();
+  assert.equal(await mobile.locator("#village-sheet").isVisible(), true);
+  assert.equal(
+    await mobile.locator("#village-objective").textContent(),
+    await mobile.locator("#objective").textContent(),
+  );
+  await mobile.locator("#village-sheet [data-close-sheet]").click();
+  for (const selector of [
+    "#pause",
+    "#mobile-speed",
+    "#center",
+    "#build-open",
+  ]) {
+    const box = await mobile.locator(selector).boundingBox();
+    assert.ok(
+      box.width >= 44 && box.height >= 44,
+      `${selector} remains easy to tap`,
+    );
+  }
   const client = await mobile.context().newCDPSession(mobile);
   const mx = mb.x + mb.width / 2,
     my = mb.y + mb.height / 2;

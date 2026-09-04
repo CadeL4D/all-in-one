@@ -81,6 +81,7 @@ document
 $("build-open").onclick = () => openSheet("build-sheet");
 $("powers-open").onclick = () => openSheet("powers-sheet");
 $("village-open").onclick = () => openSheet("village-sheet");
+$("goal-open").onclick = () => openSheet("village-sheet");
 $("open-menu").onclick = () => $("menu").showModal();
 $("choose-land").onclick = () =>
   $("land-selection").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -537,6 +538,11 @@ function pause() {
   update();
 }
 $("pause").onclick = pause;
+$("mobile-speed").onclick = () => {
+  speed = speed === 1 ? 2 : speed === 2 ? 4 : 1;
+  paused = false;
+  update();
+};
 document.querySelectorAll("[data-speed]").forEach(
   (b) =>
     (b.onclick = () => {
@@ -703,6 +709,11 @@ function update() {
           ? "Dusk"
           : "Night";
   $("day-progress").style.width = phase * 100 + "%";
+  $("mobile-speed").textContent = speed + "×";
+  $("mobile-speed").setAttribute(
+    "aria-label",
+    `Simulation speed: ${speed}×. Tap to change`,
+  );
   $("pause").textContent = paused ? "▶" : "Ⅱ";
   $("pause").setAttribute(
     "aria-label",
@@ -741,6 +752,7 @@ function update() {
     goal =
       "The hearth has fallen. Return to the Island to begin a new chapter.";
   $("objective").textContent = goal;
+  $("village-objective").textContent = goal;
   $("population").replaceChildren(
     document.createTextNode(s.people.length + " villagers"),
   );
@@ -800,6 +812,8 @@ function update() {
       : s.day >= 3 && s.day % 2 === 1 && s.raided !== s.day
         ? "⚑ Tracks at the border · raid at dusk"
         : "✦ Clear skies";
+  $("weather").classList.toggle("alert", $("weather").textContent.startsWith("⚑"));
+  $("village-weather").textContent = $("weather").textContent;
 }
 function draw() {
   if (!active || !state) return;
