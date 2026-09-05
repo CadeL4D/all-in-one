@@ -179,8 +179,8 @@ try {
   );
   const mb = await mobile.locator("#world").boundingBox();
   assert.ok(
-    mb.height >= 698,
-    "Compact phone HUD leaves at least 698px for the map",
+    mb.height >= 684,
+    "Touch-sized resource buttons still leave at least 684px for the map",
   );
   assert.equal(await mobile.locator("#world").evaluate(c => c.width), Math.round(mb.width * 3), "Map renders at native phone resolution");
   const timeHud = await mobile.locator(".time-hud").boundingBox();
@@ -320,7 +320,7 @@ try {
   assert.equal(await mobile.locator("#saved-villages button").count(), 3, "Modes keep independent progress in the same region");
   await closeMenu(mobile);
   await mobile.locator("#village-open").click();
-  assert.match(await mobile.locator("#survival-status").textContent(), /Day 3 dusk/);
+  assert.match(await mobile.locator("#survival-status").textContent(), /Day 3, dusk/);
   await mobile.locator("#village-sheet [data-close-sheet]").click();
   const fixture = sim.createWorld("progress-preview", 0, true);
   fixture.tiles.fill(0); sim.place(fixture, "hearth", 30, 22);

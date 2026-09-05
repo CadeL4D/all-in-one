@@ -8,9 +8,12 @@ import {buildSite} from './build-site.mjs';
 const output=fileURLToPath(new URL('./test-output/',import.meta.url));mkdirSync(output,{recursive:true});
 const root=buildSite(mkdtempSync(join(output,'published-')));
 const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.webmanifest':'application/manifest+json'};
+let staleCivic=false;
 const server=createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');
  if(!url.pathname.startsWith('/all-in-one/')){res.writeHead(404).end();return;}
+ if(url.pathname==='/all-in-one/cache-warm.html'){res.setHeader('Content-Type','text/html');res.end('<title>Update test</title>');return;}
+ if(staleCivic&&url.pathname==='/all-in-one/destiny/civic.js'){res.setHeader('Content-Type','text/javascript');res.setHeader('Cache-Control','public, max-age=86400');res.end('export const oldVersion = true;');return;}
  let file=join(root,url.pathname.slice('/all-in-one/'.length));
  try{if(statSync(file).isDirectory())file=join(file,'index.html');res.setHeader('Content-Type',types[extname(file)]||'application/octet-stream');res.end(readFileSync(file));}catch{res.writeHead(404).end();}
 });
@@ -27,5 +30,19 @@ try{
  await page.evaluate(()=>navigator.serviceWorker.ready.then(()=>true));
  await page.reload();await page.locator('.territory').last().waitFor();
  await page.context().setOffline(true);await page.reload();await page.locator('.territory').last().waitFor();assert.equal(await page.locator('.territory').count(),24);
- assert.deepEqual(errors,[]);console.log('PASS: assembled GitHub Pages subpath renders the island and 24 territories, then reloads offline.');
+ assert.deepEqual(errors,[]);
+ // A returning browser can have fresh-looking HTTP entries from an older
+ // release. New worker installation must bypass those entries as one shell.
+ const returning=await browser.newContext(),cached=await returning.newPage();
+ await cached.goto(`http://127.0.0.1:${server.address().port}/all-in-one/cache-warm.html`);
+ staleCivic=true;await cached.evaluate(()=>fetch('/all-in-one/destiny/civic.js').then(r=>r.text()));staleCivic=false;
+ await cached.goto(`http://127.0.0.1:${server.address().port}/all-in-one/destiny/`);
+ await cached.evaluate(()=>navigator.serviceWorker.ready.then(()=>true));
+ const updateErrors=[];cached.on('pageerror',e=>updateErrors.push(e.message));
+ await cached.reload();await cached.locator('.territory').last().waitFor();
+ assert.equal(await cached.locator('.territory').count(),24);assert.deepEqual(updateErrors,[]);
+ await returning.setOffline(true);await cached.reload();await cached.locator('.territory').last().waitFor();
+ assert.equal(await cached.locator('.territory').count(),24);assert.deepEqual(updateErrors,[]);
+ await returning.close();
+ console.log('PASS: assembled GitHub Pages island, 24 territories, offline reload, and recovery from an old HTTP-cached module.');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

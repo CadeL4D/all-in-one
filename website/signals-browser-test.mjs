@@ -1,0 +1,48 @@
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import {mkdirSync} from 'node:fs';
+import {createWorld,place,tick,DEFS,serialize} from './destiny/world.js';
+import {syncWarehouses} from './destiny/economy.js';
+const s=createWorld('signals-browser',0,true);s.tiles.fill(0);place(s,'hearth',30,22);for(let i=0;i<150;i++)tick(s,.1);
+for(const [type,x,y]of [['house',24,26],['farm',25,18],['well',35,18],['workshop',37,26],['tower',40,20]])s.buildings.push({id:s.nextId++,type,x,y,rot:0,progress:1,hp:DEFS[type].hp,buffer:{}});
+s.chapters=[0];s.campGather=false;s.stock.wood=40;s.stock.stone=40;syncWarehouses(s);s.ledger.current.made.ammo=8;s.ledger.current.used.ammo=3;
+const browser=await chromium.launch({headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});page.setDefaultTimeout(10000);
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(v=>localStorage.setItem('destiny-to-yours-v1',v),serialize(s));
+ await page.goto('http://127.0.0.1:4173/destiny/');await page.locator('#resume').click();await page.locator('#pause').click();
+ assert.equal(await page.locator('#resources [data-resource]').count(),10);
+ assert.match(await page.locator('#objective').textContent(),/supply flow|production and use/);
+ await page.locator('#supply-open').click();assert.equal(await page.locator('#supply-sheet').isVisible(),true);
+ assert.equal(await page.locator('#flow-table tbody tr').count(),8);
+ const ammo=page.locator('#flow-table tr').filter({hasText:'ammunition'});assert.match(await ammo.textContent(),/83$/);
+ assert.match(await page.locator('#supply-buildings').textContent(),/haul|collected|way/);
+ await page.locator('#flow-period').selectOption('previous');assert.match(await page.locator('#flow-period-copy').textContent(),/No previous/);
+ await page.locator('#flow-period').selectOption('today');
+ await page.locator('#pause').click();const before=await page.locator('#day-progress').getAttribute('style');
+ await page.waitForFunction(before=>document.querySelector('#day-progress').getAttribute('style')!==before,before);
+ await page.locator('#pause').click();
+ mkdirSync(new URL('./test-output/',import.meta.url),{recursive:true});await page.screenshot({path:new URL('./test-output/destiny-supply-flow-mobile.png',import.meta.url).pathname.replace(/^\/(\w:)/,'$1')});
+ await page.locator('#staffing-open').click();await page.getByRole('button',{name:'More haulers',exact:true}).click();assert.equal(await page.locator('#workers-hauler').textContent(),'1');
+ assert.equal(await page.locator('#opportunity-section').isVisible(),false);
+ await page.locator('#advice-mode').selectOption('on');assert.equal(await page.locator('#opportunity-section').isVisible(),true);
+ await page.locator('#advice-mode').selectOption('off');assert.equal(await page.locator('#opportunity-section').isVisible(),false);
+ await page.reload();await page.locator('#resume').click();await page.locator('#pause').click();await page.locator('#village-open').click();assert.equal(await page.locator('#advice-mode').inputValue(),'off');
+ await page.getByText('Assign the workforce',{exact:true}).click();assert.equal(await page.locator('#workers-hauler').textContent(),'1');
+ await page.locator('#village-sheet [data-close-sheet]').click();await page.locator('#supply-open').click();
+ await page.locator(`[data-supply-building="${s.buildings.find(b=>b.type==='tower').id}"]`).click();assert.equal(await page.locator('#inspect-sheet').isVisible(),true);assert.ok((await page.locator('#selected-signal').textContent()).length>15);
+ await page.locator('#inspect-sheet [data-close-sheet]').click();await page.screenshot({path:new URL('./test-output/destiny-signals-mobile.png',import.meta.url).pathname.replace(/^\/(\w:)/,'$1')});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.deepEqual(errors,[]);
+ // Late-game intelligence is visible independently of advisor suggestions.
+ const late=JSON.parse(serialize(s));late.difficulty='survival';late.peaceful=false;late.day=26;late.time=2501;delete late.ledger;delete late.raidForecast;
+ const forecast=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});forecast.setDefaultTimeout(10000);forecast.on('pageerror',e=>errors.push(e.message));
+ await forecast.addInitScript(v=>localStorage.setItem('destiny-to-yours-v1',v),serialize(late));
+ await forecast.goto('http://127.0.0.1:4173/destiny/');await forecast.locator('#resume').click();await forecast.locator('#pause').click();
+ assert.match(await forecast.locator('#weather').textContent(),/Raiding party/);
+ await forecast.locator('#village-open').click();
+ const intel=await forecast.locator('#survival-status').textContent();
+ assert.match(intel,/Day 26, dusk/);assert.match(intel,/north and south/);assert.match(intel,/standard-tower shots/);assert.match(intel,/two raid nights then one clear night/);
+ assert.deepEqual(errors,[]);
+ console.log('PASS: mobile flow, truthful history, live inspection, guidance modes, hauler persistence and late attack intelligence.');
+}finally{await browser.close();}

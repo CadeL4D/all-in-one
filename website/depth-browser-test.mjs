@@ -44,7 +44,7 @@ try {
  assert.equal(errors.length,0,errors.join('\n'));
  // Render a real simulated, naturally generated late village on a phone.
  const livingState=playThrough("HEARTH-742",0,"survival").state;
- livingState.day=21;livingState.time=2000;livingState.stock.meals=24;livingState.stock.stone=100;
+ delete livingState.ledger;livingState.day=21;livingState.time=2000;livingState.stock.meals=24;livingState.stock.stone=100;
  const living=serialize(livingState);
  const phone=await b.newPage({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true});phone.on('pageerror',e=>errors.push(e.message));
  await phone.addInitScript(v=>localStorage.setItem('destiny-to-yours-v1',v),living);await phone.goto('http://127.0.0.1:4173/destiny/');await phone.locator('#resume').click();await phone.locator('#pause').click();await phone.screenshot({path:'test-output/destiny-living-town-mobile.png'});
@@ -63,7 +63,7 @@ try {
  const waiting=restore(serialize(source));waiting.day=8;waiting.time=700;waiting.chapters=[0,1,2];waiting.stock.water=0;
  for(const [type,x,y] of [['house',20,30],['garden',17,30],['beacon',17,26]])waiting.buildings.push({id:waiting.nextId++,type,x,y,rot:0,progress:1,hp:DEFS[type].hp,...(type==='house'?{upgraded:true}:{})});
  const flow=await b.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});flow.on('pageerror',e=>errors.push(e.message));
- await flow.addInitScript(v=>localStorage.setItem('destiny-to-yours-v1',v),serialize(waiting));await flow.goto('http://127.0.0.1:4173/destiny/');await flow.locator('#resume').click();await flow.locator('#pause').click();
+ await flow.addInitScript(v=>{localStorage.setItem('destiny-to-yours-v1',v);localStorage.setItem('destiny-guidance','on');},serialize(waiting));await flow.goto('http://127.0.0.1:4173/destiny/');await flow.locator('#resume').click();await flow.locator('#pause').click();
  await flow.locator('#goal-open').click();assert.equal(await flow.locator('#inspect-sheet').isVisible(),true);assert.match(await flow.locator('#inspector').textContent(),/Dew well/);
  await flow.locator('#pause-building').click();assert.match(await flow.locator('#inspector').textContent(),/Production paused/);await flow.locator('#pause-building').click();
  await flow.locator('#inspect-sheet [data-close-sheet]').click();await flow.locator('#village-open').click();assert.equal(await flow.locator('#opportunities button').count(),3);

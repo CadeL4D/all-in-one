@@ -178,11 +178,11 @@
           <button data-close-sheet aria-label="Close village">×</button>
         </div>
         <p id="region-copy"></p>
-        <h3>Your next step</h3>
+        <label for="advice-mode">Guidance</label><select id="advice-mode"><option value="auto">Teach the opening, then let me lead</option><option value="on">Always show suggestions</option><option value="off">Let me lead</option></select><p id="guidance-copy"></p>
         <p id="village-objective"></p>
         <p id="settlement-pulse"></p>
         <section id="opportunity-section"><h3>Worth doing now</h3><div id="opportunities"></div></section>
-        <details class="depth-panel"><summary>Assign the workforce</summary><div id="workforce-controls"></div><p id="workforce-summary"></p></details>
+        <details class="depth-panel"><summary>Assign the workforce</summary><p>Assigned workers choose their trade first, then help elsewhere. Haulers collect construction materials and refill workshops and towers. Everyone finishes their current job; urgent care and food shortages take precedence.</p><div id="workforce-controls"></div><p id="workforce-summary"></p></details>
         <details class="depth-panel" id="caravan-panel"><summary>Visiting caravan</summary><p id="caravan-status"></p><div id="caravan-offers"></div></details>
         <details class="depth-panel"><summary>Industry & supplies</summary><p id="crafted-stock"></p><p>Timber → sawmill → planks → forge → tools. Equipped workers finish jobs 25% faster. Meals replace two food at dawn. Tap a workshop to pause it or set a stock target.</p><div id="industry-status"></div><label>Reserve tools for expeditions <select id="tool-reserve"><option value="0">None · equip everyone first</option><option value="2" selected>2 tools</option><option value="6">6 tools</option></select></label><label><input id="camp-gather" type="checkbox" checked> Gather nearby camp supplies automatically</label></details>
         <details class="depth-panel" id="exploration-panel"><summary>Explore & reclaim</summary><p id="frontier-status"></p><div id="exploration-sites"></div><p id="blessing-status"></p><div id="blessings" hidden><button data-blessing="industry">Industry · 10% faster work</button><button data-blessing="shelter">Shelter · faster rest</button><button data-blessing="sentinel">Sentinel · +3 tower damage</button></div></details>
@@ -221,12 +221,20 @@
           <small>UNDER YOUR HAND</small
           ><button data-close-sheet aria-label="Close inspector">×</button>
         </div>
-        <div id="inspector"></div>
+        <div id="inspector"></div><p id="selected-signal"></p><button id="inspect-supplies">View supply flow</button>
         <button id="prioritize-building" hidden>Prioritize this building</button><button id="pause-building" hidden>Pause production</button><button id="explore-site" hidden>Send an expedition →</button>
         <div id="production-controls" hidden><p id="production-status"></p><label>Keep in store <select id="production-target"><option value="12">12</option><option value="24">24</option><option value="48">48</option></select></label><button id="production-toggle">Pause production</button></div>
         <button id="upgrade-building" hidden></button>
         <button id="repair-building" hidden>Repair +60 condition · 4 timber / 2 stone</button>
         <button id="demolish">Dismantle selected structure</button>
+      </section>
+      <section id="supply-sheet" class="sheet" hidden aria-label="Supply flow">
+        <div class="sheet-heading"><div><small>READ YOUR SETTLEMENT</small><h2>Supply flow</h2></div><button data-close-sheet aria-label="Close supply flow">×</button></div>
+        <p class="sheet-hint">Live view · use the clock to pause.</p>
+        <label for="flow-period">Production and use</label><select id="flow-period"><option value="today">Today so far</option><option value="previous">Previous day</option></select>
+        <p id="flow-period-copy"></p><div id="flow-table"></div><h3>Workers</h3><div id="labor-pulse"></div><button id="staffing-open">Assign workers</button>
+        <details class="flow-note"><summary>What these numbers count</summary><p class="sheet-hint">Produced counts finished goods, including loads still being carried. Used counts building orders, recipes, meals, care, equipment, expeditions and tower shots. Deliveries are transfers; starting supplies, trade, losses and refunds are excluded.</p></details>
+        <h3>Buildings & deliveries</h3><p class="sheet-hint">Tap a building to find it. Needs materials = shortage · Waiting for haul = supplies available · Route blocked = no access.</p><div id="supply-buildings"></div>
       </section>
       <p id="tool-tip" class="sr-only"></p>
     </main>

@@ -1,4 +1,5 @@
-import {W,H,DEFS,completed,accessRoute,capacity,hash,noise,log,influenceCap} from './world.js';
+import {recordCost} from './ledger.js';
+import {W,H,DEFS,completed,accessRoute,edgeCells,capacity,hash,noise,log,influenceCap} from './world.js';
 import {RECIPES} from './industry.js';
 
 export const GOODS=['wood','stone','food','water','planks','tools','meals','ammo'];
@@ -55,7 +56,7 @@ export function freightJobs(s,grid){
       const reserve=b.type==='forge'&&key==='stone'?8:b.type==='kitchen'&&key==='food'?8:0;
       if((s.stock[key]||0)<=reserve)continue;
       const sources=ds.filter(d=>(d.bins?.[key]||0)>0).sort((a,c)=>Math.hypot(a.x-b.x,a.y-b.y)-Math.hypot(c.x-b.x,c.y-b.y));
-      const source=sources.find(d=>accessRoute(s,{x:d.x-1,y:d.y},b,grid)!==null);
+      const source=sources.find(d=>edgeCells(s,d,grid).some(([x,y])=>accessRoute(s,{x,y},b,grid)!==null));
       if(source){jobs.push({key:'supply'+b.id,kind:'supply',b:source,target:b.id,good:key,amount:Math.min(8,missing,(s.stock[key]||0)-reserve),priority:b.type==='tower'&&((b.buffer?.ammo||0)+(b.buffer?.stone||0)<2)?-4:0});break;}
     }
   }
@@ -99,6 +100,7 @@ export function loseWarehouse(s,b){
 }
 export function replaceLostFreight(s){
   for(const b of s.buildings)if(b.replacement&&Object.entries(b.replacement).every(([k,n])=>s.stock[k]>=n)){
+    recordCost(s,b.replacement);
     b.freight??=[];b.freight.push(...reserveFreight(s,b.replacement));
     for(const [k,n]of Object.entries(b.replacement))s.stock[k]-=n;
     delete b.replacement;

@@ -66,7 +66,7 @@ test("modes have distinct grace periods, bounded escalating waves and gradual mo
     const initial = raidPlan(s);
     assert.equal(initial.length, d.base);
     assert.ok(initial.every(m => m.kind === "raveler"));
-    const later = raidPlan(s, d.firstRaid + d.interval * 6);
+    const later = Array.from({length:8},(_,i)=>raidPlan(s,d.firstRaid+d.interval*(i+3))).flat();
     assert.ok(later.length >= initial.length);
     assert.ok(later.some(m => m.kind === "skulker"));
     assert.ok(later.some(m => m.kind === "brute"));

@@ -1,3 +1,4 @@
+import {initLedger,validateLedger,recordFlow,recordCost} from './ledger.js';
 import {protectedLand} from './frontier.js';
 import {terrainValue,validateEconomy} from './economy.js';
 // Living settlement systems. Functions run after world.js has initialized.
@@ -7,6 +8,7 @@ import { initCivic, validateCivic } from "./civic.js";
 export { EXTRA_BUILDINGS, RECIPES } from "./industry.js";
 export function initDepth(s) {
   initCivic(s);
+  initLedger(s);
   for (const key of ["planks", "tools", "meals", "ammo"]) s.stock[key] ??= 0;
   s.stats ??= {deliveries: 0, crafted: 0, explored: 0, repelled: 0};
   s.guardians ??= [];
@@ -19,6 +21,7 @@ export function initDepth(s) {
   for (const p of s.people) { p.energy ??= 100; p.toolUses ??= 0; p.health ??= 100; }
 }
 export function validateDepth(s) {
+  validateLedger(s);
   initDepth(s);
   validateCivic(s);
   if (!s.stats || typeof s.stats!=="object" || !["deliveries","crafted","explored","repelled"].every(k=>Number.isFinite(s.stats[k])&&s.stats[k]>=0)) throw Error("Invalid village statistics");
@@ -72,14 +75,14 @@ export function depthJobs(s) {
 export function workDepth(s,p,b,dt) {
   if(p.task.kind==="mine") {
     if(!b){p.task=null;return true;}
-    if(p.work>=24){p.carry={key:"stone",n:Math.max(2,Math.round(4*terrainValue(s,b.x,b.y).seam*(b.upgraded?1.5:1)))};p.task=null;}
+    if(p.work>=24){p.carry={key:"stone",n:Math.max(2,Math.round(4*terrainValue(s,b.x,b.y).seam*(b.upgraded?1.5:1)))};recordFlow(s,"stone",p.carry.n,"made");p.task=null;}
     return true;
   }
   if(p.task.kind==="heal") {
     if(!b || s.stock.food<2 || s.stock.water<1){p.task=null;return true;}
     if(p.work>=8){
       const patients=s.people.filter(v=>v.health<95&&Math.hypot(v.x-b.x,v.y-b.y)<7);
-      if(patients.length){s.stock.food-=2;s.stock.water--;for(const patient of patients)patient.health=Math.min(100,patient.health+30);s.effects.push({x:b.x,y:b.y,text:"Care +30",life:1.5});}
+      if(patients.length){recordCost(s,{food:2,water:1});s.stock.food-=2;s.stock.water--;for(const patient of patients)patient.health=Math.min(100,patient.health+30);s.effects.push({x:b.x,y:b.y,text:"Care +30",life:1.5});}
       p.task=null;
     }
     return true;
@@ -88,6 +91,7 @@ export function workDepth(s,p,b,dt) {
     const r = b && RECIPES[b.type];
     if (!r || recipeStatus(s,b) !== "Ready for a worker") { p.task=null; return true; }
     if (p.work >= r.time) {
+      recordCost(s,r.input);recordFlow(s,r.output,r.amount,"made");
       for (const [key,n] of Object.entries(r.input)) b.buffer[key]-=n;
       p.carry={key:r.output,n:r.amount}; s.stats.crafted += r.amount; p.task=null;
     }
@@ -130,7 +134,7 @@ export function workDepth(s,p,b,dt) {
 }
 export function workRate(s,p) { return (p.toolUses > 0 ? 1.25 : 1) * (s.blessing === "industry" ? 1.1 : 1); }
 export function equipWorker(s,p) {
-  if (!p.toolUses && s.stock.tools > s.toolReserve) {s.stock.tools--;p.toolUses=10;s.stats.equipped=true;}
+  if (!p.toolUses && s.stock.tools > s.toolReserve) {recordFlow(s,"tools",1,"used");s.stock.tools--;p.toolUses=10;s.stats.equipped=true;}
 }
 export function nearestDepot(s,p,grid) {
   const depots=s.buildings.filter(b=>b.progress>=1 && ["hearth","store","outpost"].includes(b.type)).sort((a,b)=>Math.hypot(p.x-a.x,p.y-a.y)-Math.hypot(p.x-b.x,p.y-b.y));
@@ -191,6 +195,7 @@ export function exploreSite(s,site) {
   for(const [key,n] of Object.entries(cost))if((s.stock[key]||0)<n)return `Need ${n} ${key} for this expedition.`;
   const grid=occupancy(s);
   if(!s.people.some(p=>accessRoute(s,p,{type:"wall",x:site.x,y:site.y,rot:0},grid)!==null))return "Open a route to the site first.";
+  recordCost(s,cost);
   for(const [key,n] of Object.entries(cost))s.stock[key]-=n;
   site.ordered=true;log(s,"Expedition ordered: "+site.name+". A free worker will travel there.");return "";
 }

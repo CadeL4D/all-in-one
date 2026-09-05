@@ -1,3 +1,5 @@
+import {settlementSignals,laborSummary,goodName} from './signals.js';
+import {initLedger,FLOW_GOODS} from './ledger.js';
 import {worldAudio} from './soundscape.js';
 import {terrainHint,terrainValue,networkStatus} from './economy.js';
 import {frontierSummary} from './frontier.js';
@@ -11,7 +13,7 @@ import {
   REGIONS,
   DEFS,
   linePlan, placeLine, campaign, season, UPGRADES, startProject, productionYield, capacity,
-  DIFFICULTIES, MONSTERS, rules, dailyNeeds, nextRaidDay, raidPlan, raidDay,
+  DIFFICULTIES, MONSTERS, rules, dailyNeeds, nextRaidDay, raidPlan, raidDay, raidInfo, raidRhythm,
   footprint,
   canPlace,
   suggestedSite,
@@ -50,6 +52,9 @@ let state = null,
   audio = null,
   sound = localStorage.getItem("destiny-sound")!=="off",
   noticeTimer;
+let adviceMode=localStorage.getItem("destiny-guidance")||"auto",guidanceActive=true;
+let supplySignals=[],signalTime=0,signalState=null;
+let signalHits=[];
 let pixelRatio = window.devicePixelRatio || 1;
 let requestedZoom = 1.6;
 const camera = { x: 0, y: 0, zoom: Math.round(requestedZoom * pixelRatio) / pixelRatio };
@@ -126,6 +131,7 @@ function actOnAdvice(action){
   }else if(action.panel){closeSheets();openSheet("village-sheet");$(action.panel).open=true;$(action.panel).scrollIntoView({block:"start",behavior:"smooth"});}
 }
 $("goal-open").onclick = () => {
+  if(!guidanceActive&&!state?.lost){openSheet("supply-sheet");update();return;}
   if(state?.lost){$("atlas").click();return;}
   if(nextAdvice){actOnAdvice(nextAdvice);return;}
   if (nextBuild) { closeSheets(); setTool(nextBuild, true); }
@@ -703,7 +709,11 @@ canvas.addEventListener("pointerup", (e) => {
       save();
     }
     update();
-  } else if (!gesture && drag && (!moved || DEFS[tool])) selectTile(tileFrom(e));
+  } else if (!gesture && drag && (!moved || DEFS[tool])) {
+    const box=canvas.getBoundingClientRect(),x=e.clientX-box.left,y=e.clientY-box.top;
+    const hit=tool==='inspect'&&signalHits.find(h=>x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h);
+    if(hit)inspectSupplyBuilding(hit.id);else selectTile(tileFrom(e));
+  }
   stroke = null;
   pointers.delete(e.pointerId);
   drag = null;
@@ -872,7 +882,7 @@ function showTerritory(id) {
   const threat = document.createElement("p"); threat.className = "scout-threat";
   const next = nextRaidDay(draft), wave = raidPlan(draft);
   threat.textContent = next === null ? "No monster raids. Your challenge is a healthy, growing village." :
-    `${existing ? "Next" : "First"} raid: day ${next}, dusk · ${wave.length} monsters. ${d.interval === 1 ? "Every night" : "Every " + d.interval + " days"} after that. ${t.threat ? "+" + t.threat + " monsters from regional danger (up to the mode cap)." : "No regional wave bonus."}`;
+    `${existing ? "Next" : "First"} raid: day ${next}, ${raidInfo(draft).time} · ${wave.length} monsters. ${raidRhythm(draft,d)} ${t.threat ? "Regional danger increases attack strength." : "Sheltered region."}`;
   const neighbors = document.createElement("div"); neighbors.className = "region-neighbors";
   const label = document.createElement("small"); label.textContent = "BORDERING REGIONS"; neighbors.append(label);
   t.neighbors.forEach(n => {
@@ -954,34 +964,15 @@ function update() {
   if (!state) return;
   if (candidate && active) preview();
   const s = state;
-  $("resources").replaceChildren();
-  for (const [key, label, icon] of [
-    ["wood", "TIMBER", "♧"],
-    ["stone", "STONE", "◆"],
-    ["food", "FOOD", "❧"],
-    ["water", "WATER", "◈"],
-    ["morale", "MORALE", "✦"],
-    ["influence", "INFLUENCE", "✧"],
-  ]) {
-    const el = document.createElement("div");
-    el.className = "resource";
-    el.innerHTML =
-      '<span class="icon">' +
-      icon +
-      "</span><div><b>" +
-      Math.floor(
-        key === "morale"
-          ? s.morale
-          : key === "influence"
-            ? (s.influence ?? 35)
-            : s.stock[key],
-      ) +
-      (key === "morale" ? "%" : "") +
-      "</b><small>" +
-      label +
-      "</small></div>";
-    $("resources").append(el);
+  if(!$("resources").children.length){
+    const flow=document.createElement("button");flow.id="supply-open";flow.textContent="Flow ↗";flow.onclick=()=>{openSheet("supply-sheet");update();};$("resources").append(flow);
+    for(const [key,label]of [["wood","TIMBER"],["stone","STONE"],["food","FOOD"],["water","WATER"],["ammo","AMMO"],["planks","PLANKS"],["tools","TOOLS"],["meals","MEALS"],["morale","MORALE"],["influence","INFLUENCE"]]){
+      const el=document.createElement("button");el.className="resource";el.dataset.resource=key;el.title=label+" · View supply flow";el.innerHTML='<b></b><small>'+label+'</small>';el.onclick=()=>{openSheet("supply-sheet");update();};$("resources").append(el);
+    }
   }
+  for(const el of $("resources").querySelectorAll("[data-resource]")){const k=el.dataset.resource;el.querySelector("b").textContent=Math.floor(k==="morale"?s.morale:k==="influence"?s.influence??35:s.stock[k]||0)+(k==="morale"?"%":"");}
+  if(signalState!==s||performance.now()-signalTime>1000){supplySignals=settlementSignals(s);signalState=s;signalTime=performance.now();}
+  updateSupplyUI(s);
   $("day").textContent = "Day " + s.day;
   const phase = (s.time % DAY) / DAY;
   $("clock").textContent = paused
@@ -1015,7 +1006,10 @@ function update() {
   initDepth(s);
   const path = campaign(s), chapter = path.current;
   const step = chapter?.steps.find(step => !step.done);
-  const choices=opportunities(s);
+  guidanceActive=adviceMode==="on"||(adviceMode==="auto"&&path.index===0);
+  const choices=guidanceActive?opportunities(s):[];
+  if(document.activeElement!==$("advice-mode"))$("advice-mode").value=adviceMode;
+  $("guidance-copy").textContent=guidanceActive?"Suggestions are on. Read supply flow to understand what your village needs.":"You lead. Supply signals show what is happening; open the journey below for optional milestones.";
   nextAdvice=null;
   nextHarvest = false;
   nextSite = step?.site || null;
@@ -1073,6 +1067,12 @@ function update() {
     card.append(title, purpose, list); $("campaign-roadmap").append(card);
   }
   }
+  if(!guidanceActive&&!s.lost){
+    nextBuild=nextImprove=nextSite=nextAdvice=null;nextHarvest=false;
+    const count=supplySignals.filter(v=>v.warning).length;
+    goal=count?`${count} building${count===1?'':'s'} waiting · View supply flow`:'Supplies moving · View production and use';
+    $("chapter").textContent="YOUR SETTLEMENT";
+  }
   document.querySelectorAll("[data-build]").forEach(b => {
     const recommended = b.dataset.build === nextBuild;
     b.classList.toggle("recommended", recommended);
@@ -1081,9 +1081,12 @@ function update() {
     b.disabled=!!requires&&!completed(s,requires).length;
     if(requires)b.querySelector(".building-purpose").textContent=buildingPurpose[b.dataset.build]+(b.disabled?" · Requires "+DEFS[requires].name:"");
   });
-  $("goal-open").setAttribute("aria-label", nextAdvice?nextAdvice.title:nextBuild ? "Next objective: build " + DEFS[nextBuild].name : nextImprove ? "Next objective: improve " + DEFS[nextImprove].name : "View village progress");
+  $("goal-open").setAttribute("aria-label", !guidanceActive?"View supply flow":nextAdvice?nextAdvice.title:nextBuild ? "Next objective: build " + DEFS[nextBuild].name : nextImprove ? "Next objective: improve " + DEFS[nextImprove].name : "View village progress");
+  $("goal-open").classList.toggle("pulse-mode",!guidanceActive&&!s.lost);
   $("objective").textContent = goal + (nextBuild || nextImprove || nextHarvest ? " →" : "");
   $("village-objective").textContent = goal;
+  const selectedStatus=selected?.type?supplySignals.find(v=>v.id===selected.id):null;
+  $("selected-signal").textContent=selectedStatus?selectedStatus.label+" · "+selectedStatus.detail:"";
   $("population").replaceChildren(
     document.createTextNode(s.people.length + " villagers"),
   );
@@ -1158,7 +1161,7 @@ function update() {
   deliverReadyConvoys();
   updateDepthUI(s);
   for(const role of Object.keys(ROLES))$("workers-"+role).textContent=s.people.filter(p=>workerRole(s,p)===role).length;
-  $("workforce-summary").textContent=`${s.people.filter(p=>!workerRole(s,p)).length} general workers. Specialists prefer their trade, then help elsewhere. Changes apply after their current job; urgent food, water and care come first.`;
+  $("workforce-summary").textContent=`${s.people.filter(p=>!workerRole(s,p)).length} general workers. Assigned workers choose their trade first, then help elsewhere. Changes apply after their current job; urgent food, water and care come first.`;
   const visit=caravan(s);
   const arrivalKey=s.seed+":"+s.region+":"+visit.visit;
   if(visit.open&&!visit.traded&&completed(s,"store").length&&caravanNoticeKey!==arrivalKey){caravanNoticeKey=arrivalKey;toast("A caravan is visiting. Open Village → Visiting caravan to trade.");}
@@ -1177,16 +1180,57 @@ function update() {
     : s.peaceful
       ? "✿ " + currentSeason.name
       : raidDay(s) && s.raided !== s.day
-        ? "⚑ Tracks at the border · raid at dusk"
+        ? `⚑ ${raidInfo(s,s.day).label} · ${raidInfo(s,s.day).time} · ${raidInfo(s,s.day).approach}`
         : "✦ " + currentSeason.name + " · " + currentSeason.next + " in " + currentSeason.daysLeft + "d";
   $("weather").classList.toggle("alert", $("weather").textContent.startsWith("⚑"));
   $("village-weather").textContent = $("weather").textContent;
   const demand = dailyNeeds(s), wave = raidPlan(s), next = nextRaidDay(s);
+  const attack=raidInfo(s);
   const kinds = Object.entries(MONSTERS).map(([key, m]) => {
     const n = wave.filter(e => e.kind === key).length; return n ? `${n} ${m.name}${n > 1 ? "s" : ""}` : "";
   }).filter(Boolean).join(", ");
   $("survival-status").textContent = `${rules(s).name} · ${["Sheltered", "Wild", "Hostile"][s.threat || 0]} region. Daily need: ${demand.food} food + ${demand.water} water. ` +
-    (next === null ? "No monster raids." : `Day ${next} dusk: ${kinds}. Prepare at least ${wave.reduce((sum, m) => sum + Math.ceil(m.hp / 18), 0)} delivered shots. An Ammunition yard makes 8 shots from 2 stone and 1 plank; towers can also use delivered stone. The estimate assumes every shot hits; defenses must cover the approach.`);
+    (next === null ? "No monster raids." : `Day ${next}, ${attack.time} · ${attack.label} from the ${attack.approach}: ${kinds}. ${attack.hint} ${wave.reduce((sum,m)=>sum+Math.ceil(m.hp/18),0)} standard-tower shots to defeat this force, assuming coverage and every shot lands. ${raidRhythm(s,rules(s))} Approach may shift if terrain blocks an edge; active Hollow fronts can send additional attackers. Today’s scouted force is fixed; future projections can change as the frontier and population grow. Towers and stored wealth do not increase threat. Repair damaged buildings with materials or Mend.`);
+}
+function inspectSupplyBuilding(id){
+  selected=state.buildings.find(b=>b.id===id);if(!selected)return;
+  setTool('inspect');closeSheets();
+  camera.x=canvas.clientWidth/2-(selected.x+1)*TILE*camera.zoom;
+  camera.y=canvas.clientHeight/2-(selected.y+1)*TILE*camera.zoom;
+  openSheet('inspect-sheet');signalTime=0;update();
+}
+$("inspect-supplies").onclick=()=>{openSheet('supply-sheet');update();};
+$("staffing-open").onclick=()=>{openSheet('village-sheet');const panel=$('workforce-controls').closest('details');panel.open=true;panel.scrollIntoView({block:'start'});update();};
+$("advice-mode").onchange=e=>{adviceMode=e.target.value;localStorage.setItem('destiny-guidance',adviceMode);update();};
+$("flow-period").onchange=()=>update();
+$("supply-buildings").onclick=e=>{const button=e.target.closest('[data-supply-building]');if(button)inspectSupplyBuilding(Number(button.dataset.supplyBuilding));};
+function updateSupplyUI(s){
+  if($('supply-sheet').hidden)return;
+  const {counts,reasons}=laborSummary(s);
+  $('labor-pulse').textContent=`${counts.working} working · ${counts.hauling} hauling · ${counts.resting} resting · ${counts.idle} between jobs. `+Object.entries(reasons).map(([reason,n])=>`${n}: ${reason}.`).join(' ');
+  const ledger=initLedger(s),row=$('flow-period').value==='previous'?ledger.previous:ledger.current;
+  $('flow-period-copy').textContent=row?`Day ${row.day}${row===ledger.current?' · so far':''}. Recording began at day ${Math.floor(ledger.startedAt/DAY)+1}; that first day may be partial.`:'No previous day recorded yet. History begins when this version starts running.';
+  $('flow-table').innerHTML='<table><thead><tr><th>Goods</th><th>Stock</th><th>Produced</th><th>Used</th></tr></thead><tbody>'+FLOW_GOODS.map(k=>`<tr><th>${goodName(k)}</th><td>${Math.floor(s.stock[k]||0)}</td><td>${row?Math.floor(row.made[k]||0):'—'}</td><td>${row?Math.floor(row.used[k]||0):'—'}</td></tr>`).join('')+'</tbody></table>';
+  const list=$('supply-buildings'),ids=s.buildings.map(b=>b.id).join(',');
+  if(list.dataset.ids!==ids){list.dataset.ids=ids;list.replaceChildren();for(const b of s.buildings){const button=document.createElement('button');button.dataset.supplyBuilding=b.id;list.append(button);}}
+  for(const button of list.children){const b=s.buildings.find(b=>b.id===Number(button.dataset.supplyBuilding)),status=supplySignals.find(v=>v.id===b.id);button.textContent=`${DEFS[b.type].name} · ${status?.label||'Ready'} — ${status?.detail||''}`;button.classList.toggle('supply-warning',!!status?.warning);}
+}
+function drawSupplySignals(){
+  signalHits=[];if(tool!=='inspect')return;
+  ctx.save();ctx.font='600 11px system-ui, sans-serif';ctx.textBaseline='middle';
+  for(const status of supplySignals){
+    const b=state.buildings.find(b=>b.id===status.id);if(!b)continue;
+    if(!status.warning&&selected?.id!==b.id)continue;
+    const label=status.label,w=ctx.measureText(label).width+12,h=24;
+    const x=Math.round(camera.x+(b.x+1)*TILE*camera.zoom-w/2),y=Math.round(camera.y+b.y*TILE*camera.zoom-24);
+    if(x+w<0||x>canvas.clientWidth||y<0||y+h>canvas.clientHeight)continue;
+    if(selected?.id!==b.id&&signalHits.some(r=>x<r.x+r.w&&x+w>r.x&&y<r.y+r.h&&y+h>r.y))continue;
+    ctx.fillStyle=status.code==='route'?'#783d32':'#27372bf5';ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle=status.warning?'#e5bf77':'#b8d39b';ctx.strokeRect(x+.5,y+.5,w-1,h-1);
+    ctx.fillStyle='#fff1cd';ctx.fillText(label,x+6,y+h/2);
+    signalHits.push({id:b.id,x,y,w,h});
+  }
+  ctx.restore();
 }
 function draw() {
   if (!active || !state) return;
@@ -1272,6 +1316,7 @@ function draw() {
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   ctx.font = "600 14px system-ui, sans-serif";
   ctx.textBaseline = "middle";
+  drawSupplySignals();
   for (const e of state.effects) {
     if (!e.text) continue;
     const text = String(e.text).replace("wood", "timber");
@@ -1430,7 +1475,7 @@ function updateDepthUI(s) {
   $("industry-status").replaceChildren();
   for(const b of s.buildings.filter(b=>RECIPES[b.type])) {const p=document.createElement("p");p.textContent=`${DEFS[b.type].name}: ${b.progress<1?"Under construction":recipeStatus(s,b)}`;$("industry-status").append(p);}
   $("worker-roster").replaceChildren();
-  for(const p of s.people){const b=document.createElement("button");b.dataset.person=p.id;b.textContent=`${p.name} · ${p.state} · ${Math.floor(p.health)}% health · ${Math.floor(p.energy)}% energy${p.toolUses?" · equipped":""}`;$("worker-roster").append(b);}
+  for(const p of s.people){const b=document.createElement("button");b.dataset.person=p.id;b.textContent=`${p.name} · ${!p.task&&!p.carry&&p.idleReason?p.idleReason:p.state} · ${Math.floor(p.health)}% health · ${Math.floor(p.energy)}% energy${p.toolUses?" · equipped":""}`;$("worker-roster").append(b);}
 }
 
 $("tool-reserve").onchange=e=>{state.toolReserve=Number(e.target.value);save();};

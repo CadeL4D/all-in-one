@@ -1,7 +1,10 @@
+import {recordFlow,recordCost} from './ledger.js';
+import {scheduled,sequence,pattern,raidRhythm} from './pressure.js';
+export {raidRhythm} from './pressure.js';
 import {blighted,frontierCycle} from './frontier.js';
 import {syncWarehouses,reserveFreight,supplied,freightJobs,pickupFreight,deliverFreight,deposit,loseWarehouse,replaceLostFreight,terrainValue,validateEconomy} from './economy.js';
 import { EXTRA_BUILDINGS } from "./industry.js";
-import { favorJob } from "./civic.js";
+import { favorJob, jobTier } from "./civic.js";
 import { unloadSupplies, initDepth, validateDepth, campOrders, depthJobs, workDepth, workRate, equipWorker, nearestDepot, workerNeeds, idleActivity, ensureSites, frontier, summonGuardian, tickGuardians } from "./depth.js";
 // Pure simulation: no DOM, rendering, or wall-clock dependencies.
 export const W = 64,
@@ -15,12 +18,12 @@ export const DIFFICULTIES = {
   settler: { name: "Settler", desc: "Room to learn. Five days to prepare, smaller raids, faster production.",
     stock: [95, 70, 60, 60], consumption: .85, work: 1.15, firstRaid: 5, interval: 3,
     base: 2, growth: .5, cap: 7, hp: .85, damage: .75, bruteWave: 4, skulkWave: 3 },
-  survival: { name: "Survival", desc: "A steady test. Lean reserves and supply routes. Prepare defenses by day four; raids every other day.",
+  survival: { name: "Survival", desc: "Lean reserves and supply routes. Raids from day four; from day sixteen, two raid nights then one clear night.",
     stock: [70, 48, 40, 40], consumption: 1, work: 1, firstRaid: 4, interval: 2,
     base: 3, growth: .75, cap: 10, hp: 1, damage: 1, bruteWave: 3, skulkWave: 2 },
-  onslaught: { name: "Onslaught", desc: "A harsh frontier. Lean supplies and stronger monsters every night from day three.",
+  onslaught: { name: "Onslaught", desc: "Lean supplies, harder hits and nightly attacks from day three. Each third attack is a smaller patrol.",
     stock: [62, 44, 38, 38], consumption: 1.1, work: 1, firstRaid: 3, interval: 1,
-    base: 3, growth: .75, cap: 12, hp: 1.05, damage: 1.05, bruteWave: 2, skulkWave: 2 },
+    base: 3, growth: .75, cap: 12, hp: 1, damage: 1.1, bruteWave: 3, skulkWave: 2 },
 };
 export const MONSTERS = {
   sapper: {name:"Sapper",hp:58,damage:12,speed:.42,desc:"Seeks warehouses. Keep ammunition routes inside your defenses."},
@@ -33,23 +36,27 @@ export function rules(s) {
 }
 export function raidDay(s, day = s.day) {
   const d = rules(s);
-  return !s.peaceful && d.firstRaid > 0 && day >= d.firstRaid && (day - d.firstRaid) % d.interval === 0;
+  return scheduled(s,d,day);
 }
 export function nextRaidDay(s) {
   const d = rules(s);
   if (s.peaceful || !d.firstRaid) return null;
   let day = Math.max(s.day, d.firstRaid);
-  day += (d.interval - (day - d.firstRaid) % d.interval) % d.interval;
-  if (day === s.raided) day += d.interval;
+  while(!raidDay(s,day)||day===s.raided)day++;
   return day;
 }
+export function raidInfo(s,day=nextRaidDay(s)){return day===null?null:pattern(rules(s),day);}
 export function raidPlan(s, day = nextRaidDay(s)) {
   const d = rules(s);
   if (day === null || s.peaceful || !d.firstRaid || day < d.firstRaid) return [];
-  const wave = Math.floor((day - d.firstRaid) / d.interval) + 1;
-  const count = Math.min(d.cap + Math.min(12,Math.floor(Math.max(0,day-16)/8)*2), d.base + Math.floor((wave - 1) * d.growth) + (s.threat || 0) + frontier(s).pressure);
+  if(s.raidForecast?.day===day)return s.raidForecast.monsters.map(m=>({...m}));
+  const info=raidInfo(s,day),wave=sequence(d,day);
+  const growth=day>=16?Math.min(4,Math.floor(Math.max(0,s.people.length-12)/6)):0;
+  const base=d.base+Math.floor((wave-1)*d.growth)+(s.threat||0)+frontier(s).pressure+growth;
+  const budget=Math.min(d.cap+Math.min(12,Math.floor(Math.max(0,day-16)/8)*2),base);
+  const count=Math.max(1,Math.ceil(budget*info.scale));
   return Array.from({ length: count }, (_, i) => {
-    const kind = day>=17 && i%5===2 ? "sapper" : wave >= d.bruteWave && i % 4 === 0 ? "brute" :
+    const kind = day>=17&&info.kind==='raid'&&i%5===2 ? "sapper" : info.kind==='patrol'?(wave>=d.skulkWave&&i%3===1?'skulker':'raveler'):info.kind==='rush'&&wave>=d.skulkWave?(i%4===0?'raveler':'skulker'):info.kind==='siege'&&wave>=d.bruteWave?(i%3===0?'brute':'raveler'):wave >= d.bruteWave && i % 4 === 0 ? "brute" :
       wave >= d.skulkWave && i % 3 === 1 ? "skulker" : "raveler";
     return { kind, hp: Math.round(MONSTERS[kind].hp * d.hp) };
   });
@@ -82,6 +89,7 @@ export function startProject(s, b, kind) {
   if (!cost || (kind === "upgrade" && b.upgraded)) return "No further upgrade available.";
   if (kind === "repair" && b.hp >= DEFS[b.type].hp) return "Already in good condition.";
   if (s.stock.wood < cost.wood || s.stock.stone < cost.stone) return "Gather more timber and stone first.";
+  recordCost(s,cost);
   b.freight=reserveFreight(s,cost);
   s.stock.wood -= cost.wood; s.stock.stone -= cost.stone;
   b.project = { kind, progress: 0 };
@@ -595,6 +603,7 @@ export function place(s, type, x, y, rot = 0) {
   const reason = canPlace(s, type, x, y, rot);
   if (reason) return reason;
   const d = DEFS[type];
+  recordCost(s,{wood:d.wood,stone:d.stone});
   const freight=type === "path"?null:reserveFreight(s,d);
   s.stock.wood -= d.wood;
   s.stock.stone -= d.stone;
@@ -639,7 +648,7 @@ export function buildLine(from, to) {
 export function linePlan(s, type, from, to) {
   if (!["wall", "path"].includes(type)) return {cells: [], reason: "Choose a wall or trail."};
   if (![from.x, from.y, to.x, to.y].every(Number.isInteger) || Math.abs(to.x - from.x) + Math.abs(to.y - from.y) > W + H) return {cells: [], reason: "Draw a shorter line inside the map."};
-  const draft = {...s, buildings: structuredClone(s.buildings), roads: [...s.roads], stock: {...s.stock}};
+  const draft = {...s, ledger:structuredClone(s.ledger), buildings: structuredClone(s.buildings), roads: [...s.roads], stock: {...s.stock}};
   const cells = buildLine(from, to).filter(p => type === "path" ? !s.roads.includes(p.y * W + p.x) : !["wall", "gate"].includes(buildingAt(s, p.x, p.y)?.type));
   for (const p of cells) {
     const reason = place(draft, type, p.x, p.y);
@@ -745,7 +754,7 @@ function assign(s, p, grid) {
   }
   jobs.sort(
     (a, b) =>
-      a.priority - b.priority ||
+      jobTier(s,p,a)-jobTier(s,p,b) || a.priority - b.priority ||
       Math.hypot(p.x - a.b.x, p.y - a.b.y) -
         Math.hypot(p.x - b.b.x, p.y - b.b.y),
   );
@@ -753,6 +762,7 @@ function assign(s, p, grid) {
     if (claimed.has(job.key)) continue;
     const path = accessRoute(s, p, job.b, grid);
     if (path === null) continue;
+    delete p.idleReason;
     p.task = { key: job.key, kind: job.kind, id: job.b.id, index: job.index, site: job.site, target:job.target, good:job.good, amount:job.amount };
     equipWorker(s, p);
     p.path = path;
@@ -768,7 +778,9 @@ function assign(s, p, grid) {
             : "Drawing water";
     return;
   }
-  p.state = "No reachable work — taking a break";
+  const openJobs=jobs.filter(j=>!claimed.has(j.key));
+  p.idleReason=!jobs.length?"No open orders or production demand":!openJobs.length?"Available jobs already staffed":"Open jobs cannot be reached";
+  p.state = p.idleReason;
   idleActivity(s,p,grid);
 }
 function daily(s) {
@@ -779,6 +791,7 @@ function daily(s) {
   const meals = Math.min(s.stock.meals || 0, Math.floor(foodNeed / 2));
   const rawNeed = foodNeed - meals * 2;
   const fed = s.stock.food >= rawNeed && s.stock.water >= waterNeed;
+  recordCost(s,{meals,food:Math.min(s.stock.food,rawNeed),water:Math.min(s.stock.water,waterNeed)});
   s.stock.meals = (s.stock.meals || 0) - meals;
   s.stock.food = Math.max(0, s.stock.food - rawNeed);
   s.stock.water = Math.max(0, s.stock.water - waterNeed);
@@ -819,7 +832,7 @@ function daily(s) {
     }
   }
   if (raidDay(s))
-    log(s, `Tracks at the border. ${raidPlan(s, s.day).length} monsters expected at dusk.`);
+    log(s, `${raidInfo(s,s.day).label}: ${raidPlan(s,s.day).length} monsters expected at ${raidInfo(s,s.day).time}, from the ${raidInfo(s,s.day).approach}.`);
   if (
     !s.won &&
     s.day >= 4 &&
@@ -842,8 +855,7 @@ export function raid(s) {
   const grid = occupancy(s),
     r = rng(hash(s.seed + s.day));
   const d = rules(s), plan = raidPlan(s, s.day);
-  const wave = Math.floor((s.day - d.firstRaid) / d.interval);
-  const side = wave % 4;
+  const info=raidInfo(s,s.day),side=info.side;
   let spawned = 0;
   const hollow=frontier(s);
   for (const [index,monster] of plan.entries()) {
@@ -853,7 +865,8 @@ export function raid(s) {
     for (let attempt = 0; !entry && attempt < 160; attempt++) {
       const depth = 3 + attempt % 6;
       // Cycle east, north, west, south; use other edges if this one is ocean.
-      const edge = (side + Math.floor(attempt / 40)) % 4;
+      const flank=info.pincer&&index>=Math.ceil(plan.length/2)?2:0;
+      const edge = (side + flank + Math.floor(attempt / 40)) % 4;
       const x = edge === 0 ? W - depth - 1 : edge === 2 ? depth : 4 + Math.floor(r() * (W - 8));
       const y = edge === 1 ? depth : edge === 3 ? H - depth - 1 : 4 + Math.floor(r() * (H - 8));
       if (
@@ -901,9 +914,10 @@ export function tick(s, dt) {
     s.day = day;
     daily(s);
   }
+  if(raidDay(s)&&s.raidForecast?.day!==s.day)s.raidForecast={day:s.day,monsters:raidPlan(s,s.day)};
   if (
     raidDay(s) &&
-    s.time % DAY > DAY * 0.74 &&
+    s.time % DAY > DAY * raidInfo(s,s.day).phase &&
     s.raided !== s.day
   )
     raid(s);
@@ -989,6 +1003,7 @@ export function tick(s, dt) {
       if (t === 3 || t === 4) {
         s.tiles[index] = 0;
         p.carry = { key: t === 3 ? "wood" : "stone", n: s.peaceful ? (t===3?8:7) : (t===3?6:5) };
+        recordFlow(s,p.carry.key,p.carry.n,"made");
       }
       p.task = null;
     } else if (["farm", "well"].includes(p.task.kind)) {
@@ -1004,6 +1019,7 @@ export function tick(s, dt) {
           n:
             productionYield(s, b),
         };
+        recordFlow(s,p.carry.key,p.carry.n,"made");
         p.task = null;
       }
     }
@@ -1015,7 +1031,7 @@ export function tick(s, dt) {
       (e) => e.hp > 0 && Math.hypot(e.x - b.x, e.y - b.y) < 11,
     );
     if (e && b.cool <= 0 && (b.buffer?.ammo||b.buffer?.stone||0) >= 1) {
-      const ammunition=b.buffer.ammo>0?"ammo":"stone";b.buffer[ammunition]--;
+      const ammunition=b.buffer.ammo>0?"ammo":"stone";b.buffer[ammunition]--;recordFlow(s,ammunition,1,"used");
       e.hp -= (b.upgraded ? 27 : 18) + (s.blessing === "sentinel" ? 3 : 0);
       b.cool = 1.8;
       s.effects.push({ x: b.x + 1, y: b.y + 1, tx: e.x, ty: e.y, life: 0.22 });
@@ -1096,7 +1112,7 @@ export function tick(s, dt) {
   if (hadRaid && !s.enemies.length && !s.lost) {s.stats.repelled++;s.influence=Math.min(influenceCap(s),s.influence+10);log(s,"The village held! +10 influence. Repair and prepare before the next night.");}
 
   for (const b of s.buildings)
-    if (!s.enemies.length && b.hp < DEFS[b.type].hp)
+    if ((s.peaceful||s.difficulty==='settler')&&!s.enemies.length && b.hp < DEFS[b.type].hp)
       b.hp = Math.min(DEFS[b.type].hp, b.hp + dt * 0.08);
   s.effects = s.effects.filter((e) => (e.life -= dt) > 0);
   advanceCampaign(s);
@@ -1219,6 +1235,7 @@ export function restore(raw) {
   s.difficulty ??= s.peaceful ? "peaceful" : "survival";
   if (!Object.hasOwn(DIFFICULTIES, s.difficulty)) throw Error("Invalid difficulty");
   s.peaceful = s.difficulty === "peaceful";
+  if(s.raidForecast!==undefined){const f=s.raidForecast;if(!f||!Number.isInteger(f.day)||f.day<1||f.day>s.day||!Array.isArray(f.monsters)||f.monsters.length>48||f.monsters.some(m=>!m||!Object.hasOwn(MONSTERS,m.kind)||!Number.isFinite(m.hp)||m.hp<=0||m.hp>500))throw Error("Invalid raid forecast");}
   s.threat ??= 0;
   if (!Number.isInteger(s.threat) || s.threat < 0 || s.threat > 2) throw Error("Invalid regional threat");
   if (s.worldSeed !== undefined && (typeof s.worldSeed !== "string" ||

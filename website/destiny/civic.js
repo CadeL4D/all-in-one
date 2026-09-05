@@ -4,9 +4,11 @@ export const ROLES = {
   grower: {name:"Growers", jobs:["farm","well","heal"]},
   gatherer: {name:"Gatherers", jobs:["harvest","mine","plant"]},
   artisan: {name:"Artisans", jobs:["craft"]},
+  hauler: {name:"Haulers", jobs:["freight","supply"]},
 };
 export function initCivic(s) {
   s.workforce ??= {builder:0,grower:0,gatherer:0,artisan:0};
+  s.workforce.hauler ??= 0;
   s.caravanTrades ??= [];
 }
 export function validateCivic(s) {
@@ -26,6 +28,11 @@ export function workerRole(s,p) {
   if(index<0 || index===s.people.length-1)return null;
   for(const k of Object.keys(ROLES)){index-=(s.workforce?.[k]||0);if(index<0)return k;}
   return null;
+}
+export function jobTier(s,p,job) {
+  if(job.kind==="heal" || job.kind==="farm"&&s.stock.food<10 || job.kind==="well"&&s.stock.water<10)return -1;
+  const role=workerRole(s,p);
+  return role && ROLES[role].jobs.includes(job.kind)?0:1;
 }
 export function favorJob(s,p,job) {
   const role=workerRole(s,p);

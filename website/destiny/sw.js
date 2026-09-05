@@ -1,4 +1,4 @@
-const CACHE = "destiny-shell-v19";
+const CACHE = "destiny-shell-v22";
 const BASE = new URL("./", self.location).href;
 const ASSETS = [
   "./",
@@ -10,6 +10,9 @@ const ASSETS = [
   "economy.js",
   "frontier.js",
   "soundscape.js",
+  "signals.js",
+  "ledger.js",
+  "pressure.js",
   "industry.js",
   "civic.js",
   "advice.js",
@@ -23,7 +26,9 @@ const ASSETS = [
   "icons/apple-touch-icon.png",
 ].map((p) => new URL(p, BASE).href);
 self.addEventListener("install", (event) =>
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS))),
+  // A new shell must not reuse fresh-looking HTTP-cache entries from an old
+  // release. Otherwise its module graph can mix incompatible exports.
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS.map(url=>new Request(url,{cache:"reload"}))))),
 );
 self.addEventListener("activate", (event) =>
   event.waitUntil(
