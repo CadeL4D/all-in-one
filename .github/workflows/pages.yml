@@ -23,14 +23,16 @@ jobs:
         with:
           node-version: '22'
       - name: Test simulation
-        run: node --test website/destiny/world.test.js
+        run: node --test website/destiny/*.test.js website/site-build.test.mjs
       - name: Assemble static site
+        run: node website/build-site.mjs
+      - name: Install browser test tools
+        working-directory: website
         run: |
-          mkdir -p _site/destiny
-          cp website/index.html website/home.css website/home.js website/cover.js website/sw.js website/manifest.webmanifest website/tasks.html website/tasks.css website/tasks.js website/styles.css _site/
-          cp -R website/icons _site/icons
-          cp website/destiny/index.html website/destiny/game.css website/destiny/game.js website/destiny/world.js website/destiny/art.js website/destiny/pwa.js website/destiny/sw.js website/destiny/manifest.webmanifest _site/destiny/
-          cp -R website/destiny/icons _site/destiny/icons
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Check the published game and offline reload
+        run: node website/site-smoke.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

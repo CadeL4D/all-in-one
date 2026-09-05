@@ -1,4 +1,4 @@
-const CACHE = "destiny-shell-v17";
+const CACHE = "destiny-shell-v18";
 const BASE = new URL("./", self.location).href;
 const ASSETS = [
   "./",
