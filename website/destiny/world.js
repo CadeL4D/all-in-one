@@ -1,3 +1,5 @@
+import {blighted,frontierCycle} from './frontier.js';
+import {syncWarehouses,reserveFreight,supplied,freightJobs,pickupFreight,deliverFreight,deposit,loseWarehouse,replaceLostFreight,terrainValue,validateEconomy} from './economy.js';
 import { EXTRA_BUILDINGS } from "./industry.js";
 import { favorJob } from "./civic.js";
 import { unloadSupplies, initDepth, validateDepth, campOrders, depthJobs, workDepth, workRate, equipWorker, nearestDepot, workerNeeds, idleActivity, ensureSites, frontier, summonGuardian, tickGuardians } from "./depth.js";
@@ -11,16 +13,17 @@ export const DIFFICULTIES = {
     stock: [120, 90, 85, 85], consumption: .8, work: 1.15, firstRaid: 0, interval: 0,
     base: 0, growth: 0, cap: 0, hp: 1, damage: 1, bruteWave: 99, skulkWave: 99 },
   settler: { name: "Settler", desc: "Room to learn. Five days to prepare, smaller raids, faster production.",
-    stock: [110, 80, 70, 70], consumption: .85, work: 1.15, firstRaid: 5, interval: 3,
+    stock: [95, 70, 60, 60], consumption: .85, work: 1.15, firstRaid: 5, interval: 3,
     base: 2, growth: .5, cap: 7, hp: .85, damage: .75, bruteWave: 4, skulkWave: 3 },
-  survival: { name: "Survival", desc: "A steady test. Prepare defenses by day three; raids every other day.",
-    stock: [95, 70, 55, 55], consumption: 1, work: 1, firstRaid: 3, interval: 2,
+  survival: { name: "Survival", desc: "A steady test. Lean reserves and supply routes. Prepare defenses by day four; raids every other day.",
+    stock: [70, 48, 40, 40], consumption: 1, work: 1, firstRaid: 4, interval: 2,
     base: 3, growth: .75, cap: 10, hp: 1, damage: 1, bruteWave: 3, skulkWave: 2 },
-  onslaught: { name: "Onslaught", desc: "A harsh frontier. Lean supplies and stronger monsters every night from day two.",
-    stock: [75, 60, 45, 45], consumption: 1.2, work: 1, firstRaid: 2, interval: 1,
-    base: 4, growth: 1, cap: 14, hp: 1.15, damage: 1.15, bruteWave: 2, skulkWave: 2 },
+  onslaught: { name: "Onslaught", desc: "A harsh frontier. Lean supplies and stronger monsters every night from day three.",
+    stock: [62, 44, 38, 38], consumption: 1.1, work: 1, firstRaid: 3, interval: 1,
+    base: 3, growth: .75, cap: 12, hp: 1.05, damage: 1.05, bruteWave: 2, skulkWave: 2 },
 };
 export const MONSTERS = {
+  sapper: {name:"Sapper",hp:58,damage:12,speed:.42,desc:"Seeks warehouses. Keep ammunition routes inside your defenses."},
   raveler: { name: "Raveler", hp: 36, damage: 8, speed: .48, desc: "A steady attacker. Two tower shots on Survival." },
   skulker: { name: "Skulker", hp: 24, damage: 5, speed: .75, desc: "Fast and fragile. Intercept before it reaches your homes." },
   brute: { name: "Brute", hp: 80, damage: 15, speed: .34, desc: "Slow and armored. Five tower shots on Survival; use walls to buy time." },
@@ -44,9 +47,9 @@ export function raidPlan(s, day = nextRaidDay(s)) {
   const d = rules(s);
   if (day === null || s.peaceful || !d.firstRaid || day < d.firstRaid) return [];
   const wave = Math.floor((day - d.firstRaid) / d.interval) + 1;
-  const count = Math.min(d.cap, d.base + Math.floor((wave - 1) * d.growth) + (s.threat || 0) + frontier(s).pressure);
+  const count = Math.min(d.cap + Math.min(12,Math.floor(Math.max(0,day-16)/8)*2), d.base + Math.floor((wave - 1) * d.growth) + (s.threat || 0) + frontier(s).pressure);
   return Array.from({ length: count }, (_, i) => {
-    const kind = wave >= d.bruteWave && i % 4 === 0 ? "brute" :
+    const kind = day>=17 && i%5===2 ? "sapper" : wave >= d.bruteWave && i % 4 === 0 ? "brute" :
       wave >= d.skulkWave && i % 3 === 1 ? "skulker" : "raveler";
     return { kind, hp: Math.round(MONSTERS[kind].hp * d.hp) };
   });
@@ -62,12 +65,12 @@ export function season(s) {
   return { ...SEASONS[index], next: SEASONS[(index + 1) % 4].name, daysLeft: 4 - (s.day - 1) % 4 };
 }
 export const UPGRADES = {
-  quarry: {wood: 18, stone: 14, benefit: "4 → 6 stone per mining trip"},
+  quarry: {wood: 18, stone: 14, benefit: "+50% stone per trip; richer seams yield more"},
   house: { wood: 18, stone: 8, benefit: "4 → 6 beds" },
   farm: { wood: 16, stone: 6, benefit: "+50% harvest per trip" },
-  well: { wood: 12, stone: 12, benefit: "8 → 12 water per trip" },
-  store: { wood: 20, stone: 12, benefit: "+100 extra capacity for each resource" },
-  tower: { wood: 16, stone: 24, benefit: "18 → 27 damage per stone" },
+  well: { wood: 12, stone: 12, benefit: "8 → 11 base water per trip; nearby water improves yield" },
+  store: { wood: 20, stone: 12, benefit: "+80 extra capacity for each resource" },
+  tower: { wood: 16, stone: 24, benefit: "18 → 27 damage per delivered shot" },
 };
 export function projectCost(b, kind) {
   return kind === "upgrade" ? UPGRADES[b.type] : kind === "repair" ? { wood: 4, stone: 2 } : null;
@@ -79,13 +82,15 @@ export function startProject(s, b, kind) {
   if (!cost || (kind === "upgrade" && b.upgraded)) return "No further upgrade available.";
   if (kind === "repair" && b.hp >= DEFS[b.type].hp) return "Already in good condition.";
   if (s.stock.wood < cost.wood || s.stock.stone < cost.stone) return "Gather more timber and stone first.";
+  b.freight=reserveFreight(s,cost);
   s.stock.wood -= cost.wood; s.stock.stone -= cost.stone;
   b.project = { kind, progress: 0 };
   log(s, `${DEFS[b.type].name}: ${kind} queued. Workers must reach the building.`);
   return "";
 }
 export function productionYield(s, b) {
-  return b.type === "farm" ? Math.max(1, Math.round(8 * REGIONS[s.region].food * season(s).crop * (b.upgraded ? 1.5 : 1))) : b.upgraded ? 12 : 8;
+  const land=blighted(s,b.x,b.y)?.5:1;
+  return b.type === "farm" ? Math.max(1, Math.round(8 * land * REGIONS[s.region].food * terrainValue(s,b.x,b.y).soil * season(s).crop * (b.upgraded ? 1.5 : 1))) : Math.max(1,Math.round(land*(b.upgraded ? 11 : 8)*terrainValue(s,b.x,b.y).water));
 }
 export function campaign(s) {
   const built = type => completed(s, type).length > 0;
@@ -103,11 +108,11 @@ export function campaign(s) {
       build("kitchen", "Build a Commonpot to reduce daily food use."), build("store", "Build a storehouse for larger reserves."),
       improve("farm", "Improve a field for 50% more food per trip."),
       { label: `Stockpile two days of food: ${Math.floor(s.stock.food)}/${need.food * 2}.`, done: s.stock.food >= need.food * 2 } ] },
-    { name: "A lasting home", purpose: "Reach the second spring with a growing village. Then turn your settlement into a thriving town.", steps: [
+    { name: "A lasting home", purpose: "Maintain a growing village and dependable supply routes. Then develop industry and the frontier.", steps: [
       improve("house", "Improve a cottage to welcome two more villagers."), build("garden", "Create a Pocket garden to keep spirits high."),
       build("beacon", "Raise a Wishing spire to strengthen your powers."),
       { label: `Welcome twelve villagers: ${s.people.length}/12. Spare beds and supplies attract a traveler at dawn.`, done: s.people.length >= 12 },
-      { label: `Reach the second spring: day ${s.day}/17. Maintain food, water, and defenses through winter.`, done: s.day >= 17 } ] },
+      { label: `Deliver 20 supply loads: ${s.stats?.freight||0}/20. Build a working supply network.`, done:(s.stats?.freight||0)>=20 } ] },
     { name: "A working town", purpose: "Turn raw materials into tools, trade meals for longer reserves, and uncover a keeper's blessing.", steps: [
       build("workshop", "Build a Sawmill: timber becomes planks."), build("forge", "Build a Tool forge: planks and stone become tools."),
       { label: "Equip a villager with a crafted tool.", done: (s.people || []).some(p=>p.toolUses>0) || !!s.stats?.equipped },
@@ -115,16 +120,19 @@ export function campaign(s) {
     { name: "Reclaim the frontier", purpose: "Renew your forests and remove the rift's growing pressure. The whole region becomes a lasting home.", steps: [
       build("forester", "Build a Forester lodge to renew harvested timber."),
       { label: "Plant three trees: "+(s.stats?.planted || 0)+"/3.", done:(s.stats?.planted || 0)>=3 },
-      { site: "rift", label: "Seal the Hollow Rift: take 6 planks and 2 tools on an expedition.", done: !!s.stats?.riftSealed },
+      { site: "rift", label: "Seal the Hollow Rift: take 10 planks and 4 tools on an expedition.", done: !!s.stats?.riftSealed },
       {label:"Discover all three abandoned sites.",done:(s.sites||[]).filter(v=>v.kind!=="rift"&&v.done).length>=3,site:"cache"} ] },
   ];
+  const frontierChapter={name:"A foothold beyond home",purpose:"Develop a protected district and keep the Hollow away from productive land.",steps:[{type:"outpost",label:"Build a Frontier depot at least 16 tiles from the hearth.",done:completed(s,"outpost").some(b=>completed(s,"hearth").some(h=>Math.hypot(h.x-b.x,h.y-b.y)>=16))},{label:"Work a rich seam or riverside field within 10 tiles of the frontier depot.",done:completed(s,"outpost").some(o=>s.buildings.some(b=>b.progress>=1&&Math.hypot(b.x-o.x,b.y-o.y)<10&&((b.type==="quarry"&&terrainValue(s,b.x,b.y).seam>=1)||(b.type==="farm"&&terrainValue(s,b.x,b.y).soil>1))))},{label:s.peaceful?"Reclaim the old Hollow site.":"Reclaim two Hollow fronts.",site:"rift",done:(s.sites||[]).filter(v=>v.kind==="rift"&&v.done).length>=(s.peaceful?1:2)}]};
+  chapters.push({name:"Supply the defenses",purpose:"Ammunition yards stretch scarce stone into prepared shots. Protect the carriers.",steps:[s.peaceful?build("store","Build a storehouse for surplus supplies."):build("arsenal","Build an Ammunition yard."),{label:"Deliver 50 supply loads through your network.",done:(s.stats?.freight||0)>=50},{label:s.peaceful?"Stock 12 planks for a frontier district.":"Keep 12 prepared shots in storage or towers.",done:s.peaceful?(s.stock.planks||0)>=12:(s.stock.ammo||0)+s.buildings.reduce((n,b)=>n+(b.buffer?.ammo||0),0)>=12}]});
+  chapters.push(frontierChapter);
   const earned = s.chapters || [];
   const index = chapters.findIndex((_, i) => !earned.includes(i));
   return { chapters, index, current: index < 0 ? null : chapters[index], earned };
 }
 export function advanceCampaign(s) {
   if (s.lost) return;
-  s.chapters ??= [];
+  s.chapters ??= [];s.progressionVersion=2;
   let path = campaign(s);
   while (path.current && path.current.steps.every(step => step.done)) {
     s.chapters.push(path.index);
@@ -135,7 +143,7 @@ export function advanceCampaign(s) {
 }
 export function dailyNeeds(s) {
   const multiplier = rules(s).consumption;
-  return { food: Math.ceil(s.people.length * 2 * multiplier * (completed(s, "kitchen").length ? .7 : 1)),
+  return { food: Math.ceil(s.people.length * 2 * multiplier * (completed(s, "kitchen").length ? .85 : 1)),
     water: Math.ceil(s.people.length * 1.5 * multiplier * season(s).water) };
 }
 export const REGIONS = [
@@ -174,7 +182,7 @@ export const DEFS = {
     stone: 8,
     time: 8,
     hp: 110,
-    desc: "Marks stone within 12 tiles. Below 60 stone in storage, a miner can also extract 4 stone every 18 working seconds. A renewable supply for defenses.",
+    desc: "Marks nearby stone. Extracts 2, 4 or 6 stone per 24 working seconds depending on the surveyed seam. Rich seams reward an outpost.",
   },
   beacon: {
     name: "Wishing spire",
@@ -214,7 +222,7 @@ export const DEFS = {
     stone: 8,
     time: 6,
     hp: 90,
-    desc: "A worker draws 8 water in 14 seconds, then carries it home.",
+    desc: "Draws water in 14 working seconds. Water access improves yield; workers carry it to local storage.",
   },
   farm: {
     name: "Field patch",
@@ -224,7 +232,7 @@ export const DEFS = {
     stone: 0,
     time: 5,
     hp: 60,
-    desc: "A worker grows 8 food in 20 seconds, then carries it home. Lowlands yield 10; highlands 7.",
+    desc: "Grows food in 20 working seconds. Soil, region and season affect yield. Check the land before planting.",
   },
   lumber: {
     name: "Beamwright",
@@ -244,7 +252,7 @@ export const DEFS = {
     stone: 8,
     time: 9,
     hp: 100,
-    desc: "Cuts daily food use by 30%. A cook also turns 4 food and 1 water into 3 meals; each meal replaces 2 food at dawn. Production can be paused.",
+    desc: "Cuts daily food use by 15%. A cook also turns 4 food and 1 water into 3 meals; each meal replaces 2 food at dawn. Production can be paused.",
   },
   garden: {
     name: "Pocket garden",
@@ -254,7 +262,7 @@ export const DEFS = {
     stone: 2,
     time: 4,
     hp: 50,
-    desc: "A small shared space. Adds 6 daily morale, up to 18.",
+    desc: "Adds 2 daily morale, up to 6. Gardens cannot replace food and water.",
   },
   tower: {
     name: "Farwatch",
@@ -264,7 +272,7 @@ export const DEFS = {
     stone: 14,
     time: 10,
     hp: 150,
-    desc: "Defends within 11 tiles. Each shot consumes 1 stone.",
+    desc: "Defends within 11 tiles. Construction includes 2 stone shots. Workers deliver crafted ammunition or emergency stone shots. Protect the supply route.",
   },
   wall: {
     name: "Stone stitch",
@@ -294,7 +302,7 @@ export const DEFS = {
     stone: 3,
     time: 6,
     hp: 90,
-    desc: "Raises each resource capacity by 100 and accepts nearby deliveries. Place one near distant work to cut travel time.",
+    desc: "Adds 80 capacity and stores actual delivered supplies here. Place near work and keep its supply routes open.",
   },
 };
 export function hash(s) {
@@ -395,7 +403,7 @@ export function createWorld(seed, region, difficulty = "survival") {
     people: [],
     enemies: [],
     marks: [],
-    stock: { ...Object.fromEntries(["wood", "stone", "food", "water"].map((key, i) => [key, d.stock[i]])), planks: 0, tools: 0, meals: 0 },
+    stock: { ...Object.fromEntries(["wood", "stone", "food", "water"].map((key, i) => [key, d.stock[i]])), planks: 0, tools: 0, meals: 0, ammo:0 },
     time: 0,
     day: 1,
     nextId: 1,
@@ -416,7 +424,7 @@ export function log(s, text) {
 export const completed = (s, type) =>
   s.buildings.filter((b) => b.type === type && b.progress >= 1);
 export function capacity(s) {
-  return 180 + completed(s, "store").reduce((n, b) => n + (b.upgraded ? 200 : 100), 0);
+  return 140 + completed(s, "store").reduce((n, b) => n + (b.upgraded ? 160 : 80), 0)+completed(s,"outpost").length*80;
 }
 export function beds(s) {
   return (
@@ -522,6 +530,7 @@ export function canPlace(s, type, x, y, rot) {
     return "Your village already has a hearth.";
   if (type !== "hearth" && !s.buildings.some((b) => b.type === "hearth"))
     return "Place the Hearthhold first.";
+  if(blighted(s,x,y)&&!["outpost","beacon","wall","gate","path"].includes(type))return "Hollow blight: reclaim the site or ward this land with a frontier depot.";
   const cells = footprint(type, rot);
   for (const [dx, dy] of cells) {
     const ax = x + dx,
@@ -551,12 +560,21 @@ export function canPlace(s, type, x, y, rot) {
     )
       return "No worker can reach this site.";
     if (s.people.length) {
-      // Preserve existing routes, including routes to unfinished construction.
-      const worker = s.people[0], before = occupancy(s);
-      for (const b of s.buildings) {
-        if (b.type === "wall" || b.type === "path") continue;
-        if (accessRoute(s, worker, b, before) !== null && accessRoute(s, worker, b, grid) === null)
-          return "Leave a passage to existing buildings.";
+      // Compare connected ground, not just access to any edge of a building.
+      // Otherwise two workers can reach opposite sides of a warehouse while
+      // being unable to carry supplies between their separate pockets.
+      const worker=s.people[0],before=occupancy(s);
+      const flood=map=>{
+        const seen=new Uint8Array(W*H),start=Math.floor(worker.y)*W+Math.floor(worker.x),queue=[start];seen[start]=1;
+        for(let i=0;i<queue.length;i++){const v=queue[i],x=v%W,y=Math.floor(v/W);for(const [nx,ny]of [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]){
+          if(nx<0||ny<0||nx>=W||ny>=H)continue;const n=ny*W+nx;if(!map[n]&&!seen[n]){seen[n]=1;queue.push(n);}
+        }}return seen;
+      };
+      const was=flood(before),after=flood(grid);
+      for(const p of s.people){const i=Math.floor(p.y)*W+Math.floor(p.x);if(was[i]&&!after[i])return "Leave a connected supply route for every worker.";}
+      for(const b of s.buildings){
+        if(b.type==='wall'||b.type==='path')continue;
+        if(edgeCells(s,b,before).some(([x,y])=>was[y*W+x])&&!edgeCells(s,b,grid).some(([x,y])=>after[y*W+x]))return "Leave a passage to existing buildings.";
       }
     }
   }
@@ -566,6 +584,9 @@ export function suggestedSite(s, type, cx, cy, rot = 0) {
   const candidates = [];
   for (let dy = -12; dy <= 12; dy++) for (let dx = -12; dx <= 12; dx++)
     candidates.push({ x: Math.round(cx) + dx, y: Math.round(cy) + dy, distance: dx * dx + dy * dy });
+  if(['quarry','farm','well'].includes(type))for(const p of candidates){
+    const land=terrainValue(s,p.x,p.y);p.distance-=(type==='quarry'?48*land.seam:24*land[type==='farm'?'soil':'water']);
+  }
   candidates.sort((a, b) => a.distance - b.distance);
   const site = candidates.find(p => !canPlace(s, type, p.x, p.y, rot));
   return site ? { x: site.x, y: site.y } : null;
@@ -574,13 +595,14 @@ export function place(s, type, x, y, rot = 0) {
   const reason = canPlace(s, type, x, y, rot);
   if (reason) return reason;
   const d = DEFS[type];
+  const freight=type === "path"?null:reserveFreight(s,d);
   s.stock.wood -= d.wood;
   s.stock.stone -= d.stone;
   if (type === "path") {
     s.roads.push(y * W + x);
     return "";
   }
-  const b = { id: s.nextId++, type, x, y, rot, progress: 0, hp: d.hp, cool: 0 };
+  const b = { id: s.nextId++, type, x, y, rot, progress: 0, hp: d.hp, cool: 0, freight:freight||[], buffer:{} };
   s.buildings.push(b);
   if (type === "hearth") {
     const e = edgeCells(s, b);
@@ -617,7 +639,7 @@ export function buildLine(from, to) {
 export function linePlan(s, type, from, to) {
   if (!["wall", "path"].includes(type)) return {cells: [], reason: "Choose a wall or trail."};
   if (![from.x, from.y, to.x, to.y].every(Number.isInteger) || Math.abs(to.x - from.x) + Math.abs(to.y - from.y) > W + H) return {cells: [], reason: "Draw a shorter line inside the map."};
-  const draft = {...s, buildings: [...s.buildings], roads: [...s.roads], stock: {...s.stock}};
+  const draft = {...s, buildings: structuredClone(s.buildings), roads: [...s.roads], stock: {...s.stock}};
   const cells = buildLine(from, to).filter(p => type === "path" ? !s.roads.includes(p.y * W + p.x) : !["wall", "gate"].includes(buildingAt(s, p.x, p.y)?.type));
   for (const p of cells) {
     const reason = place(draft, type, p.x, p.y);
@@ -633,12 +655,13 @@ export function placeLine(s, type, from, to) {
 }
 export function remove(s, b) {
   if (b.type === "hearth") return "The Hearthhold anchors this village.";
+  syncWarehouses(s);loseWarehouse(s,b);
   s.buildings = s.buildings.filter((v) => v.id !== b.id);
   const d = DEFS[b.type];
-  s.stock.wood = Math.min(capacity(s), s.stock.wood + Math.floor(d.wood / 2));
+  s.stock.wood = Math.min(capacity(s), s.stock.wood + Math.max(0,Math.floor(d.wood / 2)-s.people.filter(p=>p.carry?.target===b.id&&p.carry.key==="wood").reduce((n,p)=>n+p.carry.n,0)));
   s.stock.stone = Math.min(
     capacity(s),
-    s.stock.stone + Math.floor(d.stone / 2),
+    s.stock.stone + Math.max(0,Math.floor(d.stone / 2)-s.people.filter(p=>p.carry?.target===b.id&&p.carry.key==="stone").reduce((n,p)=>n+p.carry.n,0)),
   );
   log(s, d.name + " dismantled; half its materials recovered.");
   return "";
@@ -676,11 +699,13 @@ function assign(s, p, grid) {
   const claimed = new Set(
     s.people.filter((v) => v !== p && v.task).map((v) => v.task.key),
   );
-  const jobs = depthJobs(s);
+  const jobs = [...freightJobs(s,grid),...depthJobs(s)];
   for (const b of s.buildings) {
-    if (b.progress < 1)
-      jobs.push({ key: "build" + b.id, kind: "build", b, priority: 0 });
-    else if (b.project) jobs.push({ key: "project" + b.id, kind: "project", b, priority: b.project.kind === "repair" ? 0 : 1 });
+    if (b.progress < 1) {
+      if(supplied(s,b))jobs.push({ key: "build" + b.id, kind: "build", b, priority: 0 });
+      continue;
+    }
+    else if (b.project) {if(supplied(s,b))jobs.push({ key: "project" + b.id, kind: "project", b, priority: b.project.kind === "repair" ? 0 : 1 });continue;}
     else if (!b.paused && b.type === "farm" && s.stock.food < capacity(s) - 8)
       jobs.push({
         key: "farm" + b.id,
@@ -709,7 +734,7 @@ function assign(s, p, grid) {
     });
   }
   for (const job of jobs) {
-    if(job.b?.priority)job.priority-=5;
+    if(job.b?.priority||s.buildings.find(b=>b.id===job.target)?.priority)job.priority-=5;
     favorJob(s,p,job);
     if (
       (s.focus === "build" && ["build", "project"].includes(job.kind)) ||
@@ -728,12 +753,12 @@ function assign(s, p, grid) {
     if (claimed.has(job.key)) continue;
     const path = accessRoute(s, p, job.b, grid);
     if (path === null) continue;
-    p.task = { key: job.key, kind: job.kind, id: job.b.id, index: job.index, site: job.site };
+    p.task = { key: job.key, kind: job.kind, id: job.b.id, index: job.index, site: job.site, target:job.target, good:job.good, amount:job.amount };
     equipWorker(s, p);
     p.path = path;
     p.work = 0;
     p.state =
-      job.kind === "mine" ? "Mining deeper stone" : job.kind === "heal" ? "Caring for injured villagers" : job.kind === "craft" ? "Refining supplies" : job.kind === "plant" ? "Planting new trees" : job.kind === "explore" ? "Traveling to an old site" : job.kind === "build"
+      ["freight","supply"].includes(job.kind) ? "Collecting supplies for delivery" : job.kind === "mine" ? "Mining deeper stone" : job.kind === "heal" ? "Caring for injured villagers" : job.kind === "craft" ? "Refining supplies" : job.kind === "plant" ? "Planting new trees" : job.kind === "explore" ? "Traveling to an old site" : job.kind === "build"
         ? "Building " + DEFS[job.b.type].name
         : job.kind === "project" ? (job.b.project.kind === "repair" ? "Repairing " : "Upgrading ") + DEFS[job.b.type].name
         : job.kind === "harvest"
@@ -763,7 +788,7 @@ function daily(s) {
       100,
       s.morale +
         (fed ? 4 : -18) +
-        Math.min(18, completed(s, "garden").length * 6) -
+        Math.min(6, completed(s, "garden").length * 2) -
         (beds(s) < s.people.length ? 8 : 0),
     ),
   );
@@ -868,7 +893,7 @@ export function tick(s, dt) {
   s.focus ??= "balanced";
   s.influence = Math.min(
     influenceCap(s),
-    s.influence + completed(s, "beacon").length * dt * 0.2,
+    s.influence + completed(s, "beacon").length * dt * 0.06,
   );
   s.time += dt;
   const day = Math.floor(s.time / DAY) + 1;
@@ -884,7 +909,8 @@ export function tick(s, dt) {
     raid(s);
   for (const convoy of s.convoys) convoy.remaining=Math.max(0,convoy.remaining-dt);
   const grid = occupancy(s);
-  ensureSites(s,grid);
+  ensureSites(s,grid);frontierCycle(s);
+  syncWarehouses(s);replaceLostFreight(s);
   if ((s.campTimer = (s.campTimer || 0) - dt) <= 0) {campOrders(s);s.campTimer=5;}
   tickGuardians(s,dt,grid);
   for (const b of [...completed(s, "lumber"), ...completed(s, "quarry")])
@@ -901,6 +927,7 @@ export function tick(s, dt) {
   for (const p of s.people) {
     if (workerNeeds(s,p,dt,grid)) continue;
     if (move(p, dt, s, grid)) continue;
+    if(deliverFreight(s,p,grid))continue;
     if (p.carry) {
       const delivery = nearestDepot(s,p,grid);
       if (!delivery) {p.state="Delivery blocked — open a route to a storehouse";continue;}
@@ -910,9 +937,9 @@ export function tick(s, dt) {
         p.state = "Carrying " + p.carry.n + " " + p.carry.key;
         continue;
       }
-      give(s, p.carry.key, p.carry.n);
+      deposit(s,delivery.b,p.carry.key,p.carry.n);
       s.stats.deliveries++;
-      s.influence = Math.min(influenceCap(s), s.influence + 2);
+      s.influence = Math.min(influenceCap(s), s.influence + .5);
       s.effects.push({
         x: p.x,
         y: p.y,
@@ -933,19 +960,22 @@ export function tick(s, dt) {
     const b = s.buildings.find((b) => b.id === p.task.id);
     const rate = rules(s).work * workRate(s,p);
     p.work += dt * rate;
+    if(pickupFreight(s,p,b))continue;
     if (workDepth(s,p,b,dt*rate)) {if(!p.task && p.toolUses>0)p.toolUses--;continue;}
     if (p.task.kind === "build") {
-      if (!b || b.progress >= 1) {
+      if (!b || b.progress >= 1 || !supplied(s,b)) {
         p.task = null;
         continue;
       }
       b.progress = Math.min(1, b.progress + dt * workRate(s,p) / DEFS[b.type].time);
       if (b.progress >= 1) {
+        if(b.type==="tower"){b.buffer??={};b.buffer.stone=(b.buffer.stone||0)+2;}
+        s.effects.push({x:b.x,y:b.y,text:DEFS[b.type].name+" ready",ring:2,life:1.8,duration:1.8,sound:"delivery"});
         log(s, DEFS[b.type].name + " is ready.");
         p.task = null;
       }
     } else if (p.task.kind === "project") {
-      if (!b?.project) { p.task = null; continue; }
+      if (!b?.project || !supplied(s,b)) { p.task = null; continue; }
       b.project.progress += dt * rate / (b.project.kind === "repair" ? 8 : 16);
       if (b.project.progress >= 1) {
         if (b.project.kind === "upgrade") b.upgraded = true;
@@ -958,7 +988,7 @@ export function tick(s, dt) {
         t = s.tiles[index];
       if (t === 3 || t === 4) {
         s.tiles[index] = 0;
-        p.carry = { key: t === 3 ? "wood" : "stone", n: t === 3 ? 8 : 7 };
+        p.carry = { key: t === 3 ? "wood" : "stone", n: s.peaceful ? (t===3?8:7) : (t===3?6:5) };
       }
       p.task = null;
     } else if (["farm", "well"].includes(p.task.kind)) {
@@ -984,8 +1014,8 @@ export function tick(s, dt) {
     const e = s.enemies.find(
       (e) => e.hp > 0 && Math.hypot(e.x - b.x, e.y - b.y) < 11,
     );
-    if (e && b.cool <= 0 && s.stock.stone >= 1) {
-      s.stock.stone--;
+    if (e && b.cool <= 0 && (b.buffer?.ammo||b.buffer?.stone||0) >= 1) {
+      const ammunition=b.buffer.ammo>0?"ammo":"stone";b.buffer[ammunition]--;
       e.hp -= (b.upgraded ? 27 : 18) + (s.blessing === "sentinel" ? 3 : 0);
       b.cool = 1.8;
       s.effects.push({ x: b.x + 1, y: b.y + 1, tx: e.x, ty: e.y, life: 0.22 });
@@ -1045,6 +1075,7 @@ export function tick(s, dt) {
     move(e, dt * (MONSTERS[e.kind] || MONSTERS.raveler).speed, s, enemyGrid, true);
   }
   for (const b of s.buildings.filter((b) => b.hp <= 0)) {
+    loseWarehouse(s,b);
     log(s, DEFS[b.type].name + " was lost.");
     if (b.type === "hearth") {
       s.lost = true;
@@ -1055,6 +1086,7 @@ export function tick(s, dt) {
     }
   }
   const fallen=s.people.filter(p=>p.health<=0);
+  for(const p of fallen)if(p.carry?.construction){const target=s.buildings.find(b=>b.id===p.carry.target);if(target){target.replacement??={};target.replacement[p.carry.key]=(target.replacement[p.carry.key]||0)+p.carry.n;}}
   for(const p of fallen){log(s,p.name+" was lost. Protect workers and care for the injured.");s.morale=Math.max(0,s.morale-8);}
   s.people=s.people.filter(p=>(p.health??100)>0);
   if(!s.people.length&&!s.lost){s.lost=true;log(s,"No keepers remain. Your chronicle is preserved.");}
@@ -1257,9 +1289,10 @@ export function restore(raw) {
     s.nextId < 1
   )
     throw Error("Invalid timeline");
-  validateDepth(s);
+  validateDepth(s);validateEconomy(s);
+  s.progressionVersion=2;
   s.chapters ??= [];
-  if (!Array.isArray(s.chapters) || s.chapters.length > 6 || s.chapters.some((v, i) => v !== i)) throw Error("Invalid chapter progress");
+  if (!Array.isArray(s.chapters) || s.chapters.length > 8 || s.chapters.some((v, i) => v !== i)) throw Error("Invalid chapter progress");
   s.effects = [];
   return s;
 }

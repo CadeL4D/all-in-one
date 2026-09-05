@@ -1,3 +1,6 @@
+import {worldAudio} from './soundscape.js';
+import {terrainHint,terrainValue,networkStatus} from './economy.js';
+import {frontierSummary} from './frontier.js';
 import { reconcileConvoys, queueConvoy, applyConvoy, RECIPES, initDepth, recipeStatus, depthSummary, expeditionCost, exploreSite, chooseBlessing } from "./depth.js";
 import { ROLES, OFFERS, workerRole, setWorkforce, caravan, tradeCaravan } from "./civic.js";
 import {opportunities,buildingStatus,PAUSABLE} from "./advice.js";
@@ -45,7 +48,7 @@ let state = null,
   uiTimer = 0,
   saveTimer = 0,
   audio = null,
-  sound = false,
+  sound = localStorage.getItem("destiny-sound")!=="off",
   noticeTimer;
 let pixelRatio = window.devicePixelRatio || 1;
 let requestedZoom = 1.6;
@@ -334,14 +337,14 @@ new ResizeObserver(() => {
   resize();
   if (active) center();
 }).observe(canvas.parentElement);
-const buildingPurpose = {
+const buildingPurpose = {arsenal:"Turn stone and planks into delivered ammunition",outpost:"Store supplies and protect a distant district",
   infirmary: "Food + water → care for injuries", workshop: "Timber → planks", forge: "Planks + stone → faster tools", forester: "Renew your timber supply", gate: "Villagers pass; raiders must break it",
   hearth: "A home for your six travelers", house: "Four more beds for new arrivals", well: "Drinking water for your villagers",
   farm: "Food for your growing village", lumber: "Workers gather nearby timber", quarry: "Stone for buildings and tower shots",
-  kitchen: "Use 30% less food each day", garden: "A daily boost to village morale", tower: "Protect nearby homes; uses stone",
-  wall: "Slow attackers; leave workers a route", path: "Faster journeys for your workers", store: "Space for 100 more of each resource", beacon: "More influence for your powers",
+  kitchen: "Use 15% less food each day", garden: "A daily boost to village morale", tower: "Protect homes; needs delivered ammunition",
+  wall: "Slow attackers; leave workers a route", path: "Faster journeys for your workers", store: "Store local supplies · 80 more capacity", beacon: "More influence for your powers",
 };
-let lineStart = null, linePreview = null;
+let lineStart = null, linePreview = null, placementReason="";
 function setTool(next, suggest = false) {
   lineStart = linePreview = null;
   tool = next;
@@ -397,7 +400,7 @@ for (const type of [
   "tower",
   "wall",
   "path",
-  "beacon", "workshop", "forge", "forester", "gate", "infirmary",
+  "beacon", "workshop", "forge", "forester", "gate", "infirmary", "arsenal", "outpost",
 ]) {
   const d = DEFS[type];
   const button = document.createElement("button");
@@ -502,6 +505,8 @@ function preview() {
       : tool === "harvest"
         ? brush + " × " + brush + " harvest area"
         : buildingPurpose[tool] + " · Drag to position");
+  if(!reason&&DEFS[tool])$("placement-info").textContent+=" · "+terrainHint(state,tool,candidate.x,candidate.y);
+  placementReason=reason;
   $("confirm-placement").disabled = !!reason;
 }
 $("cancel-placement").onclick = () => {
@@ -819,11 +824,12 @@ $("atlas").onclick = () => {
   generate();
 };
 $("sound").onclick = () => {
-  sound = !sound;
+  sound = !sound;localStorage.setItem("destiny-sound",sound?"on":"off");
   $("sound").textContent = sound ? "Sound on" : "Sound off";
   $("sound").setAttribute("aria-pressed", String(sound));
   beep();
 };
+$("sound").textContent=sound?"Sound on":"Sound off";$("sound").setAttribute("aria-pressed",String(sound));
 $("help").onclick = () => $("guide").showModal();
 $("close-guide").onclick = () => $("guide").close();
 $("start-guide").onclick = () => $("guide").close();
@@ -880,7 +886,7 @@ function showTerritory(id) {
     if (!save()) return;
     enter(atlasSaves().get(id) || createTerritory(currentAtlas, id, mode));
   };
-  if(existing){const legacy=document.createElement("p");legacy.textContent=`${existing.people.length} villagers · ${existing.chapters?.length||0}/6 chapters · ${existing.stats?.riftSealed?"Frontier reclaimed":"Frontier unclaimed"}${existing.blessing?" · "+existing.blessing+" blessing":""}.`;detail.append(title,biome,copy,resources,stock,threat,legacy,neighbors,settle);}else detail.append(title, biome, copy, resources, stock, threat, neighbors, settle);
+  if(existing){const legacy=document.createElement("p");legacy.textContent=`${existing.people.length} villagers · ${existing.chapters?.length||0}/8 chapters · ${existing.stats?.riftSealed?"Frontier reclaimed":"Frontier unclaimed"}${existing.blessing?" · "+existing.blessing+" blessing":""}.`;detail.append(title,biome,copy,resources,stock,threat,legacy,neighbors,settle);}else detail.append(title, biome, copy, resources, stock, threat, neighbors, settle);
 }
 function generate() {
   const seed = $("seed").value.trim() || "HEARTH-742";
@@ -1015,7 +1021,7 @@ function update() {
   nextSite = step?.site || null;
   nextBuild = step?.type || null;
   nextImprove = step?.improve || null;
-  let goal = step?.label || "Region reclaimed. Support a neighboring village or explore the world.";
+  let goal = step?.label || "Develop another district, keep supply routes safe, and reclaim new Hollow fronts.";
   const incoming = nextRaidDay(s);
   if (incoming !== null && incoming - s.day <= 1 && completed(s, "well").length && completed(s, "farm").length && !completed(s, "tower").length) {
     goal = `Raise a Farwatch before day ${incoming} dusk. Keep stone for shots.`;
@@ -1025,7 +1031,7 @@ function update() {
     goal = `Workers are building ${DEFS[nextBuild].name}. Keep a clear route to the site.`;
     nextBuild = null;
   }
-  if (completed(s, "tower").length && !s.peaceful && s.stock.stone < 12) {
+  if (completed(s, "tower").length && !s.peaceful && s.stock.stone+(s.stock.ammo||0)+s.buildings.reduce((n,b)=>n+(b.buffer?.ammo||0)+(b.buffer?.stone||0),0) < 12) {
     goal = "Towers need ammunition. Paint stone deposits or add a Stonewright for renewable mining.";
     nextBuild = nextImprove = nextSite = null; nextHarvest = true;
   }
@@ -1114,7 +1120,7 @@ function update() {
         " " +
         (selected.progress < 1
           ? "Construction " + Math.floor(selected.progress * 100) + "%."
-          : buildingStatus(s,selected)) +
+          : buildingStatus(s,selected)+" "+networkStatus(s,selected)+" "+terrainHint(s,selected.type,selected.x,selected.y)) +
         " Condition " +
         Math.floor(selected.hp) +
         "/" +
@@ -1180,7 +1186,7 @@ function update() {
     const n = wave.filter(e => e.kind === key).length; return n ? `${n} ${m.name}${n > 1 ? "s" : ""}` : "";
   }).filter(Boolean).join(", ");
   $("survival-status").textContent = `${rules(s).name} · ${["Sheltered", "Wild", "Hostile"][s.threat || 0]} region. Daily need: ${demand.food} food + ${demand.water} water. ` +
-    (next === null ? "No monster raids." : `Day ${next} dusk: ${kinds}. Reserve at least ${wave.reduce((sum, m) => sum + Math.ceil(m.hp / 18), 0)} stone for tower shots, plus building costs. The estimate assumes every shot hits; defenses must cover the approach.`);
+    (next === null ? "No monster raids." : `Day ${next} dusk: ${kinds}. Prepare at least ${wave.reduce((sum, m) => sum + Math.ceil(m.hp / 18), 0)} delivered shots. An Ammunition yard makes 8 shots from 2 stone and 1 plank; towers can also use delivered stone. The estimate assumes every shot hits; defenses must cover the approach.`);
 }
 function draw() {
   if (!active || !state) return;
@@ -1195,10 +1201,21 @@ function draw() {
   artContext.clearRect(0, 0, artwork.width, artwork.height);
   scene(artContext, state, state.time);
   ctx.drawImage(artwork, 0, 0);
+  if(['farm','well','quarry'].includes(tool))for(let y=2;y<H-2;y+=3)for(let x=2;x<W-2;x+=3){
+    if(![0,2].includes(state.tiles[y*W+x]))continue;
+    const value=terrainValue(state,x,y),quality=value[tool==='farm'?'soil':tool==='well'?'water':'seam'];
+    ctx.fillStyle=quality>1?'#d9e88caa':'#aa897077';ctx.fillRect(x*TILE+4,y*TILE+4,quality>1?5:2,3);
+  }
+  if(selected?.type){
+    ctx.save();ctx.strokeStyle='#e2c77599';ctx.lineWidth=1/camera.zoom;ctx.setLineDash([3,4]);
+    for(const p of state.people)if(p.carry?.target===selected.id){ctx.beginPath();ctx.moveTo(p.x*TILE,p.y*TILE);ctx.lineTo((selected.x+1)*TILE,(selected.y+1)*TILE);ctx.stroke();}
+    if(['outpost','beacon'].includes(selected.type)){ctx.beginPath();ctx.arc((selected.x+.5)*TILE,(selected.y+.5)*TILE,(selected.type==='outpost'?10:7)*TILE,0,Math.PI*2);ctx.stroke();}
+    ctx.restore();
+  }
   if (hover && hover.x >= 0 && hover.y >= 0 && hover.x < W && hover.y < H) {
     const type = DEFS[tool] ? tool : null;
     const valid = type
-      ? !canPlace(state, type, hover.x, hover.y, rotation)
+      ? !placementReason
       : true;
     if (type && candidate) {
       ctx.save(); ctx.globalAlpha = .55;
@@ -1279,11 +1296,13 @@ function frame(now) {
   ) {
     const steps = Math.ceil(speed);
     for (let i = 0; i < steps; i++) tick(state, (dt * speed) / steps);
+    if(sound){try{audio??=new (window.AudioContext||window.webkitAudioContext)();worldAudio(audio,state,camera,canvas.clientWidth);}catch{sound=false;}}
   }
   uiTimer += dt;
   saveTimer += dt;
   if (uiTimer > 0.3) {
     update();
+    if(candidate&&DEFS[tool])preview();
     uiTimer = 0;
   }
   if (saveTimer > 20) {
@@ -1355,7 +1374,7 @@ for (const m of Object.values(MONSTERS)) {
   const p = document.createElement("p"); p.textContent = `${m.name} · ${m.hp} base health · ${m.damage} base damage. ${m.desc}`; $("balance-guide").append(p);
 }
 const economyGuide = document.createElement("p");
-economyGuide.textContent = "On Survival, each villager needs 2 food and 1.5 water per day. A field grows 8 food in 20 seconds of work (10 in lowlands, 7 in highlands); a well draws 8 water in 14 seconds. Delivery travel adds time. Add farms as you grow. A Commonpot saves 30% food; gardens help morale. Timber deposits yield 8, stone 7. Towers spend 1 stone per 18-damage shot. Brutes and skulkers join later waves; regional danger adds up to 2 monsters, within the difficulty cap.";
+economyGuide.textContent = "On Survival, each villager needs 2 food and 1.5 water per day. Kitchens save 15% food. Harvests yield 6 timber or 5 stone. Local soil and water access change farm and well output; gold survey marks show productive ground during placement. Quarries yield 2, 4 or 6 stone per 24 working seconds depending on the seam. Builders collect paid materials from warehouses. Workshops need input deliveries; towers need delivered stone or crafted shots. An Ammunition yard turns 2 stone and 1 plank into 8 shots. Place depots near work and protect the routes. New Hollow footholds form from day 9, blight production and strengthen raids. Frontier depots ward a 10-tile district. Sound adds local work cues and dawn/raid signals.";
 $("balance-guide").append(economyGuide);
 readSave();
 if (saved?.worldSeed) { $("seed").value = saved.worldSeed; $("difficulty").value = saved.difficulty; scouted = saved.territory; }
@@ -1400,8 +1419,8 @@ function updateDepthUI(s) {
   if(document.activeElement!==$("tool-reserve"))$("tool-reserve").value=String(s.toolReserve);
   $("convoy-status").textContent=s.convoys.map(c=>`${c.targetName}: ${Math.ceil(c.remaining)}s remaining`).join(" · ") || "No convoys traveling.";
   $("settlement-pulse").textContent=`${status.working} working · ${status.resting} resting · ${status.tools} equipped. Food reserve ${status.foodDays} days; water ${status.waterDays} days.`;
-  $("crafted-stock").textContent=`${s.stock.planks} planks · ${s.stock.tools} spare tools · ${s.stock.meals} meals` + (Object.values(s.pendingSupplies).some(n=>n>0)?` · ${Object.values(s.pendingSupplies).reduce((a,b)=>a+b,0)} convoy supplies waiting for storage`:"");
-  $("frontier-status").textContent=f.site?`${f.warded?"Warded frontier":s.peaceful?"Quiet frontier":"The Hollow is spreading"}. ${f.pressure?`+${f.pressure} monsters per raid.`:"No extra monsters yet."} A nearby Wishing spire suppresses it; an expedition seals it permanently.`:"The rift is sealed. Your village reclaimed the frontier.";
+  $("crafted-stock").textContent=`${s.stock.planks} planks · ${s.stock.tools} spare tools · ${s.stock.meals} meals · ${s.stock.ammo||0} ammunition` + (Object.values(s.pendingSupplies).some(n=>n>0)?` · ${Object.values(s.pendingSupplies).reduce((a,b)=>a+b,0)} convoy supplies waiting for storage`:"");
+  $("frontier-status").textContent=frontierSummary(s);
   $("blessings").hidden=!s.relicReady || !!s.blessing;
   $("blessing-status").textContent=s.blessing?`Keeper's blessing: ${s.blessing}.` : "Explore the old keeper shrine to choose a permanent blessing.";
   const key=JSON.stringify([s.seed,s.sites?.map(v=>[v.id,v.done,v.ordered]),s.people.map(p=>[p.id,p.state,Math.floor(p.energy/10),Math.floor(p.health/10),!!p.toolUses]),s.buildings.filter(b=>RECIPES[b.type]).map(b=>[b.id,b.type,recipeStatus(s,b)])]);

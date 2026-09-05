@@ -24,6 +24,6 @@ test('building explanations distinguish paused, full storage and unstaffed produ
 test('site priority changes a real worker assignment and persists across reload',()=>{
  const s=town(),near=add(s,'farm',27,28),far=add(s,'workshop',17,18);far.priority=true;
  s.stock.planks=0;for(const p of s.people){p.task=null;p.path=[];p.carry=null;p.idle=1;p.resting=false;p.energy=100;}
- tick(s,.1);assert.equal(s.people[0].task?.id,far.id);assert.equal(restore(serialize(s)).buildings.find(b=>b.id===far.id).priority,true);
+ tick(s,.1);assert.equal(s.people[0].task?.target??s.people[0].task?.id,far.id);assert.equal(restore(serialize(s)).buildings.find(b=>b.id===far.id).priority,true);
  s.buildings.find(b=>b.id===near.id).priority='bad';assert.throws(()=>restore(serialize(s)),/priority/);
 });

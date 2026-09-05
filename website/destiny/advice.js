@@ -1,3 +1,4 @@
+import {networkStatus,supplied} from './economy.js';
 import {completed,DEFS,dailyNeeds,capacity,occupancy,accessRoute} from './world.js';
 import {RECIPES,recipeStatus,frontier,expeditionCost} from './depth.js';
 import {caravan} from './civic.js';
@@ -23,16 +24,19 @@ export function opportunities(s) {
   if(visit.open&&!visit.traded&&completed(s,'store').length)result.push({id:'caravan',panel:'caravan-panel',title:'Meet the visiting caravan',why:`Leaves on day ${visit.leaves}. Choose one trade for tools, provisions or stone.`});
   if(s.relicReady&&!s.blessing)result.push({id:'blessing',panel:'exploration-panel',title:'Choose your keeper’s blessing',why:'Your expedition returned. Pick a permanent benefit for industry, rest or defense.'});
   const f=frontier(s);
-  if(f.site && !f.site.ordered && s.stock.planks>=6&&s.stock.tools>=2)result.push({id:'rift',site:f.site.id,title:'Reclaim the Hollow Rift',why:`Spend 6 planks and 2 tools to remove its raid pressure permanently.`});
+  if(f.site && !f.site.ordered && s.stock.planks>=10&&s.stock.tools>=4)result.push({id:'rift',site:f.site.id,title:'Reclaim the Hollow Rift',why:`Spend 10 planks and 4 tools to remove its raid pressure permanently.`});
   if(completed(s,'lumber').length)build('workshop','Start making planks','A sawmill opens toolmaking and gives your timber a new purpose.');
   if(completed(s,'workshop').length)build('forge','Equip your workers','Tools speed up work and supply frontier expeditions.');
   const discovery=s.sites?.find(v=>!v.done&&!v.ordered&&v.kind!=='rift'&&Object.entries(expeditionCost(v)).every(([k,n])=>s.stock[k]>=n));
   if(discovery)result.push({id:'discover-'+discovery.id,site:discovery.id,title:'Explore '+discovery.name,why:discovery.kind==='relic'?'Recover a permanent blessing. One worker will travel to the shrine.':'Recover supplies while the rest of your village keeps working.'});
   if(completed(s,'forge').length)build('forester','Renew the woodland','Replace harvested timber and keep the village growing.');
-  if(s.chapters?.length===6)result.push({id:'neighbors',panel:'convoy-panel',title:'Support another settlement',why:'Send supplies to a settled neighbor, or choose a new region on the world map.'});
+  if(completed(s,'workshop').length)build('arsenal','Supply the watchtowers','Crafted shots use less stone. Workers carry inputs and ammunition.');
+  if(completed(s,'store').length)build('outpost','Establish a frontier district','Place a protected depot near rich seams or riverside fields beyond the hearth.');
+  if(s.chapters?.length===8)result.push({id:'neighbors',panel:'convoy-panel',title:'Support another settlement',why:'Send supplies to a settled neighbor, or choose a new region on the world map.'});
   return result.sort((a,b)=>Number(!!b.urgent)-Number(!!a.urgent)).slice(0,3);
 }
 export function buildingStatus(s,b) {
+  if(!supplied(s,b))return networkStatus(s,b);
   const staff=s.people.find(p=>p.task?.id===b.id);
   const working=staff&&!staff.path?.length&&!staff.resting;
   if(b.progress<1)return staff?`${staff.name} is ${working?'building':'traveling to the site'}. ${Math.floor(b.progress*100)}% complete.`:'Construction queued. An available worker must reach this site.';

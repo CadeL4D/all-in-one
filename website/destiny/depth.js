@@ -1,3 +1,5 @@
+import {protectedLand} from './frontier.js';
+import {terrainValue,validateEconomy} from './economy.js';
 // Living settlement systems. Functions run after world.js has initialized.
 import { W, H, DAY, DEFS, completed, capacity, beds, dailyNeeds, occupancy, accessRoute, route, hash, log, influenceCap } from "./world.js";
 import { RECIPES } from "./industry.js";
@@ -5,7 +7,7 @@ import { initCivic, validateCivic } from "./civic.js";
 export { EXTRA_BUILDINGS, RECIPES } from "./industry.js";
 export function initDepth(s) {
   initCivic(s);
-  for (const key of ["planks", "tools", "meals"]) s.stock[key] ??= 0;
+  for (const key of ["planks", "tools", "meals", "ammo"]) s.stock[key] ??= 0;
   s.stats ??= {deliveries: 0, crafted: 0, explored: 0, repelled: 0};
   s.guardians ??= [];
   s.convoys ??= [];
@@ -26,10 +28,10 @@ export function validateDepth(s) {
   if (!Array.isArray(s.receivedConvoys) || s.receivedConvoys.some(id=>typeof id!=="string")) throw Error("Invalid convoy receipts");
   for (const g of s.guardians) {g.path=[];g.cool=0;}
 
-  for (const key of ["planks", "tools", "meals"]) if (!Number.isFinite(s.stock[key]) || s.stock[key] < 0) throw Error("Invalid crafted stock");
+  for (const key of ["planks", "tools", "meals", "ammo"]) if (!Number.isFinite(s.stock[key]) || s.stock[key] < 0) throw Error("Invalid crafted stock");
   if (![null, "industry", "shelter", "sentinel"].includes(s.blessing)) throw Error("Invalid blessing");
   if (!Array.isArray(s.guardians) || s.guardians.length > 2 || s.guardians.some(g => ![g.x,g.y,g.hp,g.life].every(Number.isFinite) || g.x < 0 || g.y < 0 || g.x >= W || g.y >= H)) throw Error("Invalid guardian");
-  if (s.sites && (!Array.isArray(s.sites) || s.sites.length > 4 || s.sites.some(site => !["cache", "relic", "rift"].includes(site.kind) || !Number.isInteger(site.x) || !Number.isInteger(site.y) || site.x < 2 || site.x >= W-2 || site.y < 2 || site.y >= H-2 || !Number.isFinite(site.progress) || site.progress < 0 || site.progress > 1))) throw Error("Invalid exploration sites");
+  if (s.sites && (!Array.isArray(s.sites) || s.sites.length > 24 || s.sites.some(site => !["cache", "relic", "rift"].includes(site.kind) || (site.born!==undefined&&(!Number.isInteger(site.born)||site.born<1)) || !Number.isInteger(site.x) || !Number.isInteger(site.y) || site.x < 2 || site.x >= W-2 || site.y < 2 || site.y >= H-2 || !Number.isFinite(site.progress) || site.progress < 0 || site.progress > 1))) throw Error("Invalid exploration sites");
   for (const p of s.people) {
     if (!Number.isFinite(p.health) || p.health<0 || p.health>100 || !Number.isFinite(p.energy) || p.energy < 0 || p.energy > 100 || !Number.isInteger(p.toolUses) || p.toolUses < 0 || p.toolUses > 10) throw Error("Invalid worker equipment");
   }
@@ -39,9 +41,9 @@ export function recipeStatus(s, b) {
   if (!r) return "";
   if (b.paused) return "Production paused";
   if (s.stock[r.output] >= (b.target ?? r.target)) return "Target reached";
-  for (const [key,n] of Object.entries(r.input)) if ((s.stock[key] || 0) < n) return `Needs ${n} ${key}`;
-  if (b.type === "forge" && s.stock.stone < 14) return "Keeping 12 stone for defenses";
-  if (b.type === "kitchen" && s.stock.food < 12) return "Keeping raw food for supper";
+  for (const [key,n] of Object.entries(r.input)) if ((b.buffer?.[key] || 0) < n) return (s.stock[key]||0)>=n?`Waiting for delivery: ${n} ${key}`:`Needs ${n} ${key}`;
+  if (b.type === "forge" && (b.buffer?.stone||0) < 2) return "Keeping 12 stone for defenses";
+  if (b.type === "kitchen" && (b.buffer?.food||0) < 4) return "Keeping raw food for supper";
   return "Ready for a worker";
 }
 export function campOrders(s) {
@@ -70,7 +72,7 @@ export function depthJobs(s) {
 export function workDepth(s,p,b,dt) {
   if(p.task.kind==="mine") {
     if(!b){p.task=null;return true;}
-    if(p.work>=18){p.carry={key:"stone",n:b.upgraded?6:4};p.task=null;}
+    if(p.work>=24){p.carry={key:"stone",n:Math.max(2,Math.round(4*terrainValue(s,b.x,b.y).seam*(b.upgraded?1.5:1)))};p.task=null;}
     return true;
   }
   if(p.task.kind==="heal") {
@@ -86,7 +88,7 @@ export function workDepth(s,p,b,dt) {
     const r = b && RECIPES[b.type];
     if (!r || recipeStatus(s,b) !== "Ready for a worker") { p.task=null; return true; }
     if (p.work >= r.time) {
-      for (const [key,n] of Object.entries(r.input)) s.stock[key]-=n;
+      for (const [key,n] of Object.entries(r.input)) b.buffer[key]-=n;
       p.carry={key:r.output,n:r.amount}; s.stats.crafted += r.amount; p.task=null;
     }
     return true;
@@ -131,7 +133,7 @@ export function equipWorker(s,p) {
   if (!p.toolUses && s.stock.tools > s.toolReserve) {s.stock.tools--;p.toolUses=10;s.stats.equipped=true;}
 }
 export function nearestDepot(s,p,grid) {
-  const depots=s.buildings.filter(b=>b.progress>=1 && ["hearth","store"].includes(b.type)).sort((a,b)=>Math.hypot(p.x-a.x,p.y-a.y)-Math.hypot(p.x-b.x,p.y-b.y));
+  const depots=s.buildings.filter(b=>b.progress>=1 && ["hearth","store","outpost"].includes(b.type)).sort((a,b)=>Math.hypot(p.x-a.x,p.y-a.y)-Math.hypot(p.x-b.x,p.y-b.y));
   for (const b of depots) { const path=accessRoute(s,p,b,grid);if(path!==null)return {b,path}; }
   return null;
 }
@@ -182,7 +184,7 @@ export function ensureSites(s,grid) {
   }
   log(s,"Scouts found old sites beyond the clearing. Tap a marker to plan an expedition.");
 }
-export function expeditionCost(site) {return site.kind==="rift"?{planks:6,tools:2}:site.kind==="relic"?{food:6}:{};}
+export function expeditionCost(site) {return site.kind==="rift"?{planks:10,tools:4}:site.kind==="relic"?{food:6}:{};}
 export function exploreSite(s,site) {
   if(!site || !s.sites?.includes(site) || site.done || site.ordered || s.lost)return "Choose an unexplored site.";
   const cost=expeditionCost(site);
@@ -197,10 +199,12 @@ export function chooseBlessing(s,choice) {
   s.blessing=choice;s.relicReady=false;log(s,"The keeper's blessing: "+choice+". It will remain with this village.");return "";
 }
 export function frontier(s) {
-  const site=s.sites?.find(v=>v.kind==="rift"&&!v.done);
-  const pressure=!s.peaceful&&site?Math.min(2,Math.max(0,Math.floor((s.day-5)/4))):0;
+  const active=s.sites?.filter(v=>v.kind==="rift"&&!v.done)||[];
+  const hostile=active.filter(v=>!protectedLand(s,v.x,v.y));
+  const site=hostile[0]||active[0];
+  const pressure=!s.peaceful&&hostile.length&&s.day>=7?Math.min(8,hostile.length+Math.max(0,Math.floor((s.day-7)/6))):0;
   const radius=site?Math.min(10,2+Math.max(0,s.day-4)*.4):0;
-  const warded=!!site&&completed(s,"beacon").some(b=>Math.hypot(b.x-site.x,b.y-site.y)<13);
+  const warded=!!site&&protectedLand(s,site.x,site.y);
   return {site, pressure:warded?0:pressure, radius:warded?Math.max(1,radius-4):radius, warded};
 }
 export function summonGuardian(s,x,y) {

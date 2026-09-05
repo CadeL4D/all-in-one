@@ -41,9 +41,9 @@ async function found(page, touch = false) {
     await page.locator("#mobile-speed").click();
     await page.locator("#mobile-speed").click();
   } else await page.locator('[data-speed="4"]').click();
-  await page.waitForFunction(() =>
-    document.querySelector("#objective").textContent.includes("cottage"),
-  );
+  try {await page.waitForFunction(() => document.querySelector("#objective").textContent.includes("cottage"));}
+  catch(error){console.error("Opening state:",await page.locator('#objective').textContent(),errors);await page.screenshot({path:'test-output/opening-failure.png'});throw error;}
+
 }
 try {
   const page = await browser.newPage({
@@ -63,8 +63,8 @@ try {
   await page.locator("#difficulty").selectOption("settler");
   assert.match(await page.locator(".scout-threat").textContent(), /day 5/);
   await page.locator("#difficulty").selectOption("onslaught");
-  assert.match(await page.locator(".scout-threat").textContent(), /day 2/);
-  assert.match(await page.locator(".scout-stock").textContent(), /75 timber/);
+  assert.match(await page.locator(".scout-threat").textContent(), /day 3/);
+  assert.match(await page.locator(".scout-stock").textContent(), /62 timber/);
   await page.locator("#difficulty").selectOption("peaceful");
   assert.match(await page.locator(".scout-threat").textContent(), /No monster raids/);
   await page.locator("#difficulty").selectOption("survival");
@@ -315,12 +315,12 @@ try {
   await mobile.locator("#confirm-placement").click();
   const hard = await save(mobile);
   assert.equal(hard.difficulty, "onslaught");
-  assert.equal(hard.stock.wood, 75);
+  assert.equal(hard.stock.wood, 62);
   await menu(mobile);
   assert.equal(await mobile.locator("#saved-villages button").count(), 3, "Modes keep independent progress in the same region");
   await closeMenu(mobile);
   await mobile.locator("#village-open").click();
-  assert.match(await mobile.locator("#survival-status").textContent(), /Day 2 dusk/);
+  assert.match(await mobile.locator("#survival-status").textContent(), /Day 3 dusk/);
   await mobile.locator("#village-sheet [data-close-sheet]").click();
   const fixture = sim.createWorld("progress-preview", 0, true);
   fixture.tiles.fill(0); sim.place(fixture, "hearth", 30, 22);
@@ -335,7 +335,7 @@ try {
   await progressPage.locator("#resume").click();
   await progressPage.locator("#pause").click();
   await progressPage.locator("#village-open").click();
-  assert.equal(await progressPage.locator("#campaign-roadmap details").count(), 6);
+  assert.equal(await progressPage.locator("#campaign-roadmap details").count(), 8);
   assert.match(await progressPage.locator("#season-status").textContent(), /Spring/);
   await progressPage.locator("#campaign-roadmap details").nth(2).locator("summary").click();
   await progressPage.waitForTimeout(600);
@@ -388,5 +388,6 @@ try {
     "PASS: library filters, preview/confirm, construction, priorities, save migration, invalid import, export, pause, powers, offline reload, pinch without placement, portrait/landscape, direct harvest and undo, native-resolution art, connected atlas, difficulty previews, independent region and difficulty saves.",
   );
 } finally {
+  if(errors.length)console.error("Browser errors:",errors);
   await browser.close();
 }

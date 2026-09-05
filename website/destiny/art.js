@@ -1,3 +1,4 @@
+import {blighted,protectedLand} from './frontier.js';
 import { frontier } from "./depth.js";
 import { caravan, workerRole } from "./civic.js";
 import { W, H, noise, hash, footprint, DEFS, season } from "./world.js";
@@ -302,6 +303,14 @@ export function structure(c, b, time = 0, state = null) {
     }
     return;
   }
+  if(b.type==='arsenal'){
+    rect(c,'#6d5750',minX+4,minY+height-9,width-8,5);
+    for(let i=0;i<4;i++){rect(c,'#d9cfa8',minX+8+i*5,minY+height-15,1,10);rect(c,'#8c9f9b',minX+7+i*5,minY+height-16,3,3);}
+  }
+  if(b.type==='outpost'){
+    rect(c,'#4b5450',minX-2,minY-10,8,height+10);rect(c,'#849080',minX-1,minY-9,3,height+8);
+    rect(c,'#343d37',minX+width-4,minY-17,2,26);rect(c,'#d7bb70',minX+width-2,minY-17,11,6);
+  }
   if (b.type === "hearth") {
     roof(c, minX + 2, minY + 8, 42, 22, "#ac6342");
     rect(c, "#dec785", minX + 19, minY + 24, 7, 12);
@@ -309,7 +318,7 @@ export function structure(c, b, time = 0, state = null) {
     rect(c, "#e4cf8a", minX + 42, minY - 7, 9, 6);
     return;
   }
-  if (b.type === "store") {
+  if (b.type === "store" || b.type === "outpost") {
     roof(c, minX + 2, minY + 7, width - 4, height - 9, "#737e65");
     const count=Math.min(5,Math.ceil(((state?.stock.wood??80)+(state?.stock.stone??40))/80));
     for(let i=0;i<count;i++){const x=minX+3+(i%3)*9,y=minY+height-6-Math.floor(i/3)*6;crate(c,x,y,i%2);}
@@ -384,9 +393,11 @@ export function scene(c, s, t = 0) {
   if(seasonName==="Winter")rect(c,"#d3ddd532",0,0,W*TILE,H*TILE);
   if(seasonName==="Autumn")rect(c,"#bc884b18",0,0,W*TILE,H*TILE);
   const f=frontier(s);
-  if(f.site && !s.peaceful) {
-    for(let y=Math.max(0,f.site.y-Math.ceil(f.radius));y<Math.min(H,f.site.y+f.radius);y++)for(let x=Math.max(0,f.site.x-Math.ceil(f.radius));x<Math.min(W,f.site.x+f.radius);x++) {
-      if(Math.hypot(x-f.site.x,y-f.site.y)<f.radius && s.tiles[y*W+x]!==1)rect(c,((x+y)%3)?"#60436155":"#9a537c44",x*TILE,y*TILE,TILE,TILE);
+  if(!s.peaceful)for(const site of (s.sites||[]).filter(v=>v.kind==='rift'&&!v.done)) {
+    const radius=Math.min(13,2+Math.max(0,s.day-(site.born||4))*.45);
+    for(let y=Math.max(0,Math.floor(site.y-radius));y<Math.min(H,site.y+radius);y++)for(let x=Math.max(0,Math.floor(site.x-radius));x<Math.min(W,site.x+radius);x++)if(Math.hypot(x-site.x,y-site.y)<radius&&!protectedLand(s,x,y)&&s.tiles[y*W+x]!==1){
+      rect(c,'#60436166',x*TILE,y*TILE,TILE,TILE);
+      if((x+y)%4===0){rect(c,'#b26b9166',x*TILE+2,y*TILE+4,3,6);rect(c,'#33263e99',x*TILE+1,y*TILE+9,7,2);}
     }
   }
   for(const site of s.sites||[]) {
@@ -414,6 +425,10 @@ export function scene(c, s, t = 0) {
   for (const item of items) {
     if (item.b) {
       structure(c, item.b, t, s);
+      const stocked=Object.values(item.b.buffer||item.b.bins||{}).reduce((n,v)=>n+v,0);
+      for(let i=0;i<Math.min(4,Math.ceil(stocked/6));i++)crate(c,item.b.x*TILE+i*6,(item.b.y+Math.max(...footprint(item.b.type,item.b.rot).map(v=>v[1]))+1)*TILE-4);
+      if(item.b.freight?.length){rect(c,'#e3bd68',item.b.x*TILE,item.b.y*TILE-18,9,6);rect(c,'#413b28',item.b.x*TILE+4,item.b.y*TILE-17,1,4);}
+
       const b=item.b,worker=s.people.find(p=>p.task?.id===b.id&&!p.path?.length&&!p.resting);
       if(b.progress>=1 && worker){
         const x=b.x*TILE,y=b.y*TILE-5;
@@ -481,7 +496,7 @@ export function scene(c, s, t = 0) {
       c.arc(
         e.x * TILE,
         e.y * TILE,
-        e.ring * TILE * (1.4 - e.life),
+        e.ring * TILE * Math.max(.05,Math.min(1,1-e.life/(e.duration||1.4))),
         0,
         Math.PI * 2,
       );

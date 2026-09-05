@@ -144,6 +144,7 @@ test("peaceful disables raids; towers use stone and defeat a nearby threat", () 
   raid(s);
   assert.equal(s.enemies.length, 0);
   const tower = build(s, "tower");
+  run(s,25); // Allow ammunition carriers to stock the tower before the raid.
   s.peaceful = false;
   s.enemies.push({
     id: 900,
@@ -154,8 +155,8 @@ test("peaceful disables raids; towers use stone and defeat a nearby threat", () 
     cool: 0,
     age: 0,
   });
-  const before = s.stock.stone;
+  const before = s.stock.stone+(tower.buffer?.stone||0);
   run(s, 6);
   assert.equal(s.enemies.length, 0);
-  assert.ok(s.stock.stone < before);
+  assert.ok(s.stock.stone+(tower.buffer?.stone||0) < before);
 });

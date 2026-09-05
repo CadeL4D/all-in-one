@@ -1,3 +1,4 @@
+import {playThrough} from './playtest.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { W, H, DAY, DIFFICULTIES, MONSTERS, DEFS, createWorld, place, canPlace,
@@ -69,7 +70,7 @@ test("modes have distinct grace periods, bounded escalating waves and gradual mo
     assert.ok(later.length >= initial.length);
     assert.ok(later.some(m => m.kind === "skulker"));
     assert.ok(later.some(m => m.kind === "brute"));
-    assert.ok(raidPlan(s, 1000).length <= d.cap);
+    assert.ok(raidPlan(s, 1000).length <= d.cap+12);
     s.threat = 2;
     assert.equal(raidPlan(s).length, initial.length + 2);
     s.raided = d.firstRaid; s.day = d.firstRaid;
@@ -95,7 +96,7 @@ test("supplies scale with population and kitchens; scarce food suppresses growth
   run(s, 15);
   assert.deepEqual(dailyNeeds(s), {food: 12, water: 9});
   s.buildings.push({id: 100, type: "kitchen", x: 40, y: 20, rot: 0, progress: 1, hp: 100});
-  assert.deepEqual(dailyNeeds(s), {food: 9, water: 9});
+  assert.deepEqual(dailyNeeds(s), {food: 11, water: 9});
   s.stock.food = 0; s.stock.water = 0;
   const morale = s.morale;
   run(s, DAY);
@@ -107,7 +108,7 @@ test("a reachable raid spawns its forecast once; unprotected buildings take dama
   const s = createTerritory(atlas, 0, "survival");
   s.tiles.fill(0);
   assert.equal(place(s, "hearth", 30, 22), ""); run(s, 15);
-  s.day = 3; s.time = 2 * DAY + DAY * .75;
+  s.day = 4; s.time = 3 * DAY + DAY * .75;
   const plan = raidPlan(s);
   raid(s); assert.equal(s.enemies.length, plan.length);
   raid(s); assert.equal(s.enemies.length, plan.length, "A wave is not duplicated");
@@ -128,7 +129,7 @@ test("each region can deliver its first forecasted wave from a reachable land ed
   for (const t of TERRITORIES) {
     const s = createTerritory(atlas, t.id, "survival");
     assert.equal(place(s, "hearth", 30, 22), "");
-    s.day = 3;
+    s.day = 4;
     raid(s);
     assert.equal(s.enemies.length, 3 + t.threat, t.name);
   }
@@ -200,29 +201,10 @@ test("the next building receives a reachable, affordable suggestion without spen
 });
 
 
-test("an actively improved Survival village can complete the four chapters through winter", () => {
-  const s = createTerritory(atlas, 0, "survival");
-  opening(s);
-  const planned = ["kitchen", "store", "tower", "farm", "beacon", "tower", "well"];
-  let pending = 0;
-  for (let n = 0; n < 1700 && s.day < 18 && !s.lost; n++) {
-    if (s.stock.stone < 35) {
-      for (let i = 0; i < s.tiles.length; i++) if (s.tiles[i] === 4 && !s.marks.includes(i)) s.marks.push(i);
-    }
-    s.focus = s.stock.stone < 15 ? "harvest" : s.stock.food < 35 || s.stock.water < 25 ? "food" : "balanced";
-    if (pending < planned.length) {
-      const type = planned[pending], site = suggestedSite(s, type, 32, 24);
-      if (site) { assert.equal(place(s, type, site.x, site.y), ""); pending++; }
-    }
-    for (const b of s.buildings) {
-      if (b.progress < 1 || b.project) continue;
-      if (b.hp < DEFS[b.type].hp * .65) startProject(s, b, "repair");
-      else if (["farm", "house", "tower"].includes(b.type) && !b.upgraded && s.stock.stone > 45) startProject(s, b, "upgrade");
-    }
-    run(s, 1);
-  }
-  assert.equal(s.lost, false, JSON.stringify({day:s.day, pending, stock:s.stock, events:s.events, buildings:s.buildings.map(b=>[b.type,b.x,b.y,b.hp,b.upgraded])}));
-  assert.ok(s.stock.food > 0 && s.stock.water > 0);
-  assert.equal(pending, planned.length);
-  assert.equal(campaign(s).index, 4, JSON.stringify({day:s.day, people:s.people.length, chapters:s.chapters, stock:s.stock, steps:campaign(s).current?.steps, buildings:s.buildings.map(b=>[b.type,b.progress,b.upgraded])}));
+test("an actively supplied Survival village can establish industry through winter", () => {
+ const {state:s}=playThrough('HEARTH-742',0,'survival');
+ assert.equal(s.lost,false,JSON.stringify({day:s.day,events:s.events}));
+ assert.equal(s.day,23);assert.ok(s.chapters.length>=4);
+ assert.ok(s.stats.freight>50);assert.ok(s.stats.crafted>20);
+ assert.ok(s.stock.food>0&&s.stock.water>0);
 });

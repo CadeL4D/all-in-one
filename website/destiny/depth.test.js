@@ -1,3 +1,4 @@
+import {playThrough} from './playtest.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createWorld,place,canPlace,DEFS,tick,serialize,restore,occupancy,route,cast,raidPlan,suggestedSite,startProject,campaign,completed} from "./world.js";
@@ -31,7 +32,7 @@ test("a tired worker travels home, rests and resumes work",()=>{
 });
 test("exploration produces rewards once and the rift can be permanently sealed",()=>{
  const s=village();assert.equal(s.sites.length,4);const relic=s.sites.find(v=>v.kind==="relic");assert.equal(exploreSite(s,relic),"");const food=s.stock.food;assert.ok(exploreSite(s,relic));assert.equal(s.stock.food,food);run(s,80);assert.ok(relic.done);assert.equal(chooseBlessing(s,"industry"),"");assert.ok(chooseBlessing(s,"sentinel"));
- s.peaceful=false;s.difficulty="survival";s.day=13;assert.equal(frontier(s).pressure,2);s.stock.planks=6;s.stock.tools=2;
+ s.peaceful=false;s.difficulty="survival";s.day=13;assert.equal(frontier(s).pressure,2);s.stock.planks=10;s.stock.tools=4;
  const rift=s.sites.find(v=>v.kind==="rift");assert.equal(exploreSite(s,rift),"");s.peaceful=true;run(s,100);assert.equal(rift.done,true);assert.equal(frontier(s).pressure,0);assert.equal(restore(serialize(s)).blessing,"industry");
 });
 test("wards suppress extra pressure and guardians absorb attacks",()=>{
@@ -51,37 +52,12 @@ test("save validation rejects malformed new systems",()=>{
  const s=village();s.stock.tools=-1;assert.throws(()=>restore(serialize(s)),/stock/);s.stock.tools=0;s.guardians=[{x:NaN,y:2,hp:10,life:10}];assert.throws(()=>restore(serialize(s)),/guardian/);
 });
 
-test("a real Survival economy grows through industry, exploration and reclamation",()=>{
- const s=createTerritory(buildAtlas("balance-frontier"),0,"survival");
- const plan=["hearth","house","well","farm","lumber","tower","quarry","garden","kitchen","store","workshop","forge","forester","farm","tower","well","beacon","tower"];
- let next=0;
- for(let step=0;step<2400 && s.day<23 && !s.lost;step++) {
-   if(next<plan.length && s.buildings.filter(b=>b.progress<1).length<2) {
-     const type=plan[next],site=type==="hearth"?{x:30,y:22}:suggestedSite(s,type,32,24);
-     if(site&&!canPlace(s,type,site.x,site.y,0)){place(s,type,site.x,site.y);next++;}
-   }
-   if(s.stock.stone<45) {
-     const stones=s.tiles.map((t,i)=>({t,i,x:i%64,y:Math.floor(i/64)})).filter(p=>p.t===4&&!s.marks.includes(p.i)).sort((a,b)=>Math.hypot(a.x-32,a.y-24)-Math.hypot(b.x-32,b.y-24));
-     s.marks.push(...stones.slice(0,8).map(v=>v.i));
-   }
-   s.focus=s.stock.food<25||s.stock.water<20?"food":s.stock.stone<15?"harvest":"balanced";
-   for(const b of s.buildings)if(b.progress>=1&&!b.project){
-     if(b.hp<DEFS[b.type].hp*.6)startProject(s,b,"repair");
-     else if(["farm","house","tower"].includes(b.type)&&!b.upgraded&&s.stock.stone>45)startProject(s,b,"upgrade");
-   }
-   if(s.sites&&!s.sites.some(v=>v.ordered)) {
-     const site=s.sites.find(v=>!v.done&&v.kind==="cache")||s.sites.find(v=>!v.done&&v.kind==="relic")||s.sites.find(v=>!v.done&&v.kind==="rift");
-     if(site&&s.stock.food>25)exploreSite(s,site);
-   }
-   if(s.relicReady)chooseBlessing(s,"industry");
-   if(s.enemies.length && !s.guardians?.length && s.influence>=25) {
-     const e=s.enemies[0];cast(s,"guardian",Math.floor(e.x),Math.floor(e.y));
-   }
-   run(s,1);
- }
+test("the default Survival world can complete the full supply and frontier campaign",()=>{
+ const {state:s}=playThrough('HEARTH-742',0,'survival');
  assert.equal(s.lost,false,JSON.stringify({day:s.day,events:s.events}));
- assert.equal(next,plan.length);
- assert.equal(campaign(s).index,-1,JSON.stringify({day:s.day,chapter:campaign(s).current,stats:s.stats,sites:s.sites,stock:s.stock}));
+ assert.equal(campaign(s).index,-1,JSON.stringify({chapter:campaign(s).current,stock:s.stock}));
+ assert.ok(s.stats.freight>50);assert.ok(s.stats.crafted>50);
+ assert.ok(s.chapters.includes(7),'The earned frontier milestone persists after later damage');
  assert.ok(s.stock.food>0&&s.stock.water>0);
 });
 
@@ -90,9 +66,9 @@ test("an infirmary treats real injuries and uses supplies",()=>{
  const water=s.stock.water;run(s,30);assert.ok(patient.health>=80);assert.ok(s.stock.water<water);
 });
 test("convoy overflow is retained and open-village reconciliation applies it once",()=>{
- const source=village(),target=village();add(source,"store",25,18);target.stock.wood=180;
+ const source=village(),target=village();add(source,"store",25,18);target.stock.wood=140;
  const openCopy=restore(serialize(target));queueConvoy(source,"target","Target","unique-run-id");source.convoys[0].remaining=0;applyConvoy(source,source.convoys[0],target);
- assert.equal(target.stock.wood,180);assert.equal(target.pendingSupplies.wood,20);
+ assert.equal(target.stock.wood,140);assert.equal(target.pendingSupplies.wood,20);
  reconcileConvoys(openCopy,target);reconcileConvoys(openCopy,target);assert.equal(openCopy.pendingSupplies.wood,20);
- openCopy.stock.wood-=10;tick(openCopy,.1);assert.equal(openCopy.stock.wood,180);assert.equal(openCopy.pendingSupplies.wood,10);
+ openCopy.stock.wood-=10;tick(openCopy,.1);assert.equal(openCopy.stock.wood,140);assert.equal(openCopy.pendingSupplies.wood,10);
 });

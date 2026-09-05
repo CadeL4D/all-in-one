@@ -1,4 +1,4 @@
-const CACHE = "destiny-shell-v18";
+const CACHE = "destiny-shell-v19";
 const BASE = new URL("./", self.location).href;
 const ASSETS = [
   "./",
@@ -7,6 +7,9 @@ const ASSETS = [
   "game.js",
   "world.js",
   "depth.js",
+  "economy.js",
+  "frontier.js",
+  "soundscape.js",
   "industry.js",
   "civic.js",
   "advice.js",

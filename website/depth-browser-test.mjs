@@ -43,7 +43,7 @@ try {
  mkdirSync('test-output',{recursive:true});await p.screenshot({path:'test-output/destiny-industry-desktop.png'});
  assert.equal(errors.length,0,errors.join('\n'));
  // Render a real simulated, naturally generated late village on a phone.
- const livingState=playThrough().state;
+ const livingState=playThrough("HEARTH-742",0,"survival").state;
  livingState.day=21;livingState.time=2000;livingState.stock.meals=24;livingState.stock.stone=100;
  const living=serialize(livingState);
  const phone=await b.newPage({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true});phone.on('pageerror',e=>errors.push(e.message));
@@ -56,7 +56,7 @@ try {
  await phone.screenshot({path:'test-output/destiny-workforce-mobile.png'});
  await phone.getByText('Assign the workforce',{exact:true}).click();await phone.getByText('Visiting caravan',{exact:true}).click();
  await phone.getByText('Explore & reclaim',{exact:true}).click();await phone.screenshot({path:'test-output/destiny-reclaimed-mobile.png'});
- assert.equal(await phone.locator('#exploration-sites button').count(),4);assert.match(await phone.locator('#frontier-status').textContent(),/sealed/);assert.deepEqual(errors,[]);
+ assert.equal(await phone.locator('#exploration-sites button').count(),livingState.sites.length);assert.match(await phone.locator('#frontier-status').textContent(),/Hollow fronts/);assert.deepEqual(errors,[]);
  await phone.reload();await phone.locator('#resume').click();await phone.locator('#pause').click();await phone.locator('#village-open').click();await phone.getByText('Visiting caravan',{exact:true}).click();assert.equal(await phone.locator('[data-caravan="provisions"]').isDisabled(),true);assert.equal(await phone.locator('#workers-artisan').textContent(),'1');
  assert.equal(await phone.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  // A returning village waiting on population still gets direct, useful actions.
