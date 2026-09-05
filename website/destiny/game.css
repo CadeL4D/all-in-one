@@ -1,10 +1,10 @@
 :root {
   color-scheme: dark;
-  --bg: #101a20;
-  --panel: #17262b;
-  --line: #b7c4ad25;
+  --bg: #1c211d;
+  --panel: #252c24;
+  --line: #bca77745;
   --text: #f1ecd8;
-  --dim: #a8b6ad;
+  --dim: #b8bfaa;
   --gold: #e4bd72;
   --mint: #afd1a3;
   --safe: env(safe-area-inset-bottom, 0px);
@@ -1124,14 +1124,18 @@ dialog h2 {
     border-radius: 12px;
   }
   .mission-label {
-    display: none;
+    display: block;
+    font-size: 9px;
+    margin-bottom: 3px;
   }
   #objective {
-    display: block;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 11px;
+    white-space: normal;
+    font-size: 12px;
+    line-height: 1.4;
   }
   .world-wrap:has(.placement:not([hidden])) .mission {
     display: none;
@@ -1174,3 +1178,184 @@ dialog h2 {
     animation: none !important;
   }
 }
+/* Map-first layout: the atlas is the title screen, tools live at the thumb edge. */
+.topbar, body.in-game .topbar { height: calc(44px + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) 10px 0; gap: 8px; }
+.wordmark { font-size: 12px; letter-spacing: 1px; }
+.wordmark small, body.in-game .back { display: none; }
+.top-actions { gap: 2px; }
+.top-actions button { border: 0; background: transparent; }
+#play { height: calc(100dvh - 44px - env(safe-area-inset-top, 0px)); }
+.island-screen { display: block; max-width: 1200px; }
+.title-scene { display: none; }
+.island-content { padding: 24px 24px 30px; }
+.island-content h1 { font-size: 34px; margin: 10px 0; letter-spacing: -.6px; }
+.island-content h1 br { display: none; }
+.intro { margin: 8px 0; }
+.launch-actions { margin: 16px 0; }
+.launch-actions [data-install] { display: none; }
+.land-selection { display: flex; flex-direction: column; gap: 12px; }
+.atlas-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.atlas-heading h2 { font: 22px Georgia; margin: 0; }
+.atlas-heading span { font-size: 11px; color: var(--dim); }
+.atlas-scroll { max-height: 52dvh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: #24454a; padding: 10px; }
+.territory-map { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.territory { position: relative; padding: 0; overflow: hidden; border-radius: 5px; border: 2px solid transparent; background: #335d40; }
+.territory canvas { display: block; width: 100%; image-rendering: pixelated; }
+.territory span { position: absolute; bottom: 0; left: 0; right: 0; padding: 7px 3px; background: #10282be8; font-size: 11px; }
+.territory[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.territory-detail { padding: 14px; background: #1d3035; border: 1px solid var(--line); border-radius: 10px; }
+.territory-detail h3 { margin: 0; color: var(--gold); font-size: 14px; }
+.territory-detail p { color: var(--dim); font-size: 12px; line-height: 1.5; margin: 8px 0; }
+.territory-detail button { width: 100%; }
+.seed-control { margin: 0; }
+.peaceful { margin: 0; }
+.menu-resume { width: 100%; }
+#save-status { color: var(--mint); }
+.saved-villages { display: grid; gap: 6px; }
+.saved-villages button { text-align: left; }
+.saved-villages small { display: block; color: var(--dim); font-size: 10px; margin-top: 4px; overflow-wrap: anywhere; }
+#build-sheet { max-height: 42dvh; }
+#build-sheet .sheet-heading { margin-bottom: 10px; }
+#build-sheet .sheet-heading small, #build-sheet .sheet-hint { display: none; }
+#build-sheet .buildings { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+#build-sheet .buildings button { flex: 0 0 132px; scroll-snap-align: start; }
+#build-sheet .categories { margin-bottom: 10px; }
+.world-wrap:has(~ .sheet:not([hidden])) .placement, .world-wrap:has(~ .sheet:not([hidden])) .mission { display: none; }
+@media (max-width: 700px) {
+  .island-content { padding: 16px 12px 24px; }
+  .island-content h1 { font-size: 27px; max-width: none; }
+  .island-content h1 br { display: block; }
+  .eyebrow { letter-spacing: 1.3px; }
+  .intro { font-size: 12px; line-height: 1.5; }
+  .launch-actions { margin: 12px 0; }
+  .launch-actions #resume { flex-basis: auto; }
+  .atlas-heading { align-items: start; flex-direction: column; gap: 3px; }
+  .atlas-heading h2 { font-size: 20px; }
+  .atlas-scroll { max-height: 38dvh; padding: 6px; }
+  .territory-map { grid-template-columns: repeat(4, minmax(80px, 1fr)); }
+  .territory span { font-size: 9px; padding: 5px 1px; }
+  .resourcebar { height: 34px; }
+  .resource small { font-size: 7px; }
+  .world-wrap { top: 34px; }
+  .time-hud { width: 145px; }
+  .map-controls button { width: 44px; }
+  .placement { gap: 4px; padding: 7px; flex-wrap: nowrap; }
+  .placement > div:first-child { min-width: 0; }
+  .placement strong { font-size: 11px; }
+  .placement small { font-size: 10px; line-height: 1.4; }
+  .placement-buttons { gap: 3px; flex-shrink: 0; }
+  .placement-buttons button { padding: 6px; font-size: 11px; }
+  #build-sheet { padding: 12px; }
+  #build-sheet .sheet-heading h2 { font-size: 20px; }
+  .mission { width: calc(100% - 16px); max-width: 420px; }
+}
+.building-icon { width: 64px; height: 42px; }
+/* The atlas is one landscape. Buttons are survey areas over its shared canvas. */
+.island-screen { max-width: 1500px; }
+.island-content { padding: 20px 22px 24px; }
+.island-content h1 { font-size: 28px; }
+.launch-actions #choose-land { display: none; }
+.launch-actions:has(#resume[hidden]) { display: none; }
+.atlas-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; }
+.atlas-map-panel { min-width: 0; }
+.atlas-heading { align-items: center; }
+.atlas-heading h2 { margin-bottom: 4px; }
+.atlas-tools { display: flex; flex-shrink: 0; gap: 4px; }
+.atlas-tools button { padding: 8px 12px; min-width: 44px; }
+.atlas-scroll { overflow: hidden; height: auto; aspect-ratio: 2; max-height: none; padding: 0; border-radius: 12px; position: relative; background: #315e69; touch-action: pan-x pan-y; overscroll-behavior: contain; scrollbar-width: thin; cursor: grab; }
+.atlas-scroll.atlas-zoomed { overflow: auto; }
+#atlas-board { position: absolute; top: 0; left: 0; width: 100%; aspect-ratio: 2; min-height: 0; user-select: none; }
+#atlas-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.territory-map { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 0; }
+.territory { display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; min-height: 0; min-width: 0; border: 2px solid transparent; border-radius: 0; background: transparent; padding: 2px; overflow: visible; touch-action: pan-x pan-y; }
+.territory:hover { background: #f1deb422; }
+.territory[aria-pressed="true"] { border-color: #f2d18c; box-shadow: inset 0 0 24px #f2d18c55; background: #f2d18c18; }
+.territory.neighbor { outline: 1px dashed #f1deb455; outline-offset: -4px; }
+.territory span { position: static; inset: auto; background: transparent; width: auto; padding: 0; }
+.territory .region-marker { font-size: 12px; line-height: 21px; width: 23px; height: 23px; border-radius: 50%; background: #162d32ed; border: 1px solid var(--danger); color: var(--danger); box-shadow: 0 1px 6px #091b25; }
+.territory .region-name { font-size: 10px; color: #fff1d7; margin-top: 3px; padding: 3px 5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #12282bd9; border-radius: 3px; text-shadow: 0 1px 2px #000; }
+.territory.settled .region-marker { background: #e5bf77; color: #17292b; border-color: #ffe8ad; }
+.atlas-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 2px; font-size: 10px; color: var(--dim); }
+.atlas-legend span:nth-child(1) { color: #b6d39a; }
+.atlas-legend span:nth-child(2) { color: #e5bc71; }
+.atlas-legend span:nth-child(3) { color: #e79182; }
+#world-progress { margin-left: auto; }
+.atlas-sidebar label { color: var(--gold); font-size: 9px; letter-spacing: 1px; }
+.atlas-sidebar select { margin-bottom: 6px; }
+#difficulty-copy { color: var(--dim); font-size: 11px; line-height: 1.6; margin: 0 0 12px; }
+.territory-detail h3 { font: 24px Georgia; }
+.territory-detail .region-biome { font-size: 10px; color: var(--gold); letter-spacing: .6px; }
+.scout-stock { border-top: 1px solid var(--line); padding-top: 8px; }
+.territory-detail .scout-threat { color: #e6c797; }
+.region-neighbors { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0; }
+.region-neighbors small { flex-basis: 100%; font-size: 8px; letter-spacing: 1px; color: var(--dim); margin-bottom: 3px; }
+.territory-detail .region-neighbors button { width: auto; padding: 6px 9px; font-size: 10px; min-height: 44px; }
+.survival-status { padding: 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; line-height: 1.7; color: #e6c797; }
+.bestiary summary { cursor: pointer; padding: 12px 0; color: var(--gold); }
+@media (max-width: 900px) {
+  .atlas-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .atlas-sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .atlas-sidebar > label, .atlas-sidebar > select, #difficulty-copy { grid-column: 1; }
+  .territory-detail { grid-column: 2; grid-row: 1 / 5; }
+}
+@media (max-width: 600px) {
+  .island-content { padding: 12px 10px 22px; }
+  .island-content h1 { font-size: 23px; margin: 8px 0; }
+  .intro { font-size: 11px; margin-bottom: 12px; }
+  .atlas-heading { flex-direction: row; gap: 6px; }
+  .atlas-heading h2 { font-size: 17px; }
+  .atlas-heading span { font-size: 9px; }
+  .atlas-tools { gap: 2px; }
+  .atlas-tools button { padding: 5px 8px; font-size: 10px; }
+  .atlas-tools #atlas-fit { min-width: 64px; }
+  #atlas-board { top: 0; }
+  .territory .region-name { font-size: 8px; padding: 2px; }
+  .territory .region-marker { font-size: 10px; width: 19px; height: 19px; line-height: 17px; }
+  .atlas-legend { gap: 7px; font-size: 9px; }
+  .atlas-sidebar { display: block; }
+  .territory-detail { padding: 12px; }
+  .territory-detail h3 { font-size: 22px; }
+  .territory-detail p { font-size: 11px; }
+}
+
+.building-purpose { display: block; font-size: 10px; line-height: 1.4; margin-top: 6px; color: var(--dim); }
+.buildings button.recommended { border-color: var(--gold); }
+
+#campaign-roadmap details { margin: 8px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+#campaign-roadmap summary { cursor: pointer; min-height: 32px; color: var(--gold); }
+#campaign-roadmap li { margin: 8px 0; line-height: 1.5; }
+#upgrade-building, #repair-building { display: block; width: 100%; margin: 8px 0; min-height: 48px; white-space: normal; }
+#upgrade-building[hidden], #repair-building[hidden] { display: none; }
+
+#build-sheet .buildings { touch-action: pan-x; overscroll-behavior-x: contain; scroll-snap-type: x proximity; cursor: grab; user-select: none; }
+#build-sheet .buildings button { touch-action: pan-x; }
+#build-sheet .sheet-hint { display: block; font-size: 12px; margin: 6px 0 0; }
+
+.depth-panel { padding: 12px; margin: 8px 0; border: 1px solid var(--line); border-radius: 10px; }
+.depth-panel summary { color: var(--gold); min-height: 32px; cursor: pointer; }
+.depth-panel button, #explore-site, #production-toggle { min-height: 44px; width: 100%; margin: 4px 0; text-align: left; white-space: normal; }
+.depth-panel p, #settlement-pulse { font-size: 13px; line-height: 1.6; }
+#worker-roster button { font-size: 12px; }
+#production-controls select { width: auto; min-width: 80px; }
+
+.territory.reclaimed .region-marker { color: #fff2bd; background: #52664a; box-shadow: 0 0 0 2px #e8cb85; }
+.workforce-row { display: grid; grid-template-columns: 1fr 44px 32px 44px; align-items: center; gap: 6px; margin-top: 8px; }
+.workforce-row button { text-align: center; padding: 5px; }
+.workforce-row output { text-align: center; color: var(--gold); font-weight: bold; }
+
+/* Shallow timber-colored frames keep the map prominent on a phone. */
+.topbar, body.in-game .topbar, .resourcebar, .dock { background: #20271f; border-color: #736348; }
+.sheet, dialog { background: #252d24f7; border-color: #98845b; border-radius: 6px; box-shadow: inset 0 0 0 2px #121b17, 0 6px 24px #0005; }
+.time-hud, .map-controls, .mission, .placement { background: #202b22f0; border-color: #8d7952; border-radius: 5px; box-shadow: inset 0 0 0 1px #d0bc7833; }
+.depth-panel { border-radius: 4px; background: #1d261f70; }
+button, select, input { border-radius: 4px; }
+button { background: #354035; }
+button:hover { background: #455043; }
+button.primary, .primary { background: var(--gold); }
+button.active { background: #bccd9a; }
+.dock button.active { border-radius: 4px; box-shadow: inset 0 0 0 1px #cfbc7a80; }
+#opportunities { display: grid; gap: 8px; margin: 12px 0; }
+#opportunities button { display: block; text-align: left; padding: 12px; border-left: 3px solid var(--gold); }
+#opportunities strong, #opportunities span { display: block; }
+#opportunities span { margin-top: 5px; color: var(--dim); font-size: 12px; line-height: 1.5; font-weight: normal; }
+#prioritize-building, #pause-building { width: 100%; margin: 5px 0; }

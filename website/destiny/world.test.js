@@ -90,9 +90,10 @@ test("founding, construction, cost and placement rejection", () => {
   assert.ok(place(s, "hearth", 30, 23));
   assert.equal(serialize(s), snapshot);
   assert.ok(canPlace(s, "house", 0, 0, 0));
+  const before = s.stock.wood;
   const b = build(s, "house");
   assert.equal(b.progress, 1);
-  assert.equal(s.stock.wood, 81);
+  assert.equal(s.stock.wood, before - 14);
 });
 test("harvest physically returns materials and removes deposit", () => {
   const s = setup();

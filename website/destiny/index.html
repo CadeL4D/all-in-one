@@ -46,7 +46,7 @@
           width="960"
           height="720"
           tabindex="0"
-          aria-label="Interactive village. Drag to pan, pinch to zoom. Choose a tool, tap a tile, then Confirm. Arrow keys move the cursor; Enter confirms."
+          aria-label="Interactive village. Drag to pan, pinch to zoom. Drag to paint resources in Harvest mode. Drag a building preview, release, then Build. Use two fingers to pan and pinch. Arrow keys move the cursor; Enter confirms."
         ></canvas>
         <div class="map-title">
           <span class="live-dot"></span><span id="map-label">THE WILDS</span>
@@ -77,7 +77,7 @@
           id="goal-open"
           aria-label="View current objective in Village"
         >
-          <span class="mission-label">YOUR NEXT STEP</span>
+          <span class="mission-label" id="chapter">YOUR NEXT STEP</span>
           <span id="objective"></span>
         </button>
         <div id="notice" role="status" aria-live="polite"></div>
@@ -88,7 +88,7 @@
             ><small id="placement-info">Tap open ground to choose a site</small>
           </div>
           <div class="placement-buttons">
-            <button id="rotate" aria-label="Rotate building">↻</button
+            <button id="undo-harvest" hidden aria-label="Undo last harvest marks">Undo</button><button id="brush-cycle" hidden aria-label="Change harvest area">3 × 3</button><button id="rotate" aria-label="Rotate building">↻</button
             ><button id="cancel-placement" aria-label="Cancel placement">
               ×</button
             ><button id="confirm-placement" class="primary">Confirm ✓</button>
@@ -111,7 +111,7 @@
         <div class="sheet-heading">
           <div>
             <small>SHAPE YOUR SETTLEMENT</small>
-            <h2>Every home starts here.</h2>
+            <h2>Build your village.</h2>
           </div>
           <button data-close-sheet aria-label="Close buildings">×</button>
         </div>
@@ -123,7 +123,7 @@
         </div>
         <div id="buildings" class="buildings"></div>
         <p class="sheet-hint">
-          Choose a building → tap the map → rotate → confirm.
+          Swipe to browse buildings. Drag walls or trails into a line, then Build. Use two fingers to move the map.
         </p>
       </section>
       <section class="sheet" id="powers-sheet" hidden aria-label="Powers">
@@ -154,7 +154,7 @@
           <button data-close-sheet aria-label="Close harvest options">×</button>
         </div>
         <p>
-          Choose a brush, tap trees or stone on the map, then confirm. Workers
+          Choose a brush and drag over trees or stone. Lift to mark the whole stroke; Undo removes it. Use two fingers to move the map. Workers
           harvest only marked resources with a reachable edge.
         </p>
         <div class="categories">
@@ -180,7 +180,16 @@
         <p id="region-copy"></p>
         <h3>Your next step</h3>
         <p id="village-objective"></p>
-        <p id="village-weather" class="sheet-hint"></p>
+        <p id="settlement-pulse"></p>
+        <section id="opportunity-section"><h3>Worth doing now</h3><div id="opportunities"></div></section>
+        <details class="depth-panel"><summary>Assign the workforce</summary><div id="workforce-controls"></div><p id="workforce-summary"></p></details>
+        <details class="depth-panel" id="caravan-panel"><summary>Visiting caravan</summary><p id="caravan-status"></p><div id="caravan-offers"></div></details>
+        <details class="depth-panel"><summary>Industry & supplies</summary><p id="crafted-stock"></p><p>Timber → sawmill → planks → forge → tools. Equipped workers finish jobs 25% faster. Meals replace two food at dawn. Tap a workshop to pause it or set a stock target.</p><div id="industry-status"></div><label>Reserve tools for expeditions <select id="tool-reserve"><option value="0">None · equip everyone first</option><option value="2" selected>2 tools</option><option value="6">6 tools</option></select></label><label><input id="camp-gather" type="checkbox" checked> Gather nearby camp supplies automatically</label></details>
+        <details class="depth-panel" id="exploration-panel"><summary>Explore & reclaim</summary><p id="frontier-status"></p><div id="exploration-sites"></div><p id="blessing-status"></p><div id="blessings" hidden><button data-blessing="industry">Industry · 10% faster work</button><button data-blessing="shelter">Shelter · faster rest</button><button data-blessing="sentinel">Sentinel · +3 tower damage</button></div></details>
+        <details class="depth-panel" id="convoy-panel"><summary>Neighboring villages & convoys</summary><p>A storehouse can send 20 timber, 15 stone, 15 food and 15 water to another settled neighboring region in this world and difficulty. Convoys take 30 seconds while this village is active; the receiving village keeps its supplies between visits.</p><select id="convoy-target" aria-label="Convoy destination"><option value="">Choose a neighboring village</option></select><button id="send-convoy">Send supply convoy</button><p id="convoy-status"></p></details>
+        <details class="depth-panel"><summary>The people of your village</summary><div id="worker-roster"></div></details>
+        <h3>Your journey · six chapters</h3><div id="campaign-roadmap"></div>
+        <p id="village-weather" class="sheet-hint"></p><div id="survival-status" class="survival-status"></div>
         <div id="population" class="population"></div>
         <label for="work-focus">WORK PRIORITY</label
         ><select id="work-focus">
@@ -198,6 +207,7 @@
           <h3>A place for everyone.</h3>
           <p id="promise-state"></p>
         </div>
+        <h3>Plan for the season</h3><p id="season-status"></p><p>Tap a farm, well, cottage, storehouse or tower to improve it. Projects use materials and a worker; repairs restore 60 condition. Each season lasts four days.</p>
         <h3>The village chronicle</h3>
         <ol id="events"></ol>
       </section>
@@ -212,6 +222,10 @@
           ><button data-close-sheet aria-label="Close inspector">×</button>
         </div>
         <div id="inspector"></div>
+        <button id="prioritize-building" hidden>Prioritize this building</button><button id="pause-building" hidden>Pause production</button><button id="explore-site" hidden>Send an expedition →</button>
+        <div id="production-controls" hidden><p id="production-status"></p><label>Keep in store <select id="production-target"><option value="12">12</option><option value="24">24</option><option value="48">48</option></select></label><button id="production-toggle">Pause production</button></div>
+        <button id="upgrade-building" hidden></button>
+        <button id="repair-building" hidden>Repair +60 condition · 4 timber / 2 stone</button>
         <button id="demolish">Dismantle selected structure</button>
       </section>
       <p id="tool-tip" class="sr-only"></p>
@@ -228,18 +242,34 @@
         <span class="coordinate">THE UNWRITTEN ISLES / 01</span>
       </div>
       <div class="island-content">
-        <p class="eyebrow">A LITTLE WORLD. AN ENTIRE STORY.</p>
-        <h1>Build a home.<br /><em>Hold back the wild.</em></h1>
+        <p class="eyebrow">THE UNWRITTEN LANDS · ONE WORLD, 24 REGIONS</p>
+        <h1>A world waiting <em>for a hearth.</em></h1>
         <p class="intro">
-          A village of tiny lives, in your hands.<br />Gather. Build. Grow.
-          Survive the night.
+          Follow the rivers. Scout the frontier. Choose where your story begins.
         </p>
         <div class="launch-actions">
           <button id="resume" class="primary" hidden>Continue village →</button
-          ><button id="choose-land">Begin a new story ↓</button
+          ><button id="choose-land">Explore the world ↓</button
           ><button data-install>Install game ↗</button>
         </div>
         <div class="land-selection" id="land-selection">
+          <div class="atlas-heading"><div><h2>Explore the world</h2><span>Drag to explore · tap a region to scout</span></div>
+            <div class="atlas-tools"><button id="atlas-out" aria-label="Zoom world map out">−</button><button id="atlas-fit">Whole world</button><button id="atlas-in" aria-label="Zoom world map in">+</button></div>
+          </div>
+          <div class="atlas-layout">
+            <div class="atlas-map-panel">
+              <div class="atlas-scroll" id="atlas-scroll" tabindex="0" aria-label="Scrollable world map">
+                <div id="atlas-board"><canvas id="atlas-canvas" aria-label="Continuous world terrain with coast, rivers, forests and mountains"></canvas><div id="territory-map" class="territory-map" aria-label="World atlas, 24 connected regions"></div></div>
+              </div>
+              <div class="atlas-legend"><span>● Sheltered west</span><span>● Wild heartlands</span><span>● Hostile frontier</span><span id="world-progress"></span></div>
+            </div>
+            <div class="atlas-sidebar">
+              <label for="difficulty">CHOOSE YOUR CHALLENGE</label>
+              <select id="difficulty"><option value="peaceful">Peaceful · no monsters</option><option value="settler">Settler · a gentler start</option><option value="survival" selected>Survival · the intended challenge</option><option value="onslaught">Onslaught · relentless nights</option></select>
+              <p id="difficulty-copy"></p>
+              <div id="territory-detail" class="territory-detail" aria-live="polite"></div>
+            </div>
+          </div>
           <div class="seed-control">
             <label for="seed">WORLD SEED</label
             ><input id="seed" value="HEARTH-742" maxlength="40" /><button
@@ -249,15 +279,10 @@
               ↻
             </button>
           </div>
-          <label class="peaceful"
-            ><input type="checkbox" id="peaceful" /> Peaceful world
-            <small>No raids. Build at your own pace.</small></label
-          >
-          <div id="regions" class="regions"></div>
+          <div id="regions" class="regions" hidden></div>
         </div>
         <p class="prototype-note">
-          An original village survival game · Early playable<br />One settlement
-          per save. More of the island is still to come.
+          An original village survival game · Early playable<br />One landscape, connected regions. Each region and difficulty keeps its own village; only the village you play advances.
         </p>
         <a href="../" class="hub-link">← Back to One Hub</a>
       </div>
@@ -270,17 +295,17 @@
         </div>
         <button data-close-dialog aria-label="Close menu">×</button>
       </div>
-      <div class="menu-grid">
-        <button id="save">Save village</button
+      <button id="return-game" class="primary menu-resume">Back to village →</button><p id="save-status" role="status">Your progress saves every 20 seconds.</p><div class="menu-grid">
+        <button id="save">Save now</button
         ><button id="sound" aria-pressed="false">Sound off</button
         ><button id="fullscreen">Full screen</button
         ><button data-install>Install game</button
-        ><button id="export-save">Export save</button
-        ><button id="import-save">Import save</button
-        ><button id="atlas">Return to island</button
+        ><button id="export-save">Download backup</button
+        ><button id="import-save">Load backup</button
+        ><button id="atlas">Explore territories</button
         ><button id="apply-update" hidden>Save & update</button>
       </div>
-      <input
+      <h3>Your villages</h3><div id="saved-villages" class="saved-villages"></div><input
         id="import-file"
         type="file"
         accept=".json,application/json"
@@ -301,8 +326,8 @@
       <h2>A living village.<br />A watchful hand.</h2>
       <div class="guide-steps">
         <p>
-          <b>01 · Find your clearing</b>Choose a building, tap the map to
-          preview, then Confirm. Drag to move your view; pinch to zoom. Rotate
+          <b>01 · Find your clearing</b>Choose a building, drag its
+          preview into place, then Build. Use two fingers to pan or pinch to zoom. Rotate
           irregular buildings to fit them together.
         </p>
         <p>
@@ -311,13 +336,12 @@
           their journeys.
         </p>
         <p>
-          <b>03 · Keep the work moving</b>Mark trees and stone with the harvest
-          brush. A Beamwright or quarry marks nearby deposits automatically.
+          <b>03 · Keep the work moving</b>Paint over trees and stone with the harvest
+          brush. Lift to send workers; Undo removes the last stroke. A Beamwright or quarry marks nearby deposits automatically.
           Change worker priorities in Village.
         </p>
         <p>
-          <b>04 · Prepare for dusk</b>Raids begin on day 3, then every other
-          day. Towers need stone to fire. Walls shape enemy routes. Don’t seal
+          <b>04 · Prepare for dusk</b>Your difficulty sets the first raid and its pace. The Village panel forecasts the next wave and its stone cost. Towers need stone to fire. Walls shape enemy routes. Don’t seal
           your workers inside.
         </p>
         <p>
@@ -329,7 +353,7 @@
         First chapter: shelter eight villagers, build a field, well, and garden,
         and reach day 4 with supplies. Keep growing after the milestone.
       </p>
-      <button id="start-guide" class="primary">Place the first hearth →</button>
+      <details class="bestiary"><summary>Know your enemies and supplies</summary><div id="balance-guide"></div></details><button id="start-guide" class="primary">Place the first hearth →</button>
     </dialog>
     <dialog id="install-guide">
       <div class="sheet-heading">
