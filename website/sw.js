@@ -1,25 +1,22 @@
-const CACHE = "onehub-shell-v2",
+const CACHE = "onehub-shell-v3",
   BASE = new URL("./", self.location).href;
 const ASSETS = [
   "./",
   "index.html",
   "home.css",
   "home.js",
-  "cover.js",
   "manifest.webmanifest",
   "icons/icon-192.png",
   "icons/icon-512.png",
   "icons/maskable-512.png",
   "icons/apple-touch-icon.png",
-  "destiny/world.js",
-  "destiny/art.js",
   "tasks.html",
   "tasks.css",
   "tasks.js",
   "styles.css",
 ].map((p) => new URL(p, BASE).href);
 self.addEventListener("install", (e) =>
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS))),
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map(url => new Request(url, { cache: "reload" }))))),
 );
 self.addEventListener("activate", (e) =>
   e.waitUntil(

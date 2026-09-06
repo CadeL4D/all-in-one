@@ -22,8 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test simulation
-        run: node --test website/destiny/*.test.js website/site-build.test.mjs
+      - name: Test site packaging
+        run: node --test website/site-build.test.mjs
       - name: Assemble static site
         run: node website/build-site.mjs
       - name: Install browser test tools
@@ -31,7 +31,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-      - name: Check the published game and offline reload
+      - name: Check the published hub and offline reload
         run: node website/site-smoke.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

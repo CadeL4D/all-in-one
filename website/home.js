@@ -14,18 +14,6 @@ document.querySelectorAll("[data-filter]").forEach(
         );
     }),
 );
-try {
-  const save = JSON.parse(localStorage.getItem("destiny-to-yours-v1"));
-  if (save?.version === 1 && Array.isArray(save.people) && save.people.length) {
-    document.getElementById("game-link").textContent = "Continue ↗";
-    document.getElementById("game-status").textContent =
-      "Your village · Day " +
-      Math.floor(save.day) +
-      " · " +
-      save.people.length +
-      " villagers";
-  }
-} catch {}
 let installPrompt = null;
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
@@ -43,8 +31,8 @@ async function install() {
   ).matches
     ? "One Hub is already installed."
     : /iPhone|iPad|iPod/.test(navigator.userAgent)
-      ? "In Safari, open Share → Add to Home Screen → Add. Install Destiny from inside the game for its own offline app."
-      : "Open the browser menu and choose Install app or Add to Home screen. Install Destiny from its game menu for a dedicated offline game.";
+      ? "In Safari, open Share → Add to Home Screen → Add."
+      : "Open the browser menu and choose Install app or Add to Home screen.";
   document.getElementById("hub-install-guide").showModal();
 }
 document.getElementById("hub-install").onclick = install;

@@ -4,8 +4,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
-  for (const app of ["destiny", "hub"]) {
-    const dir = app === "destiny" ? "destiny/icons" : "icons";
+  for (const app of ["hub"]) {
+    const dir = "icons";
     await mkdir(dir, { recursive: true });
     for (const [name, size] of [
       ["icon-192", 192],
@@ -24,26 +24,8 @@ try {
             g.fillStyle = color;
             g.fillRect(x, y, w, h);
           };
-          r(app === "destiny" ? "#15282c" : "#161b28", 0, 0, 64, 64);
-          if (app === "destiny") {
-            r("#344d3f", 10, 43, 44, 7);
-            r("#60784c", 14, 40, 36, 6);
-            r("#c7b081", 21, 29, 24, 17);
-            r("#a17e51", 40, 30, 5, 16);
-            r("#5c4031", 16, 26, 34, 7);
-            r("#b26c48", 19, 23, 28, 7);
-            r("#dfa665", 23, 19, 20, 5);
-            r("#f2d295", 27, 16, 12, 4);
-            r("#665039", 29, 35, 7, 11);
-            r("#efd397", 23, 34, 4, 5);
-            r("#9b987b", 39, 17, 4, 9);
-            r("#77975c", 12, 30, 6, 11);
-            r("#abc780", 13, 27, 4, 6);
-            r("#d8c789", 47, 15, 2, 13);
-            r("#edc975", 49, 15, 7, 5);
-            r("#e5ca80", 30, 8, 2, 4);
-            r("#e5ca80", 29, 9, 4, 2);
-          } else {
+          r("#161b28", 0, 0, 64, 64);
+          {
             for (const [x, y, color] of [
               [17, 17, "#c4d595"],
               [34, 17, "#e2bd79"],

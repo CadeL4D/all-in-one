@@ -34,7 +34,7 @@ export function validateSite(output){
 export function buildSite(output){
   const target=resolve(output);mkdirSync(target,{recursive:true});
   if(readdirSync(target).length)throw Error('Build output must be empty: '+target);
-  for(const folder of ['', 'destiny']){
+  for(const folder of ['']){
     const from=join(source,folder),to=join(target,folder);mkdirSync(to,{recursive:true});
     for(const entry of readdirSync(from,{withFileTypes:true}))if(entry.isFile()&&publicFile(entry.name))copyFileSync(join(from,entry.name),join(to,entry.name));
     cpSync(join(from,'icons'),join(to,'icons'),{recursive:true});
