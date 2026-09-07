@@ -22,8 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test site packaging
-        run: node --test website/site-build.test.mjs
+      - name: Test site packaging and game sim
+        run: node --test website/ruins/*.test.js website/site-build.test.mjs
       - name: Assemble static site
         run: node website/build-site.mjs
       - name: Install browser test tools

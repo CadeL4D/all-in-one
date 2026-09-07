@@ -41,7 +41,7 @@
           your pocket. Big enough for your imagination.
         </p>
         <div class="collection-count">
-          <span>01</span> experience &nbsp; / &nbsp; no account needed
+          <span>02</span> experiences &nbsp; / &nbsp; no account needed
         </div>
       </section>
       <section id="library">
@@ -49,10 +49,48 @@
           <h2>Your library</h2>
           <div class="filters">
             <button data-filter="all" class="active">All</button
+            ><button data-filter="game">Games</button
             ><button data-filter="tool">Tools</button>
           </div>
         </div>
         <div class="cards">
+          <article class="card game-card" data-kind="game">
+            <a class="art-link" href="ruins/"
+              ><div class="art">
+                <canvas
+                  id="cover"
+                  width="768"
+                  height="360"
+                  aria-label="Original pixel-art village scene"
+                ></canvas>
+                <div class="art-shade"></div>
+                <span class="badge"><i></i> PLAYABLE · OFFLINE READY</span>
+                <div class="art-title">
+                  <span>SETTLE THE WILDS</span>
+                  <h2>Pocket<br />Ruins<span>✦</span></h2>
+                </div>
+                <span class="round-play" aria-hidden="true">▶</span>
+              </div></a
+            >
+            <div class="card-bottom">
+              <div>
+                <p class="eyebrow">VILLAGE SIM / HANDS-OFF</p>
+                <h3>They live their own lives.</h3>
+                <p>
+                  Place the buildings. Set the job counts. Your villagers chop,
+                  plant, and wander on their own — one dawn autosave at a time.
+                </p>
+                <div class="tags">
+                  <span>Pixel art</span><span>Auto-saves</span
+                  ><span>Install & play</span>
+                </div>
+              </div>
+              <a class="play-button" href="ruins/">Play now ↗</a>
+            </div>
+            <div class="card-status" id="game-status">
+              A fresh island grows while you watch.
+            </div>
+          </article>
           <article class="card tool-card" data-kind="tool">
             <a href="tasks.html" class="tool-link"
               ><div class="task-art">
@@ -105,6 +143,7 @@
       <h2>One tap away.</h2>
       <p id="hub-install-copy"></p>
     </dialog>
+    <script type="module" src="cover.js"></script>
     <script type="module" src="home.js"></script>
   </body>
 </html>

@@ -1,0 +1,33 @@
+{
+  "id": "./",
+  "name": "Pocket Ruins",
+  "short_name": "Ruins",
+  "description": "Settle the wilds: place buildings, set job counts, and watch your villagers live their own lives. An original offline village sim.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#131c16",
+  "theme_color": "#15201a",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

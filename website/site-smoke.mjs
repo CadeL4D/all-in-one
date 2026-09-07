@@ -20,14 +20,28 @@ try{
  const page=await browser.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
  await page.goto(`http://127.0.0.1:${server.address().port}/all-in-one/`);
- assert.equal(await page.locator('.card').count(),1);
+ assert.equal(await page.locator('.card').count(),2,'two library cards');
  assert.equal(await page.locator('a[href="destiny/"]').count(),0);
- await page.locator('.tool-button').click();
+ // The game card draws its cover and links into the ruins.
+ await page.waitForFunction(() => document.querySelector('#cover')?.getContext('2d') !== null);
+ await page.locator('a[href="ruins/"]').first().click();
+ await page.waitForURL('**/ruins/');
+ await page.waitForSelector('#world canvas, canvas#world');
+ await page.waitForFunction(() => document.getElementById('day')?.textContent?.includes('Day'), null, {timeout: 10000});
+ await page.waitForFunction(() => {
+   const chips = document.querySelectorAll('.res-chip').length;
+   return chips >= 4 && document.querySelector('#toasts, #hint') !== null;
+ }, null, {timeout: 10000});
+ assert.deepEqual(errors,[]);
+ // Back to the hub, then prove the whole thing works offline.
  await page.getByRole('link', {name:'One Hub home', exact:true}).click();
  await page.evaluate(()=>navigator.serviceWorker.ready.then(()=>true));
  await page.reload();
  await page.context().setOffline(true);await page.reload();
- assert.equal(await page.locator('.card').count(),1);
+ assert.equal(await page.locator('.card').count(),2);
+ // And the game boots offline too.
+ await page.goto(`http://127.0.0.1:${server.address().port}/all-in-one/ruins/`);
+ await page.waitForFunction(() => document.getElementById('day')?.textContent?.includes('Day'), null, {timeout: 10000});
  assert.deepEqual(errors,[]);
- console.log('PASS: hub, task navigation, and offline reload.');
+ console.log('PASS: hub, ruins game, and offline reload.');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"
+    />
+    <meta name="theme-color" content="#15201a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta
+      name="description"
+      content="Settle the wilds: place buildings, set job counts, and watch your villagers live their own lives. An original offline village sim."
+    />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="icon" href="icons/icon-192.png" />
+    <title>Pocket Ruins</title>
+    <link rel="stylesheet" href="game.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="back" href="../" aria-label="One Hub home">◈</a>
+      <div class="wordmark">
+        POCKET <i>RUINS</i> <small>SETTLE THE WILDS</small>
+      </div>
+      <div class="top-actions">
+        <button id="help" aria-label="How to play">?</button
+        ><button id="open-menu" aria-label="Game menu">☰</button>
+      </div>
+    </header>
+    <main id="play">
+      <div class="resourcebar" id="resources" aria-label="Village supplies"></div>
+      <section class="world-wrap" aria-label="Village map">
+        <canvas
+          id="world"
+          tabindex="0"
+          aria-label="Your village. Drag to pan, pinch to zoom, tap villagers or buildings to inspect."
+        ></canvas>
+        <div class="time-hud">
+          <div class="day-block">
+            <b id="day">Day 1</b>
+            <span id="clockphase">Dawn</span>
+          </div>
+          <div class="daytrack" aria-hidden="true"><i id="day-progress"></i></div>
+          <div class="speed" role="group" aria-label="Simulation speed">
+            <button id="pause" aria-label="Pause simulation">❚❚</button>
+            <button data-speed="1">1×</button>
+            <button data-speed="2">2×</button>
+            <button data-speed="3">3×</button>
+          </div>
+        </div>
+        <div class="map-controls">
+          <button id="zoom-out" aria-label="Zoom out">−</button
+          ><button id="zoom-in" aria-label="Zoom in">+</button
+          ><button id="center" aria-label="Center on camp">⌖</button>
+        </div>
+        <div id="hint" role="status" hidden></div>
+        <div id="toasts"></div>
+      </section>
+      <nav class="dock" aria-label="Village tools">
+        <button id="look" class="active"><span>⌖</span>Look</button
+        ><button id="build-open"><span>⌂</span>Build</button
+        ><button id="jobs-open"><span>⚗</span>Jobs</button>
+      </nav>
+      <div id="placement" hidden>
+        <div>
+          <strong id="placement-name">Home</strong
+          ><small id="placement-info">Drag the ghost, then confirm</small>
+        </div>
+        <div class="placement-buttons">
+          <button id="cancel-placement" aria-label="Cancel placement">×</button
+          ><button id="confirm-placement" class="primary">Confirm ✓</button>
+        </div>
+      </div>
+      <div id="build-sheet" class="sheet" hidden>
+        <div class="sheet-head">
+          <h2>Build</h2>
+          <button class="sheet-close" aria-label="Close build menu">×</button>
+        </div>
+        <div class="sheet-body" id="build-cards"></div>
+      </div>
+      <div id="jobs-sheet" class="sheet" hidden>
+        <div class="sheet-head">
+          <h2>Jobs</h2>
+          <button class="sheet-close" aria-label="Close jobs menu">×</button>
+        </div>
+        <div class="sheet-body">
+          <p class="sheet-note" id="jobs-unemployed"></p>
+          <p class="sheet-note">
+            Villagers pick their own work — you only set how many hands each
+            job gets.
+          </p>
+          <div id="job-rows"></div>
+        </div>
+      </div>
+      <div id="inspector" class="sheet" hidden>
+        <div class="sheet-head">
+          <h2 id="inspector-title">Inspect</h2>
+          <button class="sheet-close" aria-label="Close inspector">×</button>
+        </div>
+        <div class="sheet-body" id="inspector-body"></div>
+      </div>
+      <dialog id="menu-dialog">
+        <button class="dialog-close" id="menu-close" aria-label="Close menu"
+          >×</button
+        >
+        <h2>Pocket Ruins</h2>
+        <p class="menu-note">
+          An original village sim. Your villagers live their own lives — you
+          place the buildings, set the job counts, and watch.
+        </p>
+        <div class="menu-buttons">
+          <button id="menu-save">Save now</button
+          ><button id="menu-help">How to play</button
+          ><button id="menu-restart" class="danger">Start a new island</button>
+        </div>
+        <p class="menu-tiny" id="save-note">Progress saves itself at dawn.</p>
+      </dialog>
+      <dialog id="help-dialog">
+        <button class="dialog-close" id="help-close" aria-label="Close help"
+          >×</button
+        >
+        <h2>How to play</h2>
+        <ol class="help-list">
+          <li>
+            <b>Drag to look around, pinch to zoom.</b> Your eight villagers are
+            already busy around the camp.
+          </li>
+          <li>
+            <b>Build a Well</b> for clean water, then a <b>Farm</b> so farmers
+            grow food, and a <b>Sawpit</b> for wood.
+          </li>
+          <li>
+            <b>Open Jobs</b> to set how many villagers hold each job. They
+            walk, chop, plant, and haul on their own.
+          </li>
+          <li>
+            <b>Watch the bubbles.</b> A hungry villager eats from storage; a
+            tired one sleeps — if they have a Home.
+          </li>
+          <li>
+            <b>Wanderers arrive most days.</b> They join if you have supplies
+            and work to give. Housed couples raise children.
+          </li>
+        </ol>
+        <p class="menu-tiny">
+          Everything saves on its own — leave anytime, one day at 2× is a
+          three-minute session.
+        </p>
+      </dialog>
+      <dialog id="confirm-dialog">
+        <h2 id="confirm-title">Are you sure?</h2>
+        <p id="confirm-body"></p>
+        <div class="menu-buttons">
+          <button id="confirm-no">Keep it</button
+          ><button id="confirm-yes" class="danger">Yes, do it</button>
+        </div>
+      </dialog>
+    </main>
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

@@ -10,6 +10,8 @@ test('published hub includes its assets and excludes the removed game',()=>{
  for(const file of ['index.html','home.js','tasks.html','tasks.js'])assert.equal(existsSync(join(target,file)),true,file);
  assert.equal(existsSync(join(target,'destiny')),false);
  assert.equal(existsSync(join(target,'package.json')),false);
+ assert.equal(existsSync(join(target,'ruins/index.html')),true,'the ruins game is published');
+ assert.equal(existsSync(join(target,'ruins/main.js')),true);
  assert.ok(validateSite(target)>10);
  unlinkSync(join(target,'home.js'));
  assert.throws(()=>validateSite(target),/Missing published asset.*home\.js/);
