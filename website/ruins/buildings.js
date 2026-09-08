@@ -73,6 +73,7 @@ function totalCost(def) {
 
 export function siteComplete(state, building) {
   building.complete = true;
+  state.stats.built++;
   const def = BUILDINGS[building.type];
   // A finished farm claims its crop plots on nearby open grass.
   if (def.plots) {

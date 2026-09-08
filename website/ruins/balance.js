@@ -80,7 +80,9 @@ export const RESOURCES = ["wood", "food", "water"];
 // RtR hands you up to 64 starting supplies incl. wood (Update 2 notes);
 // 64 wood covers well+farm+sawpit with margin - no bootstrap deadlock.
 export const START_RESOURCES = { wood: 64, food: 24, water: 30 };
-export const CAMP_STORAGE = 40;
+export const CAMP_STORAGE = 80; // holds the 64 starting wood (research camp
+// tiers reach 86 slots); keeps boot supplies inside the cap so the HUD
+// doesn't warn on day 1
 export const STOREHOUSE_STORAGE = 60;
 export const HOME_STORAGE = 6;
 // Guides: ~2 wells for the first 10-20 villagers. A villager burns 70
