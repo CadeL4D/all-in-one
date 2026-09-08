@@ -1,4 +1,4 @@
-const CACHE = "ruins-shell-v1";
+const CACHE = "ruins-shell-v2";
 const BASE = new URL("./", self.location).href;
 const ASSETS = [
   "./",
@@ -16,6 +16,8 @@ const ASSETS = [
   "clock.js",
   "world.js",
   "path.js",
+  "corruption.js",
+  "monsters.js",
   "rng.js",
   "pwa.js",
   "manifest.webmanifest",

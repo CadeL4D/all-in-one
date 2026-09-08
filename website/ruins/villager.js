@@ -23,11 +23,13 @@ export function createVillager(state, x, y, age = "adult") {
     workBuilding: null,
     home: null,
     carrying: null,
+    carryAmount: 0,
     path: [],
     task: null,
     bubble: null,
     bubbleUntil: 0,
     activity: "Arriving",
+    attackCd: 0, // melee swing cooldown when raiders close in
     growTick: age === "child" ? state.clock.tick + B.ADULT_AGE_DAYS * B.DAY_TICKS : -1,
     facing: 1,
   };
@@ -104,7 +106,7 @@ export function tickVillager(state, v, dt) {
 function isWorking(v) {
   return (
     v.task &&
-    ["chop", "plant", "harvestPlot", "harvestBush", "build", "fetch", "deliver"].includes(v.task.kind)
+    ["chop", "mine", "plant", "harvestPlot", "harvestBush", "build", "fetch", "deliver"].includes(v.task.kind)
   );
 }
 
@@ -251,6 +253,7 @@ function jobWork(state, v) {
   if (v.carrying) return startHaul(state, v);
   if (v.job === "woodcutter" && state.resources.wood >= cap) return false;
   if (v.job === "farmer" && state.resources.food >= cap) return false;
+  if (v.job === "stonecutter" && state.resources.stone >= cap) return false;
   if (!state.flags.storageFull && state.resources.wood >= cap && state.resources.food >= cap) {
     state.flags.storageFull = true;
     state.events.push({ type: "storage-full" });
@@ -265,6 +268,17 @@ function jobWork(state, v) {
       def.radius,
     );
     if (tree >= 0) return startGotoTile(state, v, { kind: "chop", target: tree, workLeft: B.CHOP_TICKS }, tree);
+  }
+
+  if (v.job === "stonecutter") {
+    const def = B.BUILDINGS[workAt.type];
+    const rock = nearestTile(
+      state.world,
+      state.world.rocks,
+      workAt.x, workAt.y,
+      def.radius,
+    );
+    if (rock >= 0) return startGotoTile(state, v, { kind: "mine", target: rock, workLeft: B.MINE_TICKS }, rock);
   }
 
   if (v.job === "farmer") {
@@ -296,14 +310,16 @@ function jobWork(state, v) {
   if (v.job === "builder") {
     const site = state.buildings.find((b) => !b.complete);
     if (site) {
-      const needed = B.BUILDINGS[site.type].cost.wood ?? 0;
-      if (site.delivered < needed) {
-        if (v.carrying === "wood") return startGoto(state, v, { kind: "deliver", building: site.id }, site);
-        if (state.resources.wood >= 1) {
+      const missing = bd.nextMissingRes(site);
+      if (missing) {
+        if (v.carrying === missing)
+          return startGoto(state, v, { kind: "deliver", building: site.id, res: missing }, site);
+        if (state.resources[missing] >= 1) {
           const store = nearestStore(state, v);
-          if (store) return startGoto(state, v, { kind: "fetch", building: store.id, then: site.id }, store);
+          if (store)
+            return startGoto(state, v, { kind: "fetch", building: store.id, then: site.id, res: missing }, store);
         }
-        return false; // no wood in storage: builders wait (event fires in game.js)
+        return false; // that resource is out of storage: builders wait
       }
       return startGoto(state, v, { kind: "build", building: site.id }, site);
     }
@@ -335,7 +351,7 @@ function startGoto(state, v, task, building) {
     }
   candidates.sort((a, b) => a[1] - b[1]);
   for (const [goal] of candidates) {
-    const path = here === goal ? [] : findPath(state.world, here, goal, state.buildingAt);
+    const path = here === goal ? [] : findPath(state.world, here, goal, state.buildingAt, { through: state.gateTiles });
     if (!path) continue;
     v.path = path;
     v.task = task;
@@ -351,7 +367,7 @@ function startGoto(state, v, task, building) {
 function startGotoTile(state, v, task, tile) {
   const size = state.world.size;
   const here = Math.floor(v.y) * size + Math.floor(v.x);
-  const path = here === tile ? [] : findPath(state.world, here, tile, state.buildingAt);
+  const path = here === tile ? [] : findPath(state.world, here, tile, state.buildingAt, { through: state.gateTiles });
   if (!path) return false;
   v.path = path;
   v.task = task;
@@ -448,6 +464,12 @@ function runTask(state, v, dt) {
       if (v.task.workLeft <= 0) finishChop(state, v);
       return;
     }
+    case "mine": {
+      v.activity = "Mining stone";
+      v.task.workLeft -= dt;
+      if (v.task.workLeft <= 0) finishMine(state, v);
+      return;
+    }
     case "harvestPlot": {
       v.activity = "Harvesting";
       v.task.workLeft -= dt;
@@ -471,35 +493,42 @@ function runTask(state, v, dt) {
       return;
     }
     case "fetch": {
-      v.activity = "Fetching wood";
+      v.activity = `Fetching ${task.res}`;
       task.workLeft = (task.workLeft ?? B.EAT_TICKS) - dt;
       if (task.workLeft <= 0) {
-        if (state.resources.wood >= 1) {
-          state.resources.wood -= 1;
-          v.carrying = "wood";
+        if (state.resources[task.res] >= 1) {
+          state.resources[task.res] -= 1;
+          v.carrying = task.res;
           const site = state.buildings.find((b) => b.id === task.then);
-          if (site) startGoto(state, v, { kind: "deliver", building: site.id }, site);
-          else v.task = null;
+          if (site)
+            startGoto(state, v, { kind: "deliver", building: site.id, res: task.res }, site);
+          else {
+            // Site gone: put it back.
+            state.resources[task.res] = Math.min(bd.storageCap(state), state.resources[task.res] + 1);
+            v.carrying = null;
+            v.task = null;
+          }
         } else v.task = null;
       }
       return;
     }
     case "deliver": {
-      v.activity = "Delivering wood";
-      if (v.carrying !== "wood") {
+      v.activity = `Delivering ${task.res}`;
+      if (v.carrying !== task.res) {
         v.task = null;
         return;
       }
       const site = state.buildings.find((b) => b.id === task.building);
       if (!site || site.complete) {
         v.carrying = null; // put it back
-        state.resources.wood = Math.min(bd.storageCap(state), state.resources.wood + 1);
+        state.resources[task.res] = Math.min(bd.storageCap(state), state.resources[task.res] + 1);
         v.task = null;
         return;
       }
-      const needed = B.BUILDINGS[site.type].cost.wood ?? 0;
-      if (site.delivered >= needed) return; // already fully supplied; keep the plank
-      site.delivered += 1;
+      const need = B.BUILDINGS[site.type].cost[task.res] ?? 0;
+      if ((site.deliveredRes[task.res] ?? 0) >= need) return; // fully supplied; keep holding it
+      site.deliveredRes[task.res] = (site.deliveredRes[task.res] ?? 0) + 1;
+      site.delivered = (site.delivered ?? 0) + 1;
       v.carrying = null;
       v.task = null;
       return;
@@ -511,9 +540,8 @@ function runTask(state, v, dt) {
         v.task = null;
         return;
       }
-      const needed = B.BUILDINGS[site.type].cost.wood ?? 0;
-      if (site.delivered < needed) {
-        v.task = null; // go fetch next decide()
+      if (bd.nextMissingRes(site)) {
+        v.task = null; // a resource ran short: go fetch next decide()
         return;
       }
       site.workDone += dt;
@@ -553,6 +581,17 @@ function finishChop(state, v) {
     v.carrying = "wood";
     v.carryAmount = B.TREE_WOOD;
     state.events.push({ type: "chopped", x: i % state.world.size, y: Math.floor(i / state.world.size) });
+  }
+  v.task = null;
+}
+
+function finishMine(state, v) {
+  const i = v.task.target;
+  if (state.world.rocks.has(i)) {
+    state.world.feature[i] = F_NONE;
+    state.world.rocks.delete(i); // rocks are finite: no regrow
+    v.carrying = "stone";
+    v.carryAmount = B.ROCK_STONE;
   }
   v.task = null;
 }
@@ -598,7 +637,7 @@ function idleAround(state, v, dt) {
       const i = y * size + x;
       if (!tilePassable(state.world, i) || state.buildingAt[i] !== -1) continue;
       const here = Math.floor(v.y) * size + Math.floor(v.x);
-      const path = findPath(state.world, here, i, state.buildingAt);
+      const path = findPath(state.world, here, i, state.buildingAt, { through: state.gateTiles });
       if (path) {
         v.path = path;
         v.activity = "Wandering";

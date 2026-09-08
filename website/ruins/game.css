@@ -224,6 +224,39 @@ button:focus-visible {
   background: #5a3c34;
   border-color: #e26d5a88;
 }
+/* Corruption Threat: the red bar (doc 04). Cold until the blight is boxed in. */
+.threat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.55;
+}
+.threat span {
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #d9a0a0;
+}
+.threat-track {
+  width: 54px;
+  height: 6px;
+  border-radius: 3px;
+  background: #1a0f12;
+  overflow: hidden;
+}
+.threat-track i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #8f2f3f, #e26d5a);
+  transition: width 0.6s ease;
+}
+.threat.hot {
+  opacity: 1;
+}
+.threat.hot .threat-track i {
+  box-shadow: 0 0 6px #e26d5a99;
+}
 
 /* ---- Map controls ---- */
 .map-controls {
@@ -448,6 +481,17 @@ button:focus-visible {
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
 }
+.build-tab {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 5px;
+  font-weight: 600;
+}
 .build-card {
   text-align: left;
   display: flex;
@@ -603,6 +647,18 @@ dialog p {
 .menu-tiny {
   font-size: 12px;
   margin-top: 14px;
+}
+/* Loss ledger: brutal-but-fair, and worth reading (pillar 4). */
+#loss-dialog {
+  border-color: #e26d5a66;
+  text-align: center;
+}
+#loss-dialog h2 {
+  color: #f0b3a6;
+}
+#loss-dialog .insp-rows {
+  margin: 14px 0 4px;
+  text-align: left;
 }
 .help-list {
   padding-left: 20px;

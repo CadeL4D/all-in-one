@@ -25,11 +25,22 @@ export function createWorld(seed) {
   const size = MAP_SIZE;
   const terrain = new Uint8Array(size * size);
   const feature = new Uint8Array(size * size);
+  // Corruption is its own 0/1 layer over the terrain (render tints it,
+  // spread grows it, walls and buildings block it). Count kept alongside
+  // so threat math and nest thresholds don't rescan the map.
+  const corruption = new Uint8Array(size * size);
   const world = {
     seed,
     size,
     terrain,
     feature,
+    corruption,
+    corrupted: 0,
+    // 1 on every tile reachable from the camp without crossing water.
+    // Trees and rocks are clearable, so only water splits the island for
+    // real: corruption, nests and their raiders must share the camp's
+    // landmass or the whole night-raid loop silently dead-ends.
+    landmass: new Uint8Array(size * size),
     trees: new Set(),
     rocks: new Set(),
     bushes: new Set(),
@@ -40,7 +51,33 @@ export function createWorld(seed) {
     plots: new Map(),
   };
   generate(world);
+  computeLandmass(world);
+  guaranteeCorruptionSeed(world);
   return world;
+}
+
+// Flood fill from the camp over everything that is not water. Runs once,
+// post-generation; terrain never mutates afterwards, so the mask stays true
+// for the life of the world (saves reload it via the same seed).
+function computeLandmass(world) {
+  const { size, terrain, landmass } = world;
+  const start = idx(CAMP_TILE.x, CAMP_TILE.y);
+  const stack = [start];
+  landmass[start] = 1;
+  while (stack.length) {
+    const c = stack.pop();
+    const x = c % size,
+      y = Math.floor(c / size);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx,
+        ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
+      const n = idx(nx, ny);
+      if (landmass[n] || terrain[n] === T_WATER) continue;
+      landmass[n] = 1;
+      stack.push(n);
+    }
+  }
 }
 
 // Smooth value noise from the world's seed stream (kept local so world gen
@@ -201,6 +238,72 @@ function guaranteeStart(world) {
       trees++;
     }
   }
+
+  guaranteeRocks(world);
+}
+
+// The corruption needs a home in the wilds (doc 04 section 2.2: it spawns
+// near wood and rock, edge-first). Stamp a deterministic grove blob on the
+// ring ~24 tiles out so every seed has a valid site - playability never
+// depends on generation luck. The grove must sit on the camp's landmass:
+// an off-island spawn can never be walled, raided back, or reached.
+function guaranteeCorruptionSeed(world) {
+  const { size, terrain, feature, landmass } = world;
+  const base = ((world.seed ^ 0x51ed270b) % 360) * (Math.PI / 180);
+  // Walk the ring until a connected tile comes up (the mask is computed
+  // before this runs, so the grove itself lands on solid, linked ground).
+  let cx = -1,
+    cy = -1;
+  for (let step = 0; step < 360 && cx < 0; step += 5) {
+    const angle = base + (step % 2 ? -1 : 1) * Math.ceil(step / 2) * (Math.PI / 180);
+    const x = Math.round(CAMP_TILE.x + Math.cos(angle) * 24);
+    const y = Math.round(CAMP_TILE.y + Math.sin(angle) * 24);
+    if (!inBounds(x, y) || !landmass[idx(x, y)]) continue;
+    cx = x;
+    cy = y;
+  }
+  if (cx < 0) {
+    // Degenerate map (tiny island): no grove, no corruption - the site
+    // search will simply find nothing, dev-faithful.
+    return;
+  }
+  for (let dy = -3; dy <= 3; dy++)
+    for (let dx = -3; dx <= 3; dx++) {
+      const x = cx + dx,
+        y = cy + dy;
+      if (!inBounds(x, y)) continue;
+      if (dx * dx + dy * dy > 10) continue;
+      const i = idx(x, y);
+      if (terrain[i] === T_WATER) terrain[i] = T_GRASS;
+      if (feature[i] === F_NONE) {
+        feature[i] = F_TREE;
+        world.trees.add(i);
+      }
+    }
+}
+
+// Stone walls need stone: top up rocks near camp the same way berries are.
+function guaranteeRocks(world) {
+  let rocks = 0;
+  for (const i of world.rocks) {
+    const x = i % world.size,
+      y = Math.floor(i / world.size);
+    if (Math.hypot(x - CAMP_TILE.x, y - CAMP_TILE.y) <= 15) rocks++;
+  }
+  if (rocks >= 8) return;
+  for (let r = CLEAR_RADIUS + 2; r <= 15 && rocks < 8; r++)
+    for (let a = 0; a < 40 && rocks < 8; a++) {
+      const angle = (a / 40) * Math.PI * 2 + r;
+      const x = Math.round(CAMP_TILE.x + Math.cos(angle) * r);
+      const y = Math.round(CAMP_TILE.y + Math.sin(angle) * r);
+      if (!inBounds(x, y)) continue;
+      const i = idx(x, y);
+      if (world.terrain[i] === T_WATER || world.feature[i] !== F_NONE) continue;
+      if (world.plots.has(i)) continue;
+      world.feature[i] = F_ROCK;
+      world.rocks.add(i);
+      rocks++;
+    }
 }
 
 // Villagers walk through each other and past bushes/plots; water, trees,

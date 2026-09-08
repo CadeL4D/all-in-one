@@ -5,7 +5,7 @@ the One Hub. Research base: `docs/rise-to-ruins/research/01…05`. Working title
 is a placeholder — the shipped name, art, audio, and text must all be original
 (see §2).
 
-Status: **M1 "Village heartbeat" is implemented and playable** at
+Status: **M2 "Night & walls" is implemented and playable** at
 `website/ruins/` (hub website game, M0 planning complete before it). The
 Flutter app shell sketched in §6 was swapped for the hub's zero-dependency
 plain-JS website stack at the user's direction ("a website on the hub
@@ -157,7 +157,7 @@ Key decisions:
 | Milestone | Deliverable | Acceptance |
 |---|---|---|
 | **M1 — Village heartbeat** ✅ (2026-09-07, `website/ruins/`) | Clock + day/night, 8 villagers, needs (hunger/thirst/energy/health), 5 buildings (home, farm, well, sawpit, storehouse) + camp, A* pathing, pan/zoom, drag-place, jobs headcounts, nomads + births, deaths, save-anywhere + dawn autosave, contextual hints, PWA | 10-min session: village grows, needs loop works, no individual orders needed — verified in-browser + 33 node tests |
-| **M2 — Night & walls** | Corruption spread + 2 monster types, 2 wall tiers + gate, 1 tower, the pathing rule, loss state | Night raids follow RtR pathing rule; maze changes outcomes; loss is readable |
+| **M2 — Night & walls** ✅ (2026-09-08, `website/ruins/`) | Corruption spread + 2 monster types, 2 wall tiers + gate, 1 tower, the pathing rule, loss state | Night raids follow RtR pathing rule; maze changes outcomes; loss is readable — verified in-browser + 48 node tests |
 | **M3 — God hand** | Influence economy, 5 spells incl. Grab (throw physics), full resist matrix, 4 monster types, ammo economy | Grab feels physical; towers counter-match monster resists |
 | **M4 — The climb** | 8-tier town center ladder, faith/influence multiplier, full building set (≈30), Corruption Threat tuning | Full RtR loop shape; threat behaves like doc 04 §3 |
 | **M5 — Meta & world** | Perks, special nights, 3 regions + migration, sandbox/custom modes | Second village possible; restart loop is inviting |

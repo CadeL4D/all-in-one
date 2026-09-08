@@ -76,10 +76,10 @@ export const SAPLINGS_PER_DAY = 3; // trees slowly regrow away from the village
 
 // ---- Resources & storage. One big pool, capped by buildings (RtR rule);
 // harvesters stop when full ("they stop working if there's no space").
-export const RESOURCES = ["wood", "food", "water"];
+export const RESOURCES = ["wood", "food", "water", "stone"];
 // RtR hands you up to 64 starting supplies incl. wood (Update 2 notes);
 // 64 wood covers well+farm+sawpit with margin - no bootstrap deadlock.
-export const START_RESOURCES = { wood: 64, food: 24, water: 30 };
+export const START_RESOURCES = { wood: 64, food: 24, water: 30, stone: 0 };
 export const CAMP_STORAGE = 80; // holds the 64 starting wood (research camp
 // tiers reach 86 slots); keeps boot supplies inside the cap so the HUD
 // doesn't warn on day 1
@@ -91,6 +91,10 @@ export const WELL_WATER_PER_DAY = 800;
 export const WELL_STORAGE = 60;
 
 // ---- Buildings (M1 set). Wood is the only build resource until walls.
+// Nest HP lives up here: the BUILDINGS table references it.
+export const NEST_HP = 300; // targetable by towers; doc 04 section 2.3 (100
+// HP/resource RtR math rescaled: our tower does 12 dps, so ~25 s of fire)
+
 export const BUILDINGS = {
   camp: {
     name: "Camp",
@@ -100,7 +104,10 @@ export const BUILDINGS = {
     jobs: { builder: 4 },
     radius: 12, // build range radiates from the center (RtR rule)
     houses: 0,
-    hp: 100,
+    // The loss anchor: raiders must chew through this before the village
+    // falls. RtR castle tiers are the monsters' final target; 400 gives a
+    // defended village time to respond (~100s vs one husk's dps).
+    hp: 400,
   },
   home: {
     name: "Home",
@@ -153,6 +160,79 @@ export const BUILDINGS = {
     radius: 0,
     hp: 90,
   },
+  // ---- M2 defense set. Wall stats follow the wiki Walls page ratios
+  // (wood fence 100 HP @ 1 wood, stone wall 200 @ 2 stone; ours sits at
+  // 240 so a stone ring outlives two raids of chewing). Walls are 1x1,
+  // don't count toward housing, and exist to be mazed with (pillar 6).
+  fence: {
+    name: "Wood Fence",
+    size: 1,
+    cost: { wood: 1 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 100,
+    wall: true, // drag-paint placement; blocks monsters, villagers path around
+  },
+  stoneWall: {
+    name: "Stone Wall",
+    size: 1,
+    cost: { stone: 2 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 240,
+    wall: true,
+  },
+  gate: {
+    name: "Gate",
+    size: 1,
+    cost: { wood: 8 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 320,
+    wall: true,
+    gate: true, // villagers & nomads pass; monsters must break it
+  },
+  tower: {
+    name: "Sentry Tower",
+    size: 1,
+    cost: { wood: 24 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 180,
+    tower: { range: 10, damage: 12, reload: 60 }, // 1 bolt/s, pierces like RtR's bow tower
+  },
+  quarry: {
+    name: "Quarry",
+    size: 2,
+    cost: { wood: 24 },
+    storage: 8,
+    houses: 0,
+    jobs: { stonecutter: 2 },
+    radius: 9, // mines rocks inside this ring
+    hp: 90,
+  },
+  // Corrupted nest (doc 04 section 2.3): the graveyard-equivalent spawn
+  // point the corruption raises. Never player-placeable; it enters complete
+  // and targetable, and monsters pour out of it at nightfall.
+  nest: {
+    name: "Corrupted Nest",
+    size: 1,
+    cost: { wood: 0 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: NEST_HP,
+    corrupted: true,
+  },
 };
 
 export const DISMANTLE_REFUND = 0.5; // fraction of cost refunded (RtR salvages)
@@ -163,6 +243,7 @@ export const JOBS = {
   builder: { name: "Builder", color: "#e8b04b" },
   farmer: { name: "Farmer", color: "#7fb95c" },
   woodcutter: { name: "Woodcutter", color: "#b07845" },
+  stonecutter: { name: "Stonecutter", color: "#9aa0a6" },
 };
 
 // ---- Growth. Nomads are the primary channel (RtR Events): rate scales with
@@ -194,3 +275,101 @@ export const MIN_ZOOM = 0.55;
 export const MAX_ZOOM = 3.2;
 export const GHOST_LIFT_PX = 56; // ghost preview floats above the finger
 export const CORPSE_DECAY_TICKS = 90000; // ~1.5 days, slower decay (RtR U2 note)
+
+// =====================================================================
+// M2 — Night & walls. Research base: docs/rise-to-ruins/research/04
+// (sections cited as doc 04 below). RtR publishes structure, not values;
+// numbers are reasoned defaults rescaled to our 400 s day, tuned by test.
+// =====================================================================
+
+// ---- Mining (quarry). Rocks are finite per map; regrow is a lie for stone.
+export const MINE_TICKS = 1100;
+export const ROCK_STONE = 6;
+
+// ---- Corruption (doc 04 section 2).
+export const CORRUPTION_SPAWN_DAY = 2; // Traditional-style delay (doc 04 section 6):
+// Survival spawns night 1, but our mobile players ARE first-timers, so day 1
+// stays calm (pillar 2) and day 2 opens with the corruption + a hint.
+export const CORRUPTION_MIN_CAMP_DIST = 20; // dev quote: checks map edge first,
+// closes in, "if it fails ... it just never spawns" (doc 04 section 2.2)
+export const CORRUPTION_SITE_RADIUS = 4; // starts as a blob of this radius
+export const CORRUPTION_SPREAD_CHANCE = 0.55; // per 600-tick check, one frontier
+// tile converts: ~20 tiles/day early, slowing as the frontier runs out
+export const CORRUPTION_SPREAD_TICKS = 600;
+export const CORRUPTION_KILLS_TREES = true; // doc 04 section 2.1: spreads under
+// forests and kills them; walls/buildings/plots block conversion (that block
+// is what "trap in the corrupted tiles" means for the threat model)
+
+// ---- Corrupted nest (our graveyard equivalent; original art/name).
+export const NEST_MIN_TILES = 30; // first nest once the blob holds this much
+export const NEST_TILES_PER_EXTRA = 60; // one more nest per this many tiles (cap 3)
+export const NEST_MAX = 3;
+export const NEST_REBUILD_DELAY_DAYS = 2; // drones-equivalent rebuild pause
+
+// ---- Corruption Threat (doc 04 section 2.4 verbatim model): desire grows
+// with the day counter; threat rises only when corruption is boxed in
+// (wants space, has none). Undisturbed growth decays threat to 0. NOTHING
+// else (wealth, population) feeds it - that is the system's identity.
+export const THREAT_MAX = 100;
+export const THREAT_RISE_PER_DAY = 8; // boxed in
+export const THREAT_DECAY_PER_DAY = 12; // growing freely
+export const THREAT_SPAWN_MULT = 0.0125; // raid count x (1 + threat * this):
+// full bar = +125% raiders. Doc 04: threat scales "how powerful and numerous".
+
+// ---- Monsters. Two types for M2 (melee + splitter, per master plan
+// section 4; wall-phaser and ranged-fire join in M3). Names/art original.
+export const MONSTERS = {
+  husk: {
+    name: "Husk",
+    hp: 35,
+    damage: 3, // per blow
+    attackTicks: 45, // ~4 dps: a wood fence buys ~25 s, a villager duel ~25 s
+    speed: 1.4, // tiles/s - slower than villagers (doc 04: headless are slow)
+    splits: null,
+    color: "#8fae6b",
+  },
+  blot: {
+    name: "Blot",
+    hp: 55,
+    damage: 3,
+    attackTicks: 50,
+    speed: 1.1,
+    // RtR slimes split into two smaller slimes on death (doc 04 section 1.3).
+    splits: { kind: "blotling", count: 2 },
+    color: "#7d5ba6",
+  },
+  blotling: {
+    name: "Blotling",
+    hp: 14,
+    damage: 2,
+    attackTicks: 45,
+    speed: 1.6,
+    splits: null,
+    color: "#9a7cc0",
+  },
+};
+export const MONSTER_HARD_CAP = 24; // sim budget guard (splits can chain)
+export const BLOT_ARRIVAL_DAY = 5; // splitters join from night 5 (RtR slimes
+// arrive day 2-4; we hold them back until the wall lesson has landed)
+export const BLOT_CHANCE = 0.3; // share of blots once arrived
+
+// ---- Night raids (doc 04 section 3). Spawn at nightfall from nests;
+// survivors retreat into the corruption at dawn (calm days, panicked nights).
+export const RAID_START_DAY = 3; // night 3 first raid: corruption lands day 2
+// morning, so there is always one full calm day to wall up (pillar 2 + 10)
+export const RAID_BASE_COUNT = 2; // night 3 size
+export const RAID_PER_DAY = 0.45; // + per day after the first raid
+export const RAID_PER_NEST = 0.8; // graveyards escalate (doc 04 section 2.3)
+export const RAID_MAX_COUNT = 12;
+export const RAID_CAP = 8; // population-adjacent raid scale ceiling in day units
+
+// ---- Melee combat (villagers fight back; RtR villagers defend themselves,
+// doc 04 section 4.3 - and there is NO hiding/shelter mechanic, veto 3).
+export const VILLAGER_DAMAGE = 2.5;
+export const VILLAGER_ATTACK_TICKS = 55; // ~2.7 dps: wins 1v1 vs a husk slowly,
+// loses 1v2 - towers are supposed to be the real defense
+export const MONSTER_ENGAGE_RANGE = 1.4; // tiles: close enough to swing
+export const VILLAGER_SWING_RANGE = 1.5;
+
+// ---- Loss (pillar 4: brutal-but-fair loss as content, restart < 10 s).
+export const LOSS_CHECK = true; // camp destroyed OR last villager dead

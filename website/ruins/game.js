@@ -7,6 +7,8 @@ import { createWorld, idx, F_NONE, F_SAPLING, F_TREE } from "./world.js";
 import * as bd from "./buildings.js";
 import { createVillager, tickVillager, indexWaterTiles } from "./villager.js";
 import { scheduleNomads, tickNomads, rollBirths, assignHomes } from "./growth.js";
+import { createCorruptionState, ensureCorruptionSpawn, tickCorruption, corruptionDawn } from "./corruption.js";
+import { createRaidState, tickMonsters, raidsAtNightfall, raidsAtDawn } from "./monsters.js";
 
 export function createGame(seed = (Math.random() * 0xffffffff) >>> 0) {
   const state = {
@@ -16,17 +18,23 @@ export function createGame(seed = (Math.random() * 0xffffffff) >>> 0) {
     world: null,
     buildings: [],
     buildingAt: new Int32Array(B.MAP_SIZE * B.MAP_SIZE).fill(-1),
+    gateTiles: new Set(), // tiles villagers may walk through, monsters may not
     villagers: [],
     nomads: [],
     nomadQueue: [],
+    monsters: [],
+    projectiles: [],
+    raid: createRaidState(),
+    corruption: createCorruptionState(),
     corpses: [],
     resources: { ...B.START_RESOURCES },
-    jobCounts: { builder: 2, farmer: 2, woodcutter: 2 },
-    flags: { storageFull: false, duskAnnounced: false },
+    jobCounts: { builder: 2, farmer: 2, woodcutter: 2, stonecutter: 0 },
+    flags: { storageFull: false, duskAnnounced: false, wallsDirty: true },
     nextId: 1,
     events: [],
-    stats: { sitesPlaced: 0, built: 0, died: 0 },
+    stats: { sitesPlaced: 0, built: 0, died: 0, slain: 0, peakPop: B.START_POP },
     lastDawn: 0,
+    lost: null, // { day, cause } once the run ends (pillar 4: loss as content)
   };
   state.rng = createRng(seed);
   state.world = createWorld(seed);
@@ -58,23 +66,41 @@ export function createGame(seed = (Math.random() * 0xffffffff) >>> 0) {
 }
 
 // Advance the sim by `ticks` (caller batches per frame: speed 2 => 2 ticks).
+// A lost village freezes the sim: the run is over, the overlay tells the tale.
 export function stepGame(state, ticks) {
+  if (state.lost) return;
   for (let t = 0; t < ticks; t++) {
     const prevPhase = state.clock.phaseIndex;
     advance(state.clock, 1);
+
+    // Nightfall: the nests release their raiders (doc 04 section 3.1).
+    if (prevPhase === 4 && state.clock.phaseIndex === 5) raidsAtNightfall(state);
+
+    // The blight lands with the dawn, BEFORE this tick's corruption beat, so
+    // the nest search sees the fresh blob on the spawn morning itself
+    // (idempotent; a no-op on every other dawn).
+    if (prevPhase !== 0 && state.clock.phaseIndex === 0) ensureCorruptionSpawn(state);
+
     for (const v of state.villagers) if (!v.dead) tickVillager(state, v, 1);
     tickNomads(state, 1);
     bd.tickProduction(state, 1);
     tickRegrow(state);
+    tickCorruption(state);
+    tickMonsters(state, 1);
 
-    // Dawn beats: births, nomad schedule, autosave marker.
+    // Dawn beats: births, nomad schedule, corruption threat, retreats.
     if (prevPhase !== 0 && state.clock.phaseIndex === 0 && state.clock.day > state.lastDawn) {
       state.lastDawn = state.clock.day;
       rollBirths(state);
       scheduleNomads(state);
+      corruptionDawn(state);
+      raidsAtDawn(state);
+      state.stats.peakPop = Math.max(state.stats.peakPop, state.villagers.length);
       state.events.push({ type: "dawn", day: state.clock.day });
     }
     cleanupDead(state);
+    checkLoss(state);
+    if (state.lost) return;
   }
   // Dusk announcement (the heartbeat: day is ending).
   if (state.clock.phaseIndex === 4 && !state.flags.duskAnnounced) {
@@ -82,6 +108,23 @@ export function stepGame(state, ticks) {
     state.events.push({ type: "dusk" });
   }
   if (state.clock.phaseIndex !== 4) state.flags.duskAnnounced = false;
+}
+
+// Pillar 4: brutal-but-fair loss is content. The run ends when the camp is
+// chewed down or the last villager falls; the overlay turns the failure
+// into a story (days, peak, kills) and restart takes seconds.
+function checkLoss(state) {
+  if (state.lost) return;
+  const camp = state.buildings.find((b) => b.type === "camp");
+  if (!camp) state.lost = { day: state.clock.day, cause: "The camp has fallen" };
+  else if (state.villagers.length === 0)
+    state.lost = { day: state.clock.day, cause: "The last villager has fallen" };
+  if (state.lost) {
+    state.lost.slain = state.stats.slain;
+    state.lost.peakPop = state.stats.peakPop;
+    state.lost.built = state.stats.built;
+    state.events.push({ type: "village-lost", cause: state.lost.cause, day: state.lost.day });
+  }
 }
 
 function tickRegrow(state) {
@@ -160,6 +203,26 @@ export function placeBuilding(state, type, x, y) {
   bd.placeSite(state, type, x, y);
   state.events.push({ type: "site-placed", name: B.BUILDINGS[type].name, x, y });
   return { ok: true };
+}
+
+// Drag-paint walls: place a run of 1x1 tiles in one confirm, paying only
+// for the tiles that actually fit (master plan section 5.2). The run chains
+// off itself, so one confirm can push territory outward.
+export function placeWallRun(state, type, tiles) {
+  const placed = [];
+  const runKeys = new Set();
+  for (const [x, y] of tiles) {
+    if (bd.canPlaceInRun(state, type, x, y, runKeys).ok) {
+      bd.placeSite(state, type, x, y);
+      placed.push([x, y]);
+      runKeys.add(`${x},${y}`);
+    }
+  }
+  if (placed.length) {
+    state.flags.wallsDirty = true;
+    state.events.push({ type: "site-placed", name: B.BUILDINGS[type].name, count: placed.length });
+  }
+  return placed;
 }
 
 export function phaseOf(state) {

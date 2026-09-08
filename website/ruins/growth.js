@@ -15,11 +15,10 @@ export function scheduleNomads(state) {
 
   const housing = bd.housingCap(state);
   const slots = bd.jobSlots(state);
-  const employed = ["builder", "farmer", "woodcutter"].reduce(
-    (a, j) => a + bd.employedCount(state, j),
-    0,
-  );
-  const freeJobs = Math.max(0, Math.min(slots.builder + slots.farmer + slots.woodcutter, state.jobCounts.builder + state.jobCounts.farmer + state.jobCounts.woodcutter) - employed);
+  const jobs = Object.keys(B.JOBS);
+  const employed = jobs.reduce((a, j) => a + bd.employedCount(state, j), 0);
+  const desired = jobs.reduce((a, j) => a + (state.jobCounts[j] ?? 0), 0);
+  const freeJobs = Math.max(0, Math.min(jobs.reduce((a, j) => a + slots[j], 0), desired) - employed);
   const supplies = (state.resources.food + state.resources.water) / Math.max(4, pop * 3);
   const supplyFactor = Math.min(1.2, Math.max(0.15, supplies));
   const roomFactor = 0.35 + 0.4 * Math.min(1, housing ? (housing - pop) / 4 : 0) + 0.25 * Math.min(1, freeJobs / 4);
@@ -105,7 +104,7 @@ function spawnNomad(state) {
     };
     if (camp) {
       const goal = camp.y * size + camp.x;
-      const path = findPath(state.world, i, goal, state.buildingAt);
+      const path = findPath(state.world, i, goal, state.buildingAt, { through: state.gateTiles });
       if (path) nomad.path = path;
     }
     state.nomads.push(nomad);

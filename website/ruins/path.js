@@ -1,5 +1,7 @@
-// A* on the tile grid. One graph for everyone; monsters will reuse it in M2
-// with the RtR rule (open path preferred, else chew the weakest wall).
+// A* on the tile grid. One graph for everyone. Monsters reuse it in two
+// modes for the RtR rule (doc 04 section 3.4): a plain search where every
+// wall blocks (clear route), and a weighted search where entering a
+// structure costs its time-to-break (least-resistance breach).
 import { MAP_SIZE } from "./balance.js";
 import { tilePassable } from "./world.js";
 
@@ -10,16 +12,18 @@ const NEIGHBORS = [
   [0, -1],
 ];
 
-// Returns an array of tile indices from (excluding) start to (including)
-// goal, or null when unreachable. `blocked` is the building occupancy grid
-// (Int32Array of building ids, -1 = free). A goal that sits inside a
-// building (or on a feature) is resolved to the nearest adjacent open tile
-// first, so targets are always standable. Uses a binary heap; maps are fine
-// at this size but the heap keeps 60 villagers re-pathing without spikes.
-export function findPath(world, start, goal, blocked) {
+// opts.through: Set of tile indices walkable despite `blocked` (gates -
+// villagers and nomads pass, monsters never get this option).
+// opts.cost(i): traversal cost for entering tile i; default 1. Must be >= 1
+// so the Manhattan heuristic stays admissible.
+export function findPath(world, start, goal, blocked, opts = {}) {
+  const through = opts.through ?? null;
+  const cost = opts.cost ?? null;
   if (start === goal) return [];
-  if (!isPassable(world, goal, blocked)) {
-    const alt = adjacentOpen(world, goal, start, blocked);
+  // In breach mode the goal stays the (blocked) camp tile itself: A* may
+  // enter it like any other structure. Otherwise resolve to standable ground.
+  if (!cost && !isPassable(world, goal, blocked, through)) {
+    const alt = adjacentOpen(world, goal, start, blocked, through);
     if (alt < 0) return null;
     goal = alt;
     if (start === goal) return [];
@@ -82,9 +86,14 @@ export function findPath(world, start, goal, blocked) {
         ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
       const n = ny * size + nx;
-      if (n !== goal && !isPassable(world, n, blocked, false)) continue;
+      // Breach mode (cost fn) expands through structures at their
+      // time-to-break; plain mode treats them as walls. Either way an
+      // infinite cost means "never" (water, trees, rocks).
+      const step = cost ? cost(n) : 1;
+      if (!isFinite(step)) continue;
+      if (n !== goal && !cost && !isPassable(world, n, blocked, through)) continue;
       if (closed[n]) continue;
-      const tentative = gScore[current] + 1;
+      const tentative = gScore[current] + step;
       if (tentative < gScore[n]) {
         gScore[n] = tentative;
         cameFrom[n] = current;
@@ -95,8 +104,8 @@ export function findPath(world, start, goal, blocked) {
   return null;
 }
 
-export function isPassable(world, i, blocked) {
-  if (blocked && blocked[i] !== -1) return false;
+export function isPassable(world, i, blocked, through = null) {
+  if (blocked && blocked[i] !== -1) return through ? through.has(i) : false;
   return tilePassable(world, i);
 }
 
@@ -115,7 +124,7 @@ function reconstruct(cameFrom, goal) {
 // Walk to the closest standable tile near a (possibly blocked) target:
 // scans outward in rings so trees inside dense clumps (or buildings whose
 // direct neighbors are all blocked) stay reachable from up to 2 tiles away.
-export function adjacentOpen(world, target, from, blocked) {
+export function adjacentOpen(world, target, from, blocked, through = null) {
   const size = MAP_SIZE;
   const tx = target % size,
     ty = Math.floor(target / size);
@@ -131,8 +140,7 @@ export function adjacentOpen(world, target, from, blocked) {
           y = ty + dy;
         if (x < 0 || y < 0 || x >= size || y >= size) continue;
         const i = y * size + x;
-        if (blocked && blocked[i] !== -1) continue;
-        if (!tilePassable(world, i)) continue;
+        if (!isPassable(world, i, blocked, through)) continue;
         const d = Math.abs(x - fx) + Math.abs(y - fy);
         if (d < bestD) {
           bestD = d;

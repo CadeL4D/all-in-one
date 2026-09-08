@@ -48,6 +48,10 @@
             <span id="clockphase">Dawn</span>
           </div>
           <div class="daytrack" aria-hidden="true"><i id="day-progress"></i></div>
+          <div class="threat" id="threat" title="Corruption Threat — rises while the blight is boxed in">
+            <span>Threat</span>
+            <div class="threat-track" aria-hidden="true"><i id="threat-fill"></i></div>
+          </div>
           <div class="speed" role="group" aria-label="Simulation speed">
             <button id="pause" aria-label="Pause simulation">❚❚</button>
             <button data-speed="1">1×</button>
@@ -148,6 +152,16 @@
             <b>Wanderers arrive most days.</b> They join if you have supplies
             and work to give. Housed couples raise children.
           </li>
+          <li>
+            <b>The blight comes at night.</b> Corruption spreads in the wilds
+            and its nests spawn raiders. Wall your village and leave ONE gap:
+            raiders take open paths, so the gap funnels them past your Sentry
+            Tower instead of into your walls.
+          </li>
+          <li>
+            <b>Box the corruption in and Threat rises</b> — the red bar means
+            bigger, meaner nights. Let it sprawl and the pressure fades.
+          </li>
         </ol>
         <p class="menu-tiny">
           Everything saves on its own — leave anytime, one day at 2× is a
@@ -160,6 +174,18 @@
         <div class="menu-buttons">
           <button id="confirm-no">Keep it</button
           ><button id="confirm-yes" class="danger">Yes, do it</button>
+        </div>
+      </dialog>
+      <dialog id="loss-dialog">
+        <h2>The village has fallen</h2>
+        <p class="menu-note" id="loss-cause">The camp has fallen.</p>
+        <div class="insp-rows" id="loss-stats"></div>
+        <p class="menu-tiny">
+          Every fall teaches the next village — the wilds keep the blight, you
+          keep the know-how.
+        </p>
+        <div class="menu-buttons">
+          <button id="loss-restart" class="primary">Rise again</button>
         </div>
       </dialog>
     </main>

@@ -2,10 +2,10 @@
 // command bridge between the UI and the sim. One-finger drag pans; pinch
 // zooms; build tools are modal so pan never fights placement (doc 05 B2).
 import * as B from "./balance.js";
-import { createGame, stepGame, placeBuilding, setJobDesired } from "./game.js";
+import { createGame, stepGame, placeBuilding, placeWallRun, setJobDesired } from "./game.js";
 import { daylight, phaseInfo } from "./clock.js";
 import { createRenderer, screenToTile } from "./render.js";
-import { dismantle } from "./buildings.js";
+import * as bd from "./buildings.js";
 import { createUI } from "./ui.js";
 import { saveToLocal, loadFromLocal, clearSave } from "./save.js";
 import { pwa } from "./pwa.js";
@@ -40,6 +40,7 @@ const game = {
   enterPlacement() {
     renderer.view.buildMode = true;
     renderer.view.ghost = null;
+    renderer.view.paint = null;
     document.getElementById("hint").hidden = true; // never cover the ghost UI
   },
   enterDismantle() {
@@ -49,17 +50,32 @@ const game = {
   exitModes() {
     renderer.view.buildMode = false;
     renderer.view.ghost = null;
+    renderer.view.paint = null;
     ui.placing = null;
     ui.mode = "look";
     ui.setDock("look");
     document.getElementById("placement").hidden = true;
   },
   confirmPlacement() {
-    if (!ui.placing || !ui.placing.valid) return;
+    if (!ui.placing) return;
+    const def = B.BUILDINGS[ui.placing.type];
+    if (def.wall) {
+      // Drag-paint run: commit every painted section that fits. The run is
+      // stored as "x,y" keys - parse them back into tile pairs.
+      if (!ui.placing.run?.size) return;
+      const tiles = [...ui.placing.run].map((key) => key.split(",").map(Number));
+      placeWallRun(state, ui.placing.type, tiles);
+      // Stay armed for the next painted run.
+      renderer.view.ghost = null;
+      ui.placing = { type: ui.placing.type, x: null, y: null, valid: false, run: new Set() };
+      ui.updatePlacement(state);
+      return;
+    }
+    if (!ui.placing.valid) return;
     placeBuilding(state, ui.placing.type, ui.placing.x, ui.placing.y);
     // Stay armed for quick multi-building (drag-place feel).
     renderer.view.ghost = null;
-    ui.placing = { type: ui.placing.type, x: null, y: null, valid: false };
+    ui.placing = { type: ui.placing.type, x: null, y: null, valid: false, run: null };
     ui.updatePlacement(state);
   },
   setJob(job, delta) {
@@ -67,7 +83,7 @@ const game = {
     ui.slow(state);
   },
   dismantle(id) {
-    dismantle(state, id);
+    bd.dismantle(state, id);
     ui.slow(state);
   },
   confirm(title, body, onYes) {
@@ -146,23 +162,44 @@ function clampCamera() {
   camera.y = Math.max(2, Math.min(state.world.size - 2, camera.y));
 }
 
-// ---- Placement validity (cheap re-check used on every pointer move) ----
-function canPlaceQuick(x, y, def) {
-  if (x < 0 || y < 0) return false;
-  if (x + def.size > state.world.size || y + def.size > state.world.size) return false;
-  for (let dy = 0; dy < def.size; dy++)
-    for (let dx = 0; dx < def.size; dx++) {
-      const i = (y + dy) * state.world.size + x + dx;
-      if (state.buildingAt[i] !== -1) return false;
-      if (state.world.terrain[i] === 2) return false;
-      const f = state.world.feature[i];
-      if (f !== 0 && f !== 4) return false;
-      if (state.world.plots.has(i)) return false;
-    }
-  const half = def.size / 2;
-  const camp = state.buildings.find((b) => b.type === "camp");
-  if (!camp) return false;
-  return Math.hypot(x + half - (camp.x + 1), y + half - (camp.y + 1)) <= B.BUILDINGS.camp.radius;
+// ---- Wall drag-paint: continuous line from the last touched tile. Each
+// stroke defines the whole run (a new stroke starts fresh), so painting is
+// additive within the stroke - dragging back over it never erases.
+function paintWallTile(x, y) {
+  const placing = ui.placing;
+  if (!placing || !B.BUILDINGS[placing.type].wall) return;
+  if (!placing.run) placing.run = new Set();
+  const type = placing.type;
+  const size = state.world.size;
+  const line = [];
+  if (placing.lastPainted) {
+    const [lx, ly] = placing.lastPainted;
+    const steps = Math.max(Math.abs(x - lx), Math.abs(y - ly));
+    for (let s = 1; s <= steps; s++)
+      line.push([
+        Math.round(lx + ((x - lx) * s) / steps),
+        Math.round(ly + ((y - ly) * s) / steps),
+      ]);
+  }
+  line.push([x, y]);
+  for (const [tx, ty] of line) {
+    if (tx < 0 || ty < 0 || tx >= size || ty >= size) continue;
+    const key = `${tx},${ty}`;
+    if (placing.run.has(key)) continue;
+    if (!canPlaceQuick(tx, ty, type, placing.run)) continue;
+    placing.run.add(key);
+    placing.lastPainted = [tx, ty];
+  }
+  renderer.view.paint = { type: placing.type, tiles: placing.run };
+  ui.updatePlacement(state);
+}
+
+// Ghost/paint validity uses the authoritative rule so the preview can never
+// disagree with confirm (including the wall-chain build range). Wall runs
+// may anchor to their own earlier tiles - one stroke, one territory push.
+function canPlaceQuick(x, y, type, runKeys) {
+  if (runKeys) return bd.canPlaceInRun(state, type, x, y, runKeys).ok;
+  return bd.canPlace(state, type, x, y).ok;
 }
 
 // ---- Pointer input: pan / pinch / tap / ghost drag ----
@@ -176,18 +213,22 @@ canvas.addEventListener("pointerdown", (e) => {
   moved = false;
   if (ui.mode === "build" && ui.placing) {
     // A tap puts the ghost exactly where you touched (lifted above the
-    // finger); dragging then nudges it.
+    // finger); dragging then nudges it. Walls paint a run instead.
     const tile = screenToTile(canvas, camera, e.clientX, e.clientY, B.GHOST_LIFT_PX);
-    ui.placing.x = tile.x;
-    ui.placing.y = tile.y;
-    const def = B.BUILDINGS[ui.placing.type];
-    renderer.view.ghost = {
-      type: ui.placing.type,
-      x: tile.x,
-      y: tile.y,
-      valid: canPlaceQuick(tile.x, tile.y, def),
-    };
-    ui.updatePlacement(state);
+    if (B.BUILDINGS[ui.placing.type].wall) {
+      ui.placing.run = new Set();
+      paintWallTile(tile.x, tile.y);
+    } else {
+      ui.placing.x = tile.x;
+      ui.placing.y = tile.y;
+      renderer.view.ghost = {
+        type: ui.placing.type,
+        x: tile.x,
+        y: tile.y,
+        valid: canPlaceQuick(tile.x, tile.y, ui.placing.type),
+      };
+      ui.updatePlacement(state);
+    }
   }
   if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];
@@ -216,15 +257,19 @@ canvas.addEventListener("pointermove", (e) => {
 
   if (ui.mode === "build" && ui.placing) {
     // Ghost follows the finger, lifted above it so it's never occluded.
+    // Walls instead paint a continuous run from the last tile touched.
     const tile = screenToTile(canvas, camera, e.clientX, e.clientY, B.GHOST_LIFT_PX);
+    if (B.BUILDINGS[ui.placing.type].wall) {
+      paintWallTile(tile.x, tile.y);
+      return;
+    }
     ui.placing.x = tile.x;
     ui.placing.y = tile.y;
-    const def = B.BUILDINGS[ui.placing.type];
     renderer.view.ghost = {
       type: ui.placing.type,
       x: tile.x,
       y: tile.y,
-      valid: canPlaceQuick(tile.x, tile.y, def),
+      valid: canPlaceQuick(tile.x, tile.y, ui.placing.type),
     };
     ui.updatePlacement(state);
     return;

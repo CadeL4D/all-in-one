@@ -5,9 +5,12 @@ import { createGame } from "./game.js";
 import { MAP_SIZE } from "./balance.js";
 import { F_TREE, F_ROCK, F_BUSH } from "./world.js";
 import { indexWaterTiles } from "./villager.js";
+import { footprint } from "./buildings.js";
 
 export const SAVE_KEY = "ruins-save-v1";
-export const SAVE_VERSION = 1;
+// v2: night raids - corruption field, monsters, nests, threat, walls/gates.
+// v1 blobs predate all of it and are treated as a fresh island.
+export const SAVE_VERSION = 2;
 
 function rleEncode(arr) {
   const out = [];
@@ -42,6 +45,7 @@ export function serialize(state) {
     rng: state.rng.state(),
     clock: { ...state.clock },
     lastDawn: state.lastDawn,
+    lost: state.lost,
     resources: { ...state.resources },
     jobCounts: { ...state.jobCounts },
     flags: { ...state.flags },
@@ -49,12 +53,16 @@ export function serialize(state) {
     stats: { ...state.stats },
     terrain: rleEncode(state.world.terrain),
     feature: rleEncode(state.world.feature),
+    corruption: rleEncode(state.world.corruption),
     regrow: [...state.world.regrow].map(([i, e]) => [i, e.stage, e.readyTick]),
     plots: [...state.world.plots].map(([i, e]) => [i, e.farm, e.readyTick]),
+    corruptionMeta: { ...state.corruption },
+    raid: { ...state.raid },
     buildings: state.buildings,
     villagers: state.villagers,
     nomads: state.nomads,
     nomadQueue: state.nomadQueue,
+    monsters: state.monsters,
     corpses: state.corpses,
   };
 }
@@ -65,13 +73,15 @@ export function deserialize(data) {
   state.rng.restore(data.rng);
   Object.assign(state.clock, data.clock);
   state.lastDawn = data.lastDawn;
+  state.lost = data.lost ?? null;
   state.resources = { ...data.resources };
   state.jobCounts = { ...data.jobCounts };
-  state.flags = { ...data.flags };
+  state.flags = { ...data.flags, wallsDirty: true };
   state.nextId = data.nextId;
   state.stats = { ...data.stats };
   rleDecode(data.terrain, state.world.terrain);
   rleDecode(data.feature, state.world.feature);
+  rleDecode(data.corruption, state.world.corruption);
   state.world.regrow = new Map(
     data.regrow.map(([i, stage, readyTick]) => [i, { stage, readyTick }]),
   );
@@ -79,18 +89,35 @@ export function deserialize(data) {
   state.world.trees = new Set();
   state.world.rocks = new Set();
   state.world.bushes = new Set();
+  let corrupted = 0;
   for (let i = 0; i < MAP_SIZE * MAP_SIZE; i++) {
     const f = state.world.feature[i];
     if (f === F_TREE) state.world.trees.add(i);
     else if (f === F_ROCK) state.world.rocks.add(i);
     else if (f === F_BUSH) state.world.bushes.add(i);
+    if (state.world.corruption[i]) corrupted++;
   }
+  state.world.corrupted = corrupted;
+  state.corruption = { ...data.corruptionMeta };
+  state.raid = { ...data.raid };
   indexWaterTiles(state.world);
   state.buildings = data.buildings;
   state.villagers = data.villagers;
   state.nomads = data.nomads;
   state.nomadQueue = data.nomadQueue;
+  state.monsters = data.monsters ?? [];
+  state.projectiles = [];
   state.corpses = data.corpses;
+  // Re-stamp building occupancy (and gate walkthroughs) from the saved
+  // list - the fresh camp stamped by createGame is replaced wholesale.
+  state.buildingAt.fill(-1);
+  state.gateTiles = new Set();
+  for (const b of state.buildings) {
+    for (const i of footprint(b.type, b.x, b.y)) {
+      state.buildingAt[i] = b.id;
+      if (b.type === "gate") state.gateTiles.add(i);
+    }
+  }
   state.events = [];
   return state;
 }

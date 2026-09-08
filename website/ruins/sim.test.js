@@ -7,6 +7,8 @@ import { DAY_TICKS } from "./balance.js";
 
 // The full village heartbeat: build the starter set, run days, and verify
 // every loop the M1 acceptance names - growth, needs, hands-off work.
+// The set includes a Sentry Tower since M2: night raids start on day 3 and
+// the day-2 hint tells the village to raise one.
 function village(seed) {
   const s = createGame(seed);
   s.jobCounts = { builder: 3, farmer: 3, woodcutter: 3 };
@@ -22,7 +24,7 @@ function village(seed) {
       }
     return null;
   };
-  for (const t of ["well", "farm", "sawpit", "home", "home"]) place(t);
+  for (const t of ["well", "farm", "sawpit", "home", "home", "tower"]) place(t);
   return s;
 }
 
@@ -84,12 +86,16 @@ test("storage caps actually cap production", () => {
   assert.ok(s.resources.water <= bd.storageCap(s) + 1, "water respects cap");
 });
 
-test("villagers die of starvation when the village is neglected", () => {
+test("a neglected village does not survive (raids or starvation end it)", () => {
   const s = createGame(999);
   s.resources.food = 0;
   s.resources.water = 0;
-  // No buildings placed: nothing to eat (pond water only delays the end).
-  // Hunger empties in ~6 days, then 8/day of damage needs ~13 more.
+  // No buildings placed: nothing to eat, nothing to defend with. In M2 the
+  // unprotected nights usually arrive before hunger does - either way the
+  // run ends well inside the window.
   stepGame(s, DAY_TICKS * 22);
-  assert.ok(s.stats.died > 0, "neglect has consequences");
+  assert.ok(
+    s.lost || s.stats.died > 0,
+    `neglect has consequences (lost=${JSON.stringify(s.lost)}, died=${s.stats.died})`,
+  );
 });

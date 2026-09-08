@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createGame, stepGame } from "./game.js";
+import { createGame, stepGame, placeBuilding } from "./game.js";
 import { scheduleNomads, rollBirths } from "./growth.js";
 import { DAY_TICKS, NOMADS_MAX_PER_DAY, POP_SOFT_CAP } from "./balance.js";
 
@@ -61,6 +61,10 @@ test("births require housing", () => {
 
 test("children grow up and then may work", () => {
   const s = createGame(11);
+  // An undefended spawn camp falls to night raids around day 4 (M2); give
+  // this village the tower the day-2 hint tells players to raise.
+  const tower = placeBuilding(s, "tower", 33, 33);
+  tower.complete = true;
   const kid = s.villagers[0];
   kid.age = "child";
   kid.growTick = s.clock.tick + DAY_TICKS * 4;
