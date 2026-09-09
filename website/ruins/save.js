@@ -6,11 +6,13 @@ import { MAP_SIZE } from "./balance.js";
 import { F_TREE, F_ROCK, F_BUSH } from "./world.js";
 import { indexWaterTiles } from "./villager.js";
 import { footprint } from "./buildings.js";
+import { findCreature } from "./spells.js";
 
 export const SAVE_KEY = "ruins-save-v1";
-// v2: night raids - corruption field, monsters, nests, threat, walls/gates.
-// v1 blobs predate all of it and are treated as a fresh island.
-export const SAVE_VERSION = 2;
+// v3: the god hand - influence, held creatures, pending meteors. v2 blobs
+// (M2 islands) load with a fresh god state; v1 predates raids entirely and
+// is treated as a fresh island.
+export const SAVE_VERSION = 3;
 
 function rleEncode(arr) {
   const out = [];
@@ -58,6 +60,11 @@ export function serialize(state) {
     plots: [...state.world.plots].map(([i, e]) => [i, e.farm, e.readyTick]),
     corruptionMeta: { ...state.corruption },
     raid: { ...state.raid },
+    god: {
+      influence: state.god.influence,
+      held: state.god.held,
+      meteors: state.god.meteors,
+    },
     buildings: state.buildings,
     villagers: state.villagers,
     nomads: state.nomads,
@@ -68,7 +75,15 @@ export function serialize(state) {
 }
 
 export function deserialize(data) {
-  if (!data || data.v !== SAVE_VERSION) return null;
+  if (!data || (data.v !== SAVE_VERSION && data.v !== SAVE_VERSION - 1)) return null;
+  try {
+    return hydrate(data);
+  } catch {
+    return null; // corrupt payload of either version: fresh island instead
+  }
+}
+
+function hydrate(data) {
   const state = createGame(data.seed);
   state.rng.restore(data.rng);
   Object.assign(state.clock, data.clock);
@@ -100,6 +115,12 @@ export function deserialize(data) {
   state.world.corrupted = corrupted;
   state.corruption = { ...data.corruptionMeta };
   state.raid = { ...data.raid };
+  // God hand (v3; a v2 island simply starts with an empty hand).
+  if (data.god) {
+    state.god.influence = data.god.influence ?? 0;
+    state.god.held = data.god.held ?? null;
+    state.god.meteors = data.god.meteors ?? [];
+  }
   indexWaterTiles(state.world);
   state.buildings = data.buildings;
   state.villagers = data.villagers;
@@ -108,6 +129,14 @@ export function deserialize(data) {
   state.monsters = data.monsters ?? [];
   state.projectiles = [];
   state.corpses = data.corpses;
+  // Re-link a held creature by id (entities exist now); if it is gone, the
+  // hand opens rather than carrying a ghost.
+  if (state.god.held) {
+    const { kind, id } = state.god.held;
+    const linked = findCreature(state, kind, id);
+    if (linked) linked.held = true;
+    else state.god.held = null;
+  }
   // Re-stamp building occupancy (and gate walkthroughs) from the saved
   // list - the fresh camp stamped by createGame is replaced wholesale.
   state.buildingAt.fill(-1);

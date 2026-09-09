@@ -3,18 +3,20 @@
 // #1 flaw; we replace it with one-line, first-time-only hints).
 import * as B from "./balance.js";
 import * as bd from "./buildings.js";
+import { influenceMax } from "./spells.js";
 
 const RES_STYLE = {
   wood: { color: "#b98a54", label: "Wood" },
   food: { color: "#9cc45c", label: "Food" },
   water: { color: "#7fb3de", label: "Water" },
   stone: { color: "#a7adb3", label: "Stone" },
+  bolts: { color: "#c9a15f", label: "Bolts" },
 };
 
 // Build menu categories (bottom sheet, mirroring RtR's build order).
 const BUILD_TABS = [
   { key: "village", label: "Village", types: ["home", "farm", "well", "sawpit", "storehouse", "quarry"] },
-  { key: "defense", label: "Defense", types: ["fence", "stoneWall", "gate", "tower"] },
+  { key: "defense", label: "Defense", types: ["fence", "stoneWall", "gate", "tower", "stormPylon"] },
 ];
 
 const HINTS = {
@@ -38,6 +40,8 @@ const HINTS = {
     "Raiders march on your camp at night. They take any open path and never touch walls — so leave ONE gap in your wall and let the Sentry Tower greet them.",
   quarry:
     "Stone walls need stone. Build a Quarry near the gray rocks and stonecutters will mine it on their own.",
+  god: "Your people are dying at night — open God and spend influence. Lightning strikes one raider dead; your growing village refills the bar.",
+  bolts: "Your towers are out of bolts. Sawpits fletch new ones from stored wood — keep both flowing.",
 };
 
 export function createUI(game) {
@@ -46,10 +50,12 @@ export function createUI(game) {
   const ui = {
     hintShown: loadHints(),
     activeHint: null,
-    mode: "look", // look | build | dismantle
+    mode: "look", // look | build | dismantle | cast
     placing: null, // {type, x, y, valid}
     dismantleTarget: null,
     selected: null,
+    castKey: null, // armed spell key while casting
+    godOpen: false,
   };
 
   const hintEl = $("hint");
@@ -92,6 +98,14 @@ export function createUI(game) {
     chips.push(
       `<span class="res-chip"><i class="res-dot" style="background:#e8c39a"></i><b>${pop}</b><small>/ ${housing} housed</small></span>`,
     );
+    // The god's purse: influence (regrows with the village - doc 03 §5.1).
+    const maxInf = influenceMax(state);
+    if (maxInf > 0) {
+      const inf = Math.floor(state.god.influence);
+      chips.push(
+        `<span class="res-chip" title="Influence — spend it in the God panel"><i class="res-dot" style="background:#dfbd7d"></i><b>${inf}</b><small>/ ${maxInf} influence</small></span>`,
+      );
+    }
     const jobs = bd.jobSlots(state);
     const employed = Object.keys(B.JOBS).reduce(
       (a, j) => a + bd.employedCount(state, j),
@@ -178,7 +192,8 @@ export function createUI(game) {
     if (type === "fence") bits.push("Drag to paint a run of fence. Raiders chew it, but slowly.");
     if (type === "stoneWall") bits.push("Drag to paint. Twice the fence at shrugging off raids.");
     if (type === "gate") bits.push("Your villagers pass; raiders must break it.");
-    if (type === "tower") bits.push(`Shoots raiders up to ${def.tower.range} tiles away, over walls.`);
+    if (type === "tower") bits.push(`Piercing bolts up to ${def.tower.range} tiles, over walls. Good against husks and embers.`);
+    if (type === "stormPylon") bits.push(`Storm magic up to ${def.tower.range} tiles. The answer to blots and wraiths.`);
     for (const [job, n] of Object.entries(def.jobs))
       bits.push(`${n} ${B.JOBS[job].name.toLowerCase()} job${n > 1 ? "s" : ""}.`);
     return bits.join(" ");
@@ -248,6 +263,42 @@ export function createUI(game) {
     $("jobs-unemployed").textContent = `${state.villagers.length} villagers · ${idle} unemployed · ${kids} child${kids === 1 ? "" : "ren"}`;
   }
 
+  // ---- God panel: influence meter + the five-spell hand (RtR's spell
+  // bar, mobile-shaped). Armed spell swaps the bar for the cast instructions.
+  const CAST_INFO = {
+    grab: "Tap a creature to lift it — fling to throw, ease off to set down",
+    lightning: "Tap a raider or a nest to strike it",
+    meteor: "Tap where the stone should fall — everything in the circle burns",
+    heal: "Tap near your hurt villagers",
+    mend: "Tap near damaged walls and buildings",
+  };
+  const SPELL_ORDER = ["grab", "lightning", "meteor", "heal", "mend"];
+
+  function renderSpellbar() {
+    const state = game.getState();
+    const max = influenceMax(state);
+    $("influence-fill").style.width = `${Math.round((state.god.influence / Math.max(1, max)) * 100)}%`;
+    $("influence-text").textContent = `${Math.floor(state.god.influence)}/${max}`;
+    const slots = $("spell-slots");
+    slots.innerHTML = "";
+    for (const key of SPELL_ORDER) {
+      const spec = B.SPELLS[key];
+      const btn = document.createElement("button");
+      btn.className = `spell-slot${ui.castKey === key ? " armed" : ""}`;
+      btn.innerHTML = `<i>${spec.icon}</i><b>${spec.name}</b><small>${spec.cost}</small>`;
+      btn.disabled = state.god.influence < spec.cost && ui.castKey !== key;
+      btn.onclick = () => game.armSpell(key);
+      slots.appendChild(btn);
+    }
+  }
+
+  function setGodPanel(open) {
+    ui.godOpen = open;
+    if (open) renderSpellbar();
+    $("spellbar").hidden = !open || !!ui.castKey;
+    setDock(open ? "god-open" : "look");
+  }
+
   // ---- Inspector ----
   function inspect(selection) {
     const state = game.getState();
@@ -284,6 +335,7 @@ export function createUI(game) {
         rows.push(["Supplies", `${b.delivered}/${Object.values(def.cost).reduce((a, n) => a + n, 0)} hauled${missing ? ` (needs ${missing})` : ""}`]);
       }
       if (def.tower) rows.push(["Range", `${def.tower.range} tiles, fires over walls`]);
+      if (def.tower) rows.push(["Ammo", `1 bolt per shot — ${def.tower.type} damage`]);
       if (jobs) rows.push(["Jobs", jobs]);
       if (def.houses) rows.push(["Residents", `${b.occupants}/${def.houses}`]);
       if (def.storage) rows.push(["Storage", `+${def.storage} to village cap`]);
@@ -355,6 +407,13 @@ export function createUI(game) {
     "monsters-retreat": () => ["Dawn", "The surviving raiders crumble away.", "good"],
     "camp-hit": (e) => ["The camp is under attack!", "Tap to look — every blow counts.", "bad"],
     destroyed: (e) => [`${e.name} was torn down`, "Raiders broke through there.", "bad"],
+    "bolts-out": () => ["Towers out of bolts", "Sawpits fletch them from stored wood.", "bad"],
+    "emberling-sprung": (e) => [
+      "A fire spirit slipped through",
+      "The meteor carried an emberling instead of rock. It hates water...",
+      "bad",
+    ],
+    "meteor-impact": (e) => ["Meteor impact", "The circle burns — yours and theirs.", "info"],
     "site-placed": (e) =>
       e.count ? [`${e.name} sites placed`, "Builders will haul the materials.", "good"] : null,
   };
@@ -391,7 +450,12 @@ export function createUI(game) {
       if (e.type === "storage-full") showHint("storage");
       if (e.type === "dusk") showHint("night");
       if (e.type === "corruption-spawned") showHint("corruption");
-      if (e.type === "raid-start") showHint("raid");
+      if (e.type === "raid-start") {
+        showHint("raid");
+        // By the second raid the wall lesson has landed; time for the hand.
+        if (state.clock.day >= 4) showHint("god");
+      }
+      if (e.type === "bolts-out") showHint("bolts");
       if (e.type === "dawn") game.saveNow();
     }
   }
@@ -452,6 +516,7 @@ export function createUI(game) {
   function closeSheets() {
     $("build-sheet").hidden = true;
     $("jobs-sheet").hidden = true;
+    setGodPanel(false);
     closeInspector();
   }
 
@@ -479,13 +544,20 @@ export function createUI(game) {
       setDock("jobs-open");
     } else setDock("look");
   };
+  $("god-open").onclick = () => {
+    const opening = !ui.godOpen;
+    game.exitModes();
+    closeSheets();
+    if (opening) setGodPanel(true);
+  };
+  $("cancel-cast").onclick = () => game.disarmSpell();
   document.querySelectorAll(".sheet-close").forEach((b) => (b.onclick = closeSheet));
   function closeSheet() {
     closeSheets();
     setDock("look");
   }
   function setDock(active) {
-    ["look", "build-open", "jobs-open"].forEach((id) =>
+    ["look", "build-open", "jobs-open", "god-open"].forEach((id) =>
       $(id).classList.toggle("active", id === active),
     );
   }
@@ -532,12 +604,39 @@ export function createUI(game) {
     observeHints(state);
     if (!$("jobs-sheet").hidden) renderJobs();
     if (ui.placing) updatePlacementInfo(state, ui.placing.type);
+    if (ui.godOpen) renderSpellbar();
   };
   ui.inspect = inspect;
   ui.closeInspector = closeInspector;
   ui.closeSheets = closeSheets;
   ui.showHint = showHint;
   ui.setDock = setDock;
+  // Arm a spell: bar swaps to cast instructions, reticle follows the finger.
+  ui.armSpell = (key) => {
+    ui.castKey = key;
+    ui.mode = "cast";
+    $("spellbar").hidden = true;
+    $("cast-name").textContent = `${B.SPELLS[key].icon} ${B.SPELLS[key].name}`;
+    $("cast-info").textContent = CAST_INFO[key];
+    $("castbar").hidden = false;
+    game.renderer.view.cast = { key, x: null, y: null };
+  };
+  ui.disarmSpell = () => {
+    ui.castKey = null;
+    if (ui.mode === "cast") ui.mode = "look";
+    $("castbar").hidden = true;
+    game.renderer.view.cast = null;
+    if (ui.godOpen) setGodPanel(true);
+    else setDock("look");
+  };
+  // Exit-everything hook for main.js (Escape, dock switches, placement).
+  ui.closeGod = () => {
+    ui.castKey = null;
+    ui.godOpen = false;
+    $("spellbar").hidden = true;
+    $("castbar").hidden = true;
+    game.renderer.view.cast = null;
+  };
   ui.updatePlacement = (state) => {
     if (ui.placing) updatePlacementInfo(state, ui.placing.type);
   };

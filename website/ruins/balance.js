@@ -76,10 +76,11 @@ export const SAPLINGS_PER_DAY = 3; // trees slowly regrow away from the village
 
 // ---- Resources & storage. One big pool, capped by buildings (RtR rule);
 // harvesters stop when full ("they stop working if there's no space").
-export const RESOURCES = ["wood", "food", "water", "stone"];
+// Bolts (M3) are the tower ammo: a crafted pool good, not a raw harvest.
+export const RESOURCES = ["wood", "food", "water", "stone", "bolts"];
 // RtR hands you up to 64 starting supplies incl. wood (Update 2 notes);
 // 64 wood covers well+farm+sawpit with margin - no bootstrap deadlock.
-export const START_RESOURCES = { wood: 64, food: 24, water: 30, stone: 0 };
+export const START_RESOURCES = { wood: 64, food: 24, water: 30, stone: 0, bolts: 20 };
 export const CAMP_STORAGE = 80; // holds the 64 starting wood (research camp
 // tiers reach 86 slots); keeps boot supplies inside the cap so the HUD
 // doesn't warn on day 1
@@ -207,7 +208,25 @@ export const BUILDINGS = {
     jobs: {},
     radius: 0,
     hp: 180,
-    tower: { range: 10, damage: 12, reload: 60 }, // 1 bolt/s, pierces like RtR's bow tower
+    // M3: fires piercing bolts drawn from the village ammo pool (RtR bow
+    // towers pull arrows from storage; ours skips the hauling, keeps the
+    // economy). type feeds the resist matrix - sentries blunt flesh, not
+    // blots or phasers.
+    tower: { range: 10, damage: 12, reload: 60, type: "pierce" },
+  },
+  stormPylon: {
+    name: "Storm Pylon",
+    size: 1,
+    cost: { wood: 16, stone: 8 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 150,
+    // M3 counter-match piece: magic damage, the only structure answer to
+    // blots and wraiths (RtR's Elemental Bolt tower niche). Weaker raw dps
+    // than the sentry on purpose - it is a specialist, not an upgrade.
+    tower: { range: 9, damage: 10, reload: 75, type: "magic" },
   },
   quarry: {
     name: "Quarry",
@@ -316,8 +335,11 @@ export const THREAT_DECAY_PER_DAY = 12; // growing freely
 export const THREAT_SPAWN_MULT = 0.0125; // raid count x (1 + threat * this):
 // full bar = +125% raiders. Doc 04: threat scales "how powerful and numerous".
 
-// ---- Monsters. Two types for M2 (melee + splitter, per master plan
-// section 4; wall-phaser and ranged-fire join in M3). Names/art original.
+// ---- Monsters. Four types for M3 (melee, splitter, wall-phaser,
+// ranged-fire - master plan section 4), each with the full resist matrix
+// (doc 04 section 5.1). resists maps DAMAGE TYPE -> multiplier on damage
+// TAKEN: >1 is a vulnerability, <1 a resistance. All four types plus water
+// must be present for every species (asserted in tests). Names/art original.
 export const MONSTERS = {
   husk: {
     name: "Husk",
@@ -326,6 +348,8 @@ export const MONSTERS = {
     attackTicks: 45, // ~4 dps: a wood fence buys ~25 s, a villager duel ~25 s
     speed: 1.4, // tiles/s - slower than villagers (doc 04: headless are slow)
     splits: null,
+    // Headless analog: no armor, but fire cooks them (+20% -> 1.25).
+    resists: { pierce: 1, crush: 1, magic: 1, fire: 1.25, water: 1 },
     color: "#8fae6b",
   },
   blot: {
@@ -336,6 +360,11 @@ export const MONSTERS = {
     speed: 1.1,
     // RtR slimes split into two smaller slimes on death (doc 04 section 1.3).
     splits: { kind: "blotling", count: 2 },
+    // Slime analog: tower bolts mostly bounce off (12 pierce -> ~5), storm
+    // magic melts it (doc 04: +80% magic electric) - the counter-match
+    // lesson of M3. Kept just shy of half-leak so a lone sentry still
+    // carries nights 5-6; the pylon is for later, worse blots.
+    resists: { pierce: 0.45, crush: 0.5, magic: 1.75, fire: 1, water: 1 },
     color: "#7d5ba6",
   },
   blotling: {
@@ -345,13 +374,55 @@ export const MONSTERS = {
     attackTicks: 45,
     speed: 1.6,
     splits: null,
+    resists: { pierce: 0.45, crush: 0.5, magic: 1.75, fire: 1, water: 1 },
     color: "#9a7cc0",
+  },
+  wraith: {
+    name: "Wraith",
+    hp: 110,
+    damage: 4,
+    attackTicks: 60,
+    speed: 0.9, // spectres are the slowest thing on the field
+    splits: null,
+    // Spectre analog (doc 04 section 1.6): physical damage barely lands;
+    // storm magic is the answer. phaseWalls lets it glide through fences
+    // and stone walls - our DIVERGENCE: gates are warded and block it, so
+    // the villager lifeline stays meaningful (RtR gates do not stop them).
+    resists: { pierce: 0.3, crush: 0.3, magic: 1.75, fire: 1, water: 1 },
+    phaseWalls: true,
+    color: "#9db7e8",
+  },
+  emberling: {
+    name: "Emberling",
+    hp: 45,
+    damage: 4,
+    attackTicks: 75,
+    speed: 1.2,
+    ranged: { range: 5.5 }, // stops and shoots buildings/villagers (RtR
+    // fire elemental: the only ranged monster, 8-tile range, rescaled)
+    splits: null,
+    // Fire elemental analog: flame barely singes it (near-immune), water is
+    // death (doc 04: thrown into water it takes huge damage) - the Grab
+    // showpiece.
+    resists: { pierce: 1, crush: 1, magic: 1, fire: 0.1, water: 8 },
+    color: "#e2813f",
   },
 };
 export const MONSTER_HARD_CAP = 24; // sim budget guard (splits can chain)
 export const BLOT_ARRIVAL_DAY = 5; // splitters join from night 5 (RtR slimes
 // arrive day 2-4; we hold them back until the wall lesson has landed)
 export const BLOT_CHANCE = 0.3; // share of blots once arrived
+export const WRAITH_ARRIVAL_DAY = 8; // RtR spectres arrive day 12; our days
+// run ~9x shorter, but M3 also fronts more defense tools - split the
+// difference. The pylon lesson must land before they show up.
+export const WRAITH_CHANCE = 0.18;
+export const EMBERLING_ARRIVAL_DAY = 12; // RtR fire elementals day 16
+export const EMBERLING_CHANCE = 0.15;
+
+// ---- Damage types (doc 04 section 5.1, the M3 slice). Towers: sentry =
+// pierce, storm pylon = magic. Villagers swing bare-handed = crushing.
+// Lightning = magic, Meteor = fire, water only matters via Grab throws.
+export const VILLAGER_DAMAGE_TYPE = "crush";
 
 // ---- Night raids (doc 04 section 3). Spawn at nightfall from nests;
 // survivors retreat into the corruption at dawn (calm days, panicked nights).
@@ -373,3 +444,101 @@ export const VILLAGER_SWING_RANGE = 1.5;
 
 // ---- Loss (pillar 4: brutal-but-fair loss as content, restart < 10 s).
 export const LOSS_CHECK = true; // camp destroyed OR last villager dead
+
+// =====================================================================
+// M3 — God hand. Research base: docs/rise-to-ruins/research/03 section 5
+// (influence/spells) and 04 section 5 (damage types). RtR costs cited
+// inline; ours keep the ratios where the feel is right and rescale where
+// RtR's late-game economy (400-2000 influence spells) would dead-lock a
+// 10-villager mobile village.
+// =====================================================================
+
+// ---- Influence economy (doc 03 section 5.1): max influence scales with
+// the living village - RtR's original rule was a flat 40 per villager,
+// children giving less in Update 2. Faith scaling of the contribution is
+// M4 (master plan section 4); the shape below leaves room for it.
+export const INFLUENCE_PER_ADULT = 40;
+export const INFLUENCE_PER_CHILD = 15;
+// RtR regenerates "a percentage of maximum per tick"; rate unpublished.
+// 45%/day at pop 10 = ~180 influence/day: one Lightning a night early on,
+// several at pop 20+. The god grows with the village - that IS the loop.
+export const INFLUENCE_REGEN_PER_DAY = 0.45;
+
+// ---- The five spells (master plan section 4). Costs: Grab/Lightning/
+// Meteor keep RtR's exact 40/100/200; Heal (RtR Healing Aura 400) and Mend
+// (RtR Mend 800) are rescaled to our smaller pools for smaller effects.
+export const SPELLS = {
+  grab: {
+    name: "Grab",
+    cost: 40, // RtR base cost; per-tick upcharge skipped for mobile taps
+    icon: "✋",
+    blurb: "Lift a villager, wanderer, or monster. Fling them — hard landings hurt, water drowns embers.",
+  },
+  lightning: {
+    name: "Lightning",
+    cost: 100, // RtR exact
+    icon: "⚡",
+    // 40 storm damage: one-shots husks and blotlings, kills blots via the
+    // 1.75 magic weakness, never trivializes wraiths (2 casts) or embers.
+    damage: 40,
+    damageType: "magic",
+    tapRange: 1.8, // creature must be this close to the tap
+    cooldown: 30, // ~0.5 s, RtR's lightning cooldown
+    blurb: "Strike one creature with storm magic. Blots and wraiths melt; embers shrug it off.",
+  },
+  heal: {
+    name: "Heal",
+    cost: 150,
+    icon: "✚",
+    amount: 40, // instant, RtR Healing Aura is a channel - ours is a burst
+    radius: 3,
+    cooldown: 30,
+    blurb: "Mend every villager near the touch. Works after raids, not during them — plan the triage.",
+  },
+  mend: {
+    name: "Mend",
+    cost: 120,
+    icon: "⚒",
+    amount: 60, // HP restored per building
+    radius: 3,
+    cooldown: 30,
+    blurb: "Repair damaged walls, gates, and buildings near the touch. The corruption's nests resist it.",
+  },
+  meteor: {
+    name: "Meteor",
+    cost: 200, // RtR exact
+    icon: "☄",
+    damage: 60, // fire damage at the impact
+    damageType: "fire",
+    buildingDamage: 80, // friendly fire is real: RtR meteors crush walls too
+    radius: 2.2,
+    fallTicks: 48, // ~0.8 s telegraph: the shadow grows, the wise scatter
+    cooldown: 60,
+    // Doc 04 section 1.7: RtR meteors "occasionally" drop a fire elemental
+    // instead of a rock. Kept - it is exactly the gamble that makes stories.
+    emberlingChance: 0.12,
+    blurb: "Call a falling stone. Devastates raiders - and anything of yours in the circle. Rarely drops an emberling instead.",
+  },
+};
+export const CAST_TAP_RANGE = 1.2; // default tap tolerance for ground spells
+
+// ---- Tower ammo (RtR: bow towers pull 20 arrows per bolt-unit from
+// storage). One pool, both towers: bolts. Sawpits fletch them from stored
+// wood between felling - defense literally draws on the wood economy.
+export const BOLT_CRAFT_TICKS = 600; // per sawpit, ~40 crafts/day
+export const BOLT_CRAFT_WOOD = 1;
+export const BOLT_CRAFT_YIELD = 4;
+// Twenty starting bolts: the first sentry can fire on night 3 even if the
+// sawpit is still on the to-do list (brutal-but-fair, not gotcha).
+export const START_BOLTS = 20;
+export const TOWERS_WARN_EMPTY = true; // one "out of bolts" note per night
+
+// ---- Grab throw physics (doc 03 section 5: drop deals 1-10 in RtR; ours
+// scales with fling speed so the *gesture* is the damage dial).
+export const GRAB_PICKUP_RANGE = 1.4; // tiles around the tap
+export const GRAB_MIN_THROW_SPEED = 2; // tiles/s below which it's a "set down"
+export const GRAB_MAX_THROW_SPEED = 14;
+export const GRAB_MONSTER_MAX_DROP = 18; // crush damage cap on monsters
+export const GRAB_VILLAGER_MAX_DROP = 8; // villagers are fragile (RtR 1-10)
+export const GRAB_FLY_TICKS_PER_TILE = 8; // arc length scales with fling
+export const GRAB_MIN_FLY_TICKS = 12;

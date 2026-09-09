@@ -9,6 +9,7 @@ import { createVillager, tickVillager, indexWaterTiles } from "./villager.js";
 import { scheduleNomads, tickNomads, rollBirths, assignHomes } from "./growth.js";
 import { createCorruptionState, ensureCorruptionSpawn, tickCorruption, corruptionDawn } from "./corruption.js";
 import { createRaidState, tickMonsters, raidsAtNightfall, raidsAtDawn } from "./monsters.js";
+import { createGodState, tickSpells } from "./spells.js";
 
 export function createGame(seed = (Math.random() * 0xffffffff) >>> 0) {
   const state = {
@@ -26,10 +27,11 @@ export function createGame(seed = (Math.random() * 0xffffffff) >>> 0) {
     projectiles: [],
     raid: createRaidState(),
     corruption: createCorruptionState(),
+    god: createGodState(),
     corpses: [],
     resources: { ...B.START_RESOURCES },
     jobCounts: { builder: 2, farmer: 2, woodcutter: 2, stonecutter: 0 },
-    flags: { storageFull: false, duskAnnounced: false, wallsDirty: true },
+    flags: { storageFull: false, duskAnnounced: false, wallsDirty: true, boltsWarned: false },
     nextId: 1,
     events: [],
     stats: { sitesPlaced: 0, built: 0, died: 0, slain: 0, peakPop: B.START_POP },
@@ -74,7 +76,10 @@ export function stepGame(state, ticks) {
     advance(state.clock, 1);
 
     // Nightfall: the nests release their raiders (doc 04 section 3.1).
-    if (prevPhase === 4 && state.clock.phaseIndex === 5) raidsAtNightfall(state);
+    if (prevPhase === 4 && state.clock.phaseIndex === 5) {
+      state.flags.boltsWarned = false; // fresh night, one ammo nudge again
+      raidsAtNightfall(state);
+    }
 
     // The blight lands with the dawn, BEFORE this tick's corruption beat, so
     // the nest search sees the fresh blob on the spawn morning itself
@@ -87,6 +92,7 @@ export function stepGame(state, ticks) {
     tickRegrow(state);
     tickCorruption(state);
     tickMonsters(state, 1);
+    tickSpells(state, 1);
 
     // Dawn beats: births, nomad schedule, corruption threat, retreats.
     if (prevPhase !== 0 && state.clock.phaseIndex === 0 && state.clock.day > state.lastDawn) {

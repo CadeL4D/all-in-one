@@ -378,6 +378,122 @@ button:focus-visible {
   color: #dcead0;
 }
 
+/* ---- Spell bar (god hand) ---- */
+#spellbar {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #16221bee;
+  border: 1px solid #dfbd7d55;
+  border-radius: 13px;
+  padding: 9px 14px;
+  width: min(94vw, 520px);
+  justify-content: space-between;
+  backdrop-filter: blur(4px);
+  z-index: 4;
+}
+#spellbar[hidden] {
+  display: none;
+}
+.influence {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--gold);
+  flex-shrink: 0;
+}
+.influence span {
+  font-size: 15px;
+}
+.influence-track {
+  width: 56px;
+  height: 7px;
+  border-radius: 4px;
+  background: #0d1512;
+  overflow: hidden;
+}
+.influence-track i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #b08d4a, #ffe9a3);
+  transition: width 0.3s ease;
+}
+.influence b {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #f2e4c4;
+}
+#spell-slots {
+  display: flex;
+  gap: 6px;
+}
+.spell-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-height: 52px;
+  min-width: 52px;
+  padding: 5px 4px 3px;
+  border-radius: 10px;
+  line-height: 1.15;
+}
+.spell-slot i {
+  font-style: normal;
+  font-size: 16px;
+}
+.spell-slot b {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.spell-slot small {
+  font-size: 10px;
+  color: var(--gold);
+}
+.spell-slot.armed {
+  background: #3c523f;
+  border-color: #dfbd7d99;
+  color: #ffe9a3;
+}
+.spell-slot:disabled {
+  opacity: 0.42;
+}
+
+/* ---- Cast bar (armed spell instructions) ---- */
+#castbar {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #20180fd9;
+  border: 1px solid #dfbd7d55;
+  border-radius: 13px;
+  padding: 10px 14px;
+  width: min(92vw, 430px);
+  justify-content: space-between;
+  z-index: 4;
+}
+#castbar[hidden] {
+  display: none;
+}
+#castbar strong {
+  font-size: 15px;
+  color: #ffe9a3;
+}
+#castbar small {
+  display: block;
+  color: #d9c9a6;
+  font-size: 12px;
+}
+
 /* ---- Placement chips ---- */
 #placement {
   position: absolute;

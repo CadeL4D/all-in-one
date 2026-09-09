@@ -50,7 +50,16 @@ const P = {
   huskHi: "#a5c47e",
   blot: "#7d5ba6",
   blotHi: "#9a7cc0",
+  wraith: "#9db7e8",
+  wraithHi: "#c8dbf5",
+  ember: "#e2813f",
+  emberHi: "#ffb454",
+  emberCore: "#ffe9a3",
+  pylon: "#5f7f96",
+  pylonHi: "#8fc3dd",
+  pylonOrb: "#aee6ff",
   bolt: "#ffd97a",
+  hand: "#ffe9a3",
 };
 
 const hash = (i) => {
@@ -66,6 +75,7 @@ export function createRenderer(canvas, stateRef) {
     ghost: null, // {type, x, y, valid}
     selected: null, // {kind:'building'|'villager', id}
     buildMode: false,
+    cast: null, // armed spell: {key, x, y} - reticle follows the pointer
     time: 0,
   };
 
@@ -95,11 +105,14 @@ export function createRenderer(canvas, stateRef) {
     drawCorpses(state);
     drawRangeCircle(state);
     drawNomads(state);
+    drawMeteors(state);
     drawMonsters(state);
     drawVillagers(state);
     drawProjectiles(state);
+    drawGodHand(state);
     drawGhost(state);
     drawPaint(state);
+    drawReticle(state);
     drawNight(state);
     drawSelection(state);
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -310,6 +323,7 @@ export function createRenderer(canvas, stateRef) {
       else if (b.type === "stoneWall") drawStoneWall(X, Y, S);
       else if (b.type === "gate") drawGate(X, Y, S);
       else if (b.type === "tower") drawTower(X, Y, S);
+      else if (b.type === "stormPylon") drawStormPylon(X, Y, S);
       else if (b.type === "quarry") drawQuarry(X, Y, S);
       // Damage bar: only when it actually hurts (readable raids).
       if (b.complete && b.hp < def.hp) {
@@ -523,6 +537,31 @@ export function createRenderer(canvas, stateRef) {
     g.fillRect(X + 3, Y + 12, 10, 1);
   }
 
+  // M3: the anti-spirit piece. A standing stone cradling a storm-lit orb -
+  // it should read "magic" at a glance next to the sentry's wood-and-stone.
+  function drawStormPylon(X, Y, S) {
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + 14, 12, 1);
+    g.fillStyle = P.pylon;
+    g.fillRect(X + 6, Y + 5, 4, 9); // standing stone
+    g.fillStyle = P.pylonHi;
+    g.fillRect(X + 6, Y + 5, 2, 9);
+    g.fillStyle = P.rockLo;
+    g.fillRect(X + 4, Y + 13, 8, 2); // footing
+    const pulse = Math.sin(view.time * 0.005) * 0.5 + 0.5;
+    g.fillStyle = P.pylonOrb;
+    g.fillRect(X + 5, Y + 2, 6, 4); // orb
+    g.fillStyle = "#e8f8ff";
+    g.fillRect(X + 6, Y + 2, 2, 2);
+    if (pulse > 0.7) {
+      g.fillStyle = "rgba(174,230,255,0.5)";
+      g.fillRect(X + 4, Y + 1, 8, 6); // charge bloom
+    }
+    g.fillStyle = P.pylonHi;
+    g.fillRect(X + 3, Y + 7, 1, 2); // side sigils
+    g.fillRect(X + 12, Y + 9, 1, 2);
+  }
+
   function drawQuarry(X, Y, S) {
     g.fillStyle = "#8d8d84";
     g.fillRect(X + 1, Y + 1, S - 2, S - 2); // cut pit floor
@@ -585,9 +624,9 @@ export function createRenderer(canvas, stateRef) {
   function drawNomads(state) {
     for (const n of state.nomads) {
       const X = px(n.x),
-        Y = px(n.y);
+        Y = px(n.y - (n.heldZ ?? 0));
       g.fillStyle = P.shadow;
-      g.fillRect(X - 3, Y + 4, 6, 1);
+      g.fillRect(X - 3, Y + 4 + (n.heldZ ?? 0) * B.TILE, 6, 1);
       g.fillStyle = "#5a8dd6";
       g.fillRect(X - 2, Y - 1, 4, 5);
       g.fillStyle = P.skin;
@@ -595,15 +634,17 @@ export function createRenderer(canvas, stateRef) {
     }
   }
 
-  // Monsters shamble with a 2-frame bob keyed to time + id.
+  // Monsters shamble with a 2-frame bob keyed to time + id. Held creatures
+  // ride the god hand: drawn lifted by heldZ (tiles) with a longer shadow.
   function drawMonsters(state) {
     for (const m of state.monsters) {
       const X = px(m.x),
-        Y = px(m.y);
+        Y = px(m.y - (m.heldZ ?? 0));
       const bob = Math.floor(view.time / 220 + m.id) % 2;
       const s = m.kind === "blotling" ? 0.6 : m.kind === "blot" ? 1.15 : 1;
       g.fillStyle = P.shadow;
-      g.fillRect(X - 3 * s, Y + 4 * s, 6 * s, 1);
+      const shrink = (m.heldZ ?? 0) * 2;
+      g.fillRect(X - 3 * s + shrink, Y + 4 * s + (m.heldZ ?? 0) * B.TILE, 6 * s - shrink * 2, 1);
       if (m.kind === "blot" || m.kind === "blotling") {
         // Blob: jiggly dome with a darker core.
         const j = bob ? 1 : 0;
@@ -615,6 +656,37 @@ export function createRenderer(canvas, stateRef) {
         g.fillStyle = "#2a1d3a";
         g.fillRect(X - 2 * s, Y - 1 * s + j, 1, 1);
         g.fillRect(X + 1 * s, Y - 1 * s + j, 1, 1);
+      } else if (m.kind === "wraith") {
+        // Wraith: a hovering shroud, partly there (RtR spectres are hard
+        // to spot) - constant translucency plus a slow shimmer.
+        g.globalAlpha = 0.55 + Math.sin(view.time * 0.003 + m.id) * 0.15;
+        const j = bob ? 1 : 0;
+        g.fillStyle = P.wraith;
+        g.fillRect(X - 3 * s, Y - 4 * s + j, 6 * s, 7 * s);
+        g.fillRect(X - 4 * s, Y - 2 * s, 8 * s, 3 * s); // tattered arms
+        g.fillStyle = P.wraithHi;
+        g.fillRect(X - 2 * s, Y - 3 * s + j, 4 * s, 2 * s);
+        g.fillStyle = "#182436";
+        g.fillRect(X - 1.5 * s, Y - 2.5 * s + j, 1, 1); // hollow eyes
+        g.fillRect(X + 0.5 * s, Y - 2.5 * s + j, 1, 1);
+        g.globalAlpha = 1;
+      } else if (m.kind === "emberling") {
+        // Emberling: a flame imp - bright core, flickering crown, ember
+        // sparks that pop on the bob frame.
+        const j = bob ? 1 : 0;
+        g.fillStyle = P.ember;
+        g.fillRect(X - 3 * s, Y - 2 * s + j, 6 * s, 5 * s);
+        g.fillRect(X - 2 * s, Y - 4 * s - j, 4 * s, 2 * s); // flame crown
+        g.fillStyle = P.emberHi;
+        g.fillRect(X - 2 * s, Y - 1 * s, 4 * s, 3 * s);
+        g.fillStyle = P.emberCore;
+        g.fillRect(X - 1 * s, Y - 1 * s, 2 * s, 2 * s);
+        g.fillStyle = "#5c2a12";
+        g.fillRect(X - 1.5 * s, Y + 0, 1, 1); // sooty eyes
+        g.fillRect(X + 0.5 * s, Y + 0, 1, 1);
+        g.fillStyle = P.emberHi;
+        g.fillRect(X + 3 * s, Y - 3 * s - j, 1, 1); // drifting sparks
+        g.fillRect(X - 4 * s, Y - 5 * s + j, 1, 1);
       } else {
         // Husk: hunched husk of a villager, arms dangling.
         g.fillStyle = P.husk;
@@ -631,20 +703,131 @@ export function createRenderer(canvas, stateRef) {
     }
   }
 
+  // The god hand: a warm halo around anything currently lifted or flying.
+  function drawGodHand(state) {
+    const lifted = [];
+    for (const m of state.monsters) if (m.held) lifted.push(m);
+    for (const v of state.villagers) if (v.held) lifted.push(v);
+    for (const n of state.nomads) if (n.held) lifted.push(n);
+    for (const c of lifted) {
+      const X = px(c.x),
+        Y = px(c.y - (c.heldZ ?? 0.6));
+      const pulse = Math.sin(view.time * 0.012) * 0.5 + 0.5;
+      g.strokeStyle = `rgba(255,233,163,${0.5 + pulse * 0.3})`;
+      g.lineWidth = 1;
+      g.strokeRect(X - 5, Y - 6, 10, 11);
+      // the hand itself: a little constellation of spark pixels overhead
+      g.fillStyle = P.hand;
+      g.fillRect(X - 1, Y - 10 - pulse, 2, 2);
+      g.fillRect(X - 3, Y - 8 - pulse, 1, 1);
+      g.fillRect(X + 2, Y - 8 - pulse, 1, 1);
+    }
+  }
+
+  // Pending meteors: a growing shadow on the ground and the stone itself
+  // dropping in from above (the telegraph IS the fairness - pillar 4).
+  function drawMeteors(state) {
+    for (const meteor of state.god?.meteors ?? []) {
+      const p = Math.min(1, meteor.t / meteor.dur);
+      const X = px(meteor.x),
+        Y = px(meteor.y);
+      const r = (2 + 10 * p) * (B.SPELLS.meteor.radius / 2.2);
+      g.fillStyle = `rgba(20,12,8,${0.15 + 0.3 * p})`;
+      g.beginPath();
+      g.ellipse(X, Y, r, r * 0.6, 0, 0, Math.PI * 2);
+      g.fill();
+      const fall = (1 - p) * 14 * B.TILE;
+      g.fillStyle = "#6d5a4c";
+      g.fillRect(X - 3, Y - fall - 3, 6, 6);
+      g.fillStyle = "#8d7660";
+      g.fillRect(X - 3, Y - fall - 3, 3, 3);
+      g.fillStyle = P.emberHi;
+      g.fillRect(X - 2, Y - fall + 2, 4, 2); // trailing fire
+      g.fillRect(X - 1, Y - fall + 4, 2, 1);
+    }
+  }
+
+  // Armed spell reticle: shows exactly what the circle will hit.
+  function drawReticle(state) {
+    if (!view.cast) return;
+    const { key, x, y } = view.cast;
+    const spec = B.SPELLS[key];
+    if (!spec) return;
+    const radius = { meteor: spec.radius, heal: spec.radius, mend: spec.radius, lightning: spec.tapRange }[key];
+    if (!radius) return;
+    const color =
+      key === "meteor" ? "rgba(255,180,84,0.75)" : key === "lightning" ? "rgba(174,230,255,0.75)" : "rgba(169,205,138,0.75)";
+    g.strokeStyle = color;
+    g.setLineDash([4, 3]);
+    g.beginPath();
+    g.arc(px(x), px(y), radius * B.TILE, 0, Math.PI * 2);
+    g.stroke();
+    g.setLineDash([]);
+    g.beginPath();
+    g.arc(px(x), px(y), 2, 0, Math.PI * 2);
+    g.fillStyle = color;
+    g.fill();
+  }
+
   function drawProjectiles(state) {
     for (const p of state.projectiles) {
       const t = Math.max(0, Math.min(1, p.t / p.dur));
       const x = p.x + (p.tx - p.x) * t,
         y = p.y + (p.ty - p.y) * t;
-      g.fillStyle = P.bolt;
-      g.fillRect(px(x) - 1, px(y) - 1, 2, 2);
+      if (p.kind === "fireball") {
+        g.fillStyle = P.emberHi;
+        g.fillRect(px(x) - 2, px(y) - 2, 4, 4);
+        g.fillStyle = P.emberCore;
+        g.fillRect(px(x) - 1, px(y) - 1, 2, 2);
+      } else if (p.kind === "lightning") {
+        // A jagged bolt from the sky, fading as it grounds.
+        const a = 1 - t;
+        g.strokeStyle = `rgba(214,236,255,${a})`;
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.moveTo(px(p.x) + 4, px(p.y) - 26);
+        g.lineTo(px(p.x) - 3, px(p.y) - 14);
+        g.lineTo(px(p.x) + 2, px(p.y) - 8);
+        g.lineTo(px(p.x), px(p.y));
+        g.stroke();
+        g.lineWidth = 1;
+        g.fillStyle = `rgba(174,230,255,${a})`;
+        g.fillRect(px(p.x) - 3, px(p.y) - 3, 6, 6);
+      } else if (p.kind === "impact") {
+        // Meteor arrival: an expanding fire ring.
+        const r = 4 + t * B.SPELLS.meteor.radius * B.TILE;
+        g.strokeStyle = `rgba(255,180,84,${1 - t})`;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(px(p.x), px(p.y), r, 0, Math.PI * 2);
+        g.stroke();
+        g.lineWidth = 1;
+      } else if (p.kind === "heal" || p.kind === "mend") {
+        // Rising motes inside the spell's circle: green for flesh, gold
+        // for stone.
+        const color = p.kind === "heal" ? "rgba(169,205,138," : "rgba(223,189,125,";
+        const r = p.radius * B.TILE;
+        g.strokeStyle = color + (1 - t) + ")";
+        g.beginPath();
+        g.arc(px(p.x), px(p.y), r * (0.4 + 0.6 * t), 0, Math.PI * 2);
+        g.stroke();
+        g.fillStyle = color + (1 - t) + ")";
+        for (let k = 0; k < 5; k++) {
+          const ang = k * 1.256 + p.t * 3;
+          const rr = r * 0.7 * ((k % 2 ? t : 1 - t) * 0.8 + 0.2);
+          g.fillRect(px(p.x) + Math.cos(ang) * rr - 1, px(p.y) + Math.sin(ang) * rr * 0.6 - (1 - t) * 10 - 1, 2, 2);
+        }
+      } else {
+        g.fillStyle = P.bolt;
+        g.fillRect(px(x) - 1, px(y) - 1, 2, 2);
+      }
     }
   }
 
   function drawVillagers(state) {
     for (const v of state.villagers) {
       const X = px(v.x),
-        Y = px(v.y);
+        Y = px(v.y - (v.heldZ ?? 0));
       const child = v.age === "child";
       const s = child ? 0.7 : 1;
       const sleeping = v.task && v.task.kind === "sleep";
@@ -708,6 +891,7 @@ export function createRenderer(canvas, stateRef) {
     else if (type === "stoneWall") drawStoneWall(px(x), px(y), S);
     else if (type === "gate") drawGate(px(x), px(y), S);
     else if (type === "tower") drawTower(px(x), px(y), S);
+    else if (type === "stormPylon") drawStormPylon(px(x), px(y), S);
     else if (type === "quarry") drawQuarry(px(x), px(y), S);
     if (valid && B.BUILDINGS[type].tower) {
       // Sentry coverage preview: the whole point of a tower is its circle.

@@ -38,10 +38,20 @@ test("resumed sim stays deterministic (same seed + rng state)", () => {
   );
 });
 
-test("old or corrupt saves are rejected", () => {
+test("old or corrupt saves are rejected (v2 islands migrate in)", () => {
   assert.equal(deserialize(null), null);
-  assert.equal(deserialize({ v: SAVE_VERSION - 1 }), null);
   assert.equal(deserialize({}), null);
+  assert.equal(deserialize({ v: SAVE_VERSION }), null, "right version, no payload");
+  assert.equal(deserialize({ v: SAVE_VERSION + 1 }), null, "from the future");
+  // A real v2 blob (an M2 island) loads fine - it just starts godless.
+  const s = createGame(99);
+  stepGame(s, 3000);
+  const blob = JSON.parse(JSON.stringify(serialize(s)));
+  delete blob.god;
+  blob.v = SAVE_VERSION - 1;
+  const migrated = deserialize(blob);
+  assert.ok(migrated, "v2 island loads");
+  assert.equal(migrated.god.influence, 0, "fresh god hand for an M2 island");
 });
 
 test("a night's worth of ticks completes quickly (sim budget)", () => {

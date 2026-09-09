@@ -40,7 +40,7 @@ export function createVillager(state, x, y, age = "adult") {
 const perTick = (perDay) => perDay / B.DAY_TICKS;
 
 export function tickVillager(state, v, dt) {
-  if (v.dead) return;
+  if (v.dead || v.held) return; // held: dangling from the god hand, world on pause
   const working = isWorking(v);
 
   // ---- Needs decay (working burns hunger ~x2 in RtR).

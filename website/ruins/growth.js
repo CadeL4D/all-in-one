@@ -50,6 +50,7 @@ export function tickNomads(state, dt) {
   const size = state.world.size;
   const camp = state.buildings.find((b) => b.type === "camp");
   for (const n of state.nomads) {
+    if (n.held) continue; // carried by the god hand (RtR: Grab saves nomads)
     if (!n.path.length) {
       n.arrived = true;
       createVillager(state, n.x, n.y, "adult");

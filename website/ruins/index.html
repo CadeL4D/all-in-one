@@ -70,8 +70,26 @@
       <nav class="dock" aria-label="Village tools">
         <button id="look" class="active"><span>⌖</span>Look</button
         ><button id="build-open"><span>⌂</span>Build</button
-        ><button id="jobs-open"><span>⚗</span>Jobs</button>
+        ><button id="jobs-open"><span>⚗</span>Jobs</button
+        ><button id="god-open"><span>✦</span>God</button>
       </nav>
+      <div id="spellbar" hidden>
+        <div class="influence" title="Influence — your village's faith made spendable">
+          <span>✦</span>
+          <div class="influence-track" aria-hidden="true"><i id="influence-fill"></i></div>
+          <b id="influence-text">0/0</b>
+        </div>
+        <div id="spell-slots" role="group" aria-label="God powers"></div>
+      </div>
+      <div id="castbar" hidden>
+        <div>
+          <strong id="cast-name">Lightning</strong
+          ><small id="cast-info">Tap a target</small>
+        </div>
+        <div class="placement-buttons">
+          <button id="cancel-cast" aria-label="Stop casting">×</button>
+        </div>
+      </div>
       <div id="placement" hidden>
         <div>
           <strong id="placement-name">Home</strong
@@ -161,6 +179,18 @@
           <li>
             <b>Box the corruption in and Threat rises</b> — the red bar means
             bigger, meaner nights. Let it sprawl and the pressure fades.
+          </li>
+          <li>
+            <b>You are the god here.</b> Open <b>God</b> to spend influence —
+            it regrows with your population. Lightning strikes one raider;
+            the Sentry Tower's bolts pierce husks but blots and wraiths
+            shrug them off, so raise a Storm Pylon. Grab lifts anything:
+            fling embers into water, carry wanderers to safety. Meteor
+            devastates — anything in the circle, yours or theirs.
+          </li>
+          <li>
+            <b>Towers drink bolts.</b> Sawpits fletch them from stored wood —
+            keep both flowing before a long night.
           </li>
         </ol>
         <p class="menu-tiny">

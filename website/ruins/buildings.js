@@ -9,6 +9,9 @@ import {
   DAY_TICKS,
   BUILD_TICKS_PER_RESOURCE,
   JOBS,
+  BOLT_CRAFT_TICKS,
+  BOLT_CRAFT_WOOD,
+  BOLT_CRAFT_YIELD,
 } from "./balance.js";
 import { T_GRASS, T_DIRT, F_NONE, F_STUMP, F_PLOT, idx } from "./world.js";
 
@@ -249,7 +252,9 @@ export function buildingCenter(b) {
   return { x: b.x + BUILDINGS[b.type].size / 2, y: b.y + BUILDINGS[b.type].size / 2 };
 }
 
-// Buildings slowly produce: wells seep clean water into the pool.
+// Buildings slowly produce: wells seep clean water; sawpits fletch tower
+// bolts from stored wood between felling (M3 ammo economy - towers draw
+// the shared pool dry, the woodcutter line refills it).
 export function tickProduction(state, dt) {
   const cap = storageCap(state);
   const perTick = WELL_WATER_PER_DAY / DAY_TICKS;
@@ -257,5 +262,15 @@ export function tickProduction(state, dt) {
     if (!b.complete) continue;
     if (b.type === "well" && state.resources.water < cap)
       state.resources.water = Math.min(cap, state.resources.water + perTick * dt);
+    if (
+      b.type === "sawpit" &&
+      (state.clock.tick + b.id) % BOLT_CRAFT_TICKS < dt &&
+      state.resources.wood >= BOLT_CRAFT_WOOD &&
+      state.resources.bolts < cap
+    ) {
+      // Staggered by building id so co-located sawpits don't sync-craft.
+      state.resources.wood -= BOLT_CRAFT_WOOD;
+      state.resources.bolts = Math.min(cap, state.resources.bolts + BOLT_CRAFT_YIELD);
+    }
   }
 }

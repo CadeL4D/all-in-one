@@ -14,16 +14,19 @@ const NEIGHBORS = [
 
 // opts.through: Set of tile indices walkable despite `blocked` (gates -
 // villagers and nomads pass, monsters never get this option).
+// opts.blockedFn(i): full override of the blocker test (wraiths glide
+// through wall tiles). When set, `through` is ignored.
 // opts.cost(i): traversal cost for entering tile i; default 1. Must be >= 1
 // so the Manhattan heuristic stays admissible.
 export function findPath(world, start, goal, blocked, opts = {}) {
   const through = opts.through ?? null;
   const cost = opts.cost ?? null;
+  const blockedFn = opts.blockedFn ?? null;
   if (start === goal) return [];
   // In breach mode the goal stays the (blocked) camp tile itself: A* may
   // enter it like any other structure. Otherwise resolve to standable ground.
-  if (!cost && !isPassable(world, goal, blocked, through)) {
-    const alt = adjacentOpen(world, goal, start, blocked, through);
+  if (!cost && !isPassable(world, goal, blocked, through, blockedFn)) {
+    const alt = adjacentOpen(world, goal, start, blocked, through, blockedFn);
     if (alt < 0) return null;
     goal = alt;
     if (start === goal) return [];
@@ -91,7 +94,7 @@ export function findPath(world, start, goal, blocked, opts = {}) {
       // infinite cost means "never" (water, trees, rocks).
       const step = cost ? cost(n) : 1;
       if (!isFinite(step)) continue;
-      if (n !== goal && !cost && !isPassable(world, n, blocked, through)) continue;
+      if (n !== goal && !cost && !isPassable(world, n, blocked, through, blockedFn)) continue;
       if (closed[n]) continue;
       const tentative = gScore[current] + step;
       if (tentative < gScore[n]) {
@@ -104,7 +107,8 @@ export function findPath(world, start, goal, blocked, opts = {}) {
   return null;
 }
 
-export function isPassable(world, i, blocked, through = null) {
+export function isPassable(world, i, blocked, through = null, blockedFn = null) {
+  if (blockedFn) return !blockedFn(i) && tilePassable(world, i);
   if (blocked && blocked[i] !== -1) return through ? through.has(i) : false;
   return tilePassable(world, i);
 }
@@ -124,7 +128,7 @@ function reconstruct(cameFrom, goal) {
 // Walk to the closest standable tile near a (possibly blocked) target:
 // scans outward in rings so trees inside dense clumps (or buildings whose
 // direct neighbors are all blocked) stay reachable from up to 2 tiles away.
-export function adjacentOpen(world, target, from, blocked, through = null) {
+export function adjacentOpen(world, target, from, blocked, through = null, blockedFn = null) {
   const size = MAP_SIZE;
   const tx = target % size,
     ty = Math.floor(target / size);
@@ -140,7 +144,7 @@ export function adjacentOpen(world, target, from, blocked, through = null) {
           y = ty + dy;
         if (x < 0 || y < 0 || x >= size || y >= size) continue;
         const i = y * size + x;
-        if (!isPassable(world, i, blocked, through)) continue;
+        if (!isPassable(world, i, blocked, through, blockedFn)) continue;
         const d = Math.abs(x - fx) + Math.abs(y - fy);
         if (d < bestD) {
           bestD = d;

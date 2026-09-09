@@ -6,6 +6,7 @@ import { createGame, stepGame, placeBuilding, placeWallRun, setJobDesired } from
 import { daylight, phaseInfo } from "./clock.js";
 import { createRenderer, screenToTile } from "./render.js";
 import * as bd from "./buildings.js";
+import { castSpell, grabAt, moveHeld, releaseHeld } from "./spells.js";
 import { createUI } from "./ui.js";
 import { saveToLocal, loadFromLocal, clearSave } from "./save.js";
 import { pwa } from "./pwa.js";
@@ -55,6 +56,16 @@ const game = {
     ui.mode = "look";
     ui.setDock("look");
     document.getElementById("placement").hidden = true;
+    // Casting: disarm, and set down anything the hand was carrying so a
+    // mode switch never leaves a villager dangling forever.
+    ui.closeGod();
+    if (state.god.held) releaseHeld(state, 0, 0);
+  },
+  armSpell(key) {
+    ui.armSpell(key);
+  },
+  disarmSpell() {
+    ui.disarmSpell();
   },
   confirmPlacement() {
     if (!ui.placing) return;
@@ -202,33 +213,68 @@ function canPlaceQuick(x, y, type, runKeys) {
   return bd.canPlace(state, type, x, y).ok;
 }
 
-// ---- Pointer input: pan / pinch / tap / ghost drag ----
+// ---- Pointer input: pan / pinch / tap / ghost drag / god hand ----
 const pointers = new Map();
 let pinchStart = null;
 let moved = false;
+// Recent carried-creature positions (world coords + time) for the fling.
+let grabPoints = [];
+
+// Velocity of the last ~160 ms of carry, as a throw displacement in tiles.
+// Slow release = a set-down; a hard fling throws up to ~7 tiles.
+function throwVector() {
+  const now = performance.now();
+  const pts = grabPoints.filter((p) => now - p.t < 160);
+  if (pts.length < 2) return { dx: 0, dy: 0, speed: 0 };
+  const a = pts[0],
+    b = pts[pts.length - 1];
+  const dt = Math.max(16, b.t - a.t);
+  const vx = ((b.wx - a.wx) / dt) * 1000;
+  const vy = ((b.wy - a.wy) / dt) * 1000;
+  const speed = Math.hypot(vx, vy);
+  if (speed < B.GRAB_MIN_THROW_SPEED) return { dx: 0, dy: 0, speed: 0 };
+  const capped = Math.min(speed, B.GRAB_MAX_THROW_SPEED);
+  const scale = (0.45 * B.GRAB_MAX_THROW_SPEED) / capped;
+  let dx = vx * scale,
+    dy = vy * scale;
+  const d = Math.hypot(dx, dy);
+  if (d > 7) {
+    dx *= 7 / d;
+    dy *= 7 / d;
+  }
+  return { dx, dy, speed: capped };
+}
 
 canvas.addEventListener("pointerdown", (e) => {
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   moved = false;
+  const tile = screenToTile(canvas, camera, e.clientX, e.clientY);
   if (ui.mode === "build" && ui.placing) {
     // A tap puts the ghost exactly where you touched (lifted above the
     // finger); dragging then nudges it. Walls paint a run instead.
-    const tile = screenToTile(canvas, camera, e.clientX, e.clientY, B.GHOST_LIFT_PX);
+    const lifted = screenToTile(canvas, camera, e.clientX, e.clientY, B.GHOST_LIFT_PX);
     if (B.BUILDINGS[ui.placing.type].wall) {
       ui.placing.run = new Set();
-      paintWallTile(tile.x, tile.y);
+      paintWallTile(lifted.x, lifted.y);
     } else {
-      ui.placing.x = tile.x;
-      ui.placing.y = tile.y;
+      ui.placing.x = lifted.x;
+      ui.placing.y = lifted.y;
       renderer.view.ghost = {
         type: ui.placing.type,
-        x: tile.x,
-        y: tile.y,
-        valid: canPlaceQuick(tile.x, tile.y, ui.placing.type),
+        x: lifted.x,
+        y: lifted.y,
+        valid: canPlaceQuick(lifted.x, lifted.y, ui.placing.type),
       };
       ui.updatePlacement(state);
     }
+  }
+  if (ui.mode === "cast" && ui.castKey === "grab" && !state.god.held) {
+    const grabbed = grabAt(state, tile.wx, tile.wy);
+    if (grabbed.ok) {
+      grabPoints = [{ wx: tile.wx, wy: tile.wy, t: performance.now() }];
+      ui.slow(state);
+    } else if (grabbed.reason) toastNote(grabbed.reason);
   }
   if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];
@@ -255,6 +301,17 @@ canvas.addEventListener("pointermove", (e) => {
   }
   if (pointers.size !== 1) return;
 
+  if (ui.mode === "cast" && ui.castKey) {
+    const tile = screenToTile(canvas, camera, e.clientX, e.clientY);
+    renderer.view.cast = { key: ui.castKey, x: tile.wx, y: tile.wy };
+    if (state.god.held) {
+      // The carried creature rides the finger; panning waits.
+      moveHeld(state, tile.wx, tile.wy);
+      grabPoints.push({ wx: tile.wx, wy: tile.wy, t: performance.now() });
+      if (grabPoints.length > 8) grabPoints.shift();
+      return;
+    }
+  }
   if (ui.mode === "build" && ui.placing) {
     // Ghost follows the finger, lifted above it so it's never occluded.
     // Walls instead paint a continuous run from the last tile touched.
@@ -274,7 +331,9 @@ canvas.addEventListener("pointermove", (e) => {
     ui.updatePlacement(state);
     return;
   }
-  if (ui.mode === "look" || ui.mode === "dismantle") {
+  if (
+    (ui.mode === "look" || ui.mode === "dismantle" || (ui.mode === "cast" && !state.god.held))
+  ) {
     const rect = canvas.getBoundingClientRect();
     camera.x -= (dx / rect.width) * (canvas.width / camera.zoom / B.TILE);
     camera.y -= (dy / rect.height) * (canvas.height / camera.zoom / B.TILE);
@@ -286,11 +345,30 @@ canvas.addEventListener("pointerup", (e) => {
   const wasSingle = pointers.size === 1;
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinchStart = null;
+
+  // Releasing a carried creature happens even after a drag - the drag IS
+  // the throw. Slow releases become a set-down (throwVector says so).
+  if (state.god.held) {
+    const here = screenToTile(canvas, camera, e.clientX, e.clientY);
+    grabPoints.push({ wx: here.wx, wy: here.wy, t: performance.now() });
+    const v = throwVector();
+    releaseHeld(state, v.dx, v.dy, v.speed);
+    grabPoints = [];
+    ui.slow(state);
+    return;
+  }
+
   if (!wasSingle || moved) return;
 
   // Tap (no drag): context action.
   const tile = screenToTile(canvas, camera, e.clientX, e.clientY);
   if (ui.mode === "build" && ui.placing) return; // ghost already followed
+  if (ui.mode === "cast" && ui.castKey) {
+    const result = castSpell(state, ui.castKey, tile.wx, tile.wy);
+    if (!result.ok && result.reason) toastNote(result.reason);
+    ui.slow(state);
+    return;
+  }
   if (ui.mode === "dismantle") {
     const id = tile.x >= 0 && tile.y >= 0 ? state.buildingAt[tile.y * state.world.size + tile.x] : -1;
     if (id >= 0) {
@@ -328,6 +406,12 @@ canvas.addEventListener("pointerup", (e) => {
 canvas.addEventListener("pointercancel", (e) => {
   pointers.delete(e.pointerId);
   pinchStart = null;
+  // An interrupted gesture never strands a creature mid-air.
+  if (state.god.held) {
+    releaseHeld(state, 0, 0);
+    grabPoints = [];
+    ui.slow(state);
+  }
 });
 
 // Mouse wheel zoom.
@@ -444,6 +528,12 @@ window.__ruins = {
     state.daylight = daylight(state.clock);
     ui.frame(state, phaseInfo(state.clock), speed);
   },
+  // M3 god-hand hooks for browser verification.
+  cast: (key, x, y) => castSpell(state, key, x, y),
+  grab: (x, y) => grabAt(state, x, y),
+  carryTo: (x, y) => moveHeld(state, x, y),
+  fling: (dx, dy, speed) => releaseHeld(state, dx, dy, speed),
+  influence: () => (state.god.influence = 9999),
 };
 
 pwa();

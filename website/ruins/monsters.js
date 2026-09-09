@@ -44,21 +44,7 @@ export function spawnRaid(state) {
     const at = nest.y * size + nest.x;
     const spot = adjacentOpen(state.world, at, at, state.buildingAt);
     if (spot < 0) continue; // sealed in: this spawn slot is lost
-    const kind = pickKind(state);
-    const def = B.MONSTERS[kind];
-    state.monsters.push({
-      id: state.nextId++,
-      kind,
-      x: (spot % size) + 0.5,
-      y: Math.floor(spot / size) + 0.5,
-      hp: def.hp,
-      facing: 1,
-      path: [],
-      pathI: 0,
-      attackCd: 0,
-      chewCd: 0,
-      repathAt: 0,
-    });
+    spawnMonsterAt(state, pickKind(state), (spot % size) + 0.5, Math.floor(spot / size) + 0.5);
     spawned++;
     count--;
   }
@@ -70,9 +56,41 @@ export function spawnRaid(state) {
   return spawned;
 }
 
+// One construction site for every monster entering the world: raids,
+// slime splits, and meteor-sprung emberlings all look identical.
+export function spawnMonsterAt(state, kind, x, y) {
+  const def = B.MONSTERS[kind];
+  const m = {
+    id: state.nextId++,
+    kind,
+    x,
+    y,
+    hp: def.hp,
+    facing: 1,
+    path: [],
+    pathI: 0,
+    attackCd: 0,
+    chewCd: 0,
+    repathAt: 0,
+  };
+  state.monsters.push(m);
+  return m;
+}
+
 function pickKind(state) {
-  if (state.clock.day < B.BLOT_ARRIVAL_DAY) return "husk";
-  return state.rng.chance(B.BLOT_CHANCE) ? "blot" : "husk";
+  const day = state.clock.day;
+  if (day < B.BLOT_ARRIVAL_DAY) return "husk";
+  const roll = state.rng.next();
+  // Each ARRIVED species claims a band off the top of the roll; husks keep
+  // whatever remains, so they thin out as the menagerie arrives. Bands of
+  // species not yet on the field stay unclaimed (a day-5 roll of 0.4 is a
+  // husk, not a blot riding the wraith's absent share).
+  let band = 0;
+  if (day >= B.EMBERLING_ARRIVAL_DAY && roll < (band += B.EMBERLING_CHANCE))
+    return "emberling";
+  if (day >= B.WRAITH_ARRIVAL_DAY && roll < (band += B.WRAITH_CHANCE)) return "wraith";
+  if (roll < (band += B.BLOT_CHANCE)) return "blot";
+  return "husk";
 }
 
 // ---- Per-tick driver, called from stepGame.
@@ -82,6 +100,7 @@ export function tickMonsters(state, dt) {
 
   if (state.flags.wallsDirty) {
     state.breakCost = null; // rebuilt lazily by the breach search
+    state.phaseTiles = null; // wall tiles a wraith may glide through
     for (const m of state.monsters) {
       m.path = []; // re-evaluate the rule
       m.repathAt = 0;
@@ -92,46 +111,56 @@ export function tickMonsters(state, dt) {
   const size = state.world.size;
   const camp = state.buildings.find((b) => b.type === "camp");
   for (const m of state.monsters) {
-    if (m.hp <= 0) continue;
+    if (m.hp <= 0 || m.held) continue; // held: suspended mid-air by the god hand
     m.attackCd = Math.max(0, m.attackCd - dt);
     m.chewCd = Math.max(0, m.chewCd - dt);
+    const def = B.MONSTERS[m.kind];
 
     // Melee first: a villager in reach takes all the monster's attention.
     const prey = nearestVillager(state, m, B.MONSTER_ENGAGE_RANGE);
     if (prey) {
       if (m.attackCd <= 0) {
-        m.attackCd = B.MONSTERS[m.kind].attackTicks;
-        hurtVillager(state, prey, B.MONSTERS[m.kind].damage);
+        m.attackCd = def.attackTicks;
+        hurtVillager(state, prey, def.damage);
       }
       strikeBack(state, prey, dt);
       continue; // engaged: no marching while the duel lasts
     }
 
+    // Ranged monsters (RtR fire elemental): stop at range and shoot the
+    // nearest villager, else any finished village building - walls included.
+    if (def.ranged && rangedStrike(state, m, def)) continue;
+
     // A failed route must back off too: repathing a boxed-in raider every
     // tick is a full-grid A* storm (two searches x monsters x every tick).
     if (state.clock.tick >= m.repathAt) {
       m.path = routeToCamp(state, m, camp);
+      if (!m.path.length) m.path = breachRoute(state, m, camp); // chew instead
       m.pathI = 0;
       m.repathAt = state.clock.tick + (m.path.length ? 900 : 240);
       if (!m.path.length) continue; // boxed in entirely: mill here
     }
 
-    // March; the tile ahead being a building means chew, not step.
-    const speed = (B.MONSTERS[m.kind].speed / B.TICKS_PER_SECOND) * dt;
+    // March; the tile ahead being a building means chew, not step - unless
+    // you are a wraith and the building is a bare wall, which you glide
+    // through (gates and true buildings still stop you).
+    const speed = (def.speed / B.TICKS_PER_SECOND) * dt;
     let budget = speed;
     while (budget > 0 && m.pathI < m.path.length) {
       const node = m.path[m.pathI];
       if (state.buildingAt[node] !== -1) {
-        const b = state.buildings.find((b2) => b2.id === state.buildingAt[node]);
-        if (!b) {
-          m.path = []; // rubble: repath next tick
-          break;
+        if (!(def.phaseWalls && phaseTiles(state).has(node))) {
+          const b = state.buildings.find((b2) => b2.id === state.buildingAt[node]);
+          if (!b) {
+            m.path = []; // rubble: repath next tick
+            break;
+          }
+          if (m.chewCd <= 0) {
+            m.chewCd = def.attackTicks;
+            chew(state, b, def.damage);
+          }
+          break; // no movement while chewing
         }
-        if (m.chewCd <= 0) {
-          m.chewCd = B.MONSTERS[m.kind].attackTicks;
-          chew(state, b, B.MONSTERS[m.kind].damage);
-        }
-        break; // no movement while chewing
       }
       const nx = (node % size) + 0.5,
         ny = Math.floor(node / size) + 0.5;
@@ -152,24 +181,104 @@ export function tickMonsters(state, dt) {
     if (m.pathI >= m.path.length && camp) {
       const c = bd.buildingCenter(camp);
       if (Math.hypot(c.x - m.x, c.y - m.y) < 2.3 && m.chewCd <= 0) {
-        m.chewCd = B.MONSTERS[m.kind].attackTicks;
-        chew(state, camp, B.MONSTERS[m.kind].damage);
+        m.chewCd = def.attackTicks;
+        chew(state, camp, def.damage);
       }
     }
   }
   state.monsters = state.monsters.filter((m) => m.hp > 0);
 }
 
-// The RtR rule, as a pair of searches (doc 04 section 3.4): try the clear
-// open route; only if none exists fall back to the least-time-to-break
-// breach route, where entering a structure costs its remaining chew time.
+// Wraith passability: wall tiles (fence/stone wall, never gates) a phaser
+// may glide through. Cached until walls change, like the breach grid.
+function phaseTiles(state) {
+  if (!state.phaseTiles) {
+    state.phaseTiles = new Set();
+    for (const b of state.buildings) {
+      const d = B.BUILDINGS[b.type];
+      if (!d.wall || d.gate) continue;
+      for (const i of bd.footprint(b.type, b.x, b.y)) state.phaseTiles.add(i);
+    }
+  }
+  return state.phaseTiles;
+}
+
+// Emberling ranged attack. Returns true when it fired (or held a bead on
+// cooldown) - the caller then skips marching this tick.
+function rangedStrike(state, m, def) {
+  const spec = def.ranged;
+  const cx = m.x,
+    cy = m.y;
+  let target = null,
+    kind = null,
+    bestD = spec.range;
+  for (const v of state.villagers) {
+    if (v.dead || v.held) continue;
+    const d = Math.hypot(v.x - cx, v.y - cy);
+    if (d < bestD) {
+      bestD = d;
+      target = v;
+      kind = "villager";
+    }
+  }
+  if (!target) {
+    for (const b of state.buildings) {
+      if (!b.complete || B.BUILDINGS[b.type].corrupted) continue;
+      const c = bd.buildingCenter(b);
+      const d = Math.hypot(c.x - cx, c.y - cy);
+      if (d < bestD) {
+        bestD = d;
+        target = b;
+        kind = "building";
+      }
+    }
+  }
+  if (!target) return false;
+  if (m.attackCd > 0) return true; // reloading: hold position
+  m.attackCd = def.attackTicks;
+  const tx = kind === "villager" ? target.x : bd.buildingCenter(target).x;
+  const ty = kind === "villager" ? target.y : bd.buildingCenter(target).y;
+  state.projectiles.push({ x: cx, y: cy, tx, ty, t: 0, dur: 0.16, kind: "fireball" });
+  if (kind === "villager") hurtVillager(state, target, def.damage);
+  else {
+    target.hp -= def.damage;
+    if (target.type === "camp" && !state.raid.campHit) {
+      state.raid.campHit = true;
+      state.events.push({ type: "camp-hit", x: target.x, y: target.y });
+    }
+    finishBuildingIfDestroyed(state, target);
+  }
+  return true;
+}
+
+// The RtR rule, as a pair of searches (doc 04 section 3.4). routeToCamp
+// answers only the first half: the FREE route this monster can walk without
+// breaking anything - open ground for most, bare walls erased for phasers
+// (gates and true buildings still stop a wraith, so breaching stays
+// meaningful). Empty means "no free route": the caller (tickMonsters) then
+// falls back to the least-time-to-break breach route and chews.
 export function routeToCamp(state, m, camp) {
   if (!camp) return [];
   const size = state.world.size;
   const here = Math.floor(m.y) * size + Math.floor(m.x);
   const goal = camp.y * size + camp.x;
-  const open = findPath(state.world, here, goal, state.buildingAt);
-  if (open) return open;
+  if (B.MONSTERS[m.kind].phaseWalls) {
+    const walls = phaseTiles(state);
+    return (
+      findPath(state.world, here, goal, state.buildingAt, {
+        blockedFn: (i) => state.buildingAt[i] !== -1 && !walls.has(i),
+      }) ?? []
+    );
+  }
+  return findPath(state.world, here, goal, state.buildingAt) ?? [];
+}
+
+// The fallback half of the rule: a weighted search where entering a
+// structure costs its remaining chew time - the path of least resistance.
+function breachRoute(state, m, camp) {
+  const size = state.world.size;
+  const here = Math.floor(m.y) * size + Math.floor(m.x);
+  const goal = camp.y * size + camp.x;
   const cost = breachCost(state);
   return findPath(state.world, here, goal, state.buildingAt, { cost }) ?? [];
 }
@@ -195,9 +304,28 @@ function breachCost(state) {
 }
 
 // ---- Damage helpers.
+
+// The resist/vulnerability matrix, applied in one place (doc 04 section
+// 5.1). Every damage source in the game funnels through here: tower bolts,
+// villager fists, spells, Grab throws. Water only ever matters to thrown
+// creatures - it is the emberling's death sentence and nobody else's.
+export function damageMonster(state, m, amount, type = "crush") {
+  const mult = B.MONSTERS[m.kind].resists?.[type] ?? 1;
+  m.hp -= amount * mult;
+  if (m.hp <= 0) killMonster(state, m);
+  return m.hp <= 0;
+}
+
 function chew(state, b, damage) {
-  b.hp -= damage;
-  if (b.type === "camp" && !state.raid.campHit) {
+  damageBuilding(state, b, damage);
+}
+
+// Shared rite for any building taking damage - monster chew, tower fire,
+// spell blast: raise the camp alarm once per raid, and destroy at 0.
+// opts.raidAlarm: meteor-class friendly fire stays silent about raiders.
+export function damageBuilding(state, b, amount, opts = {}) {
+  b.hp -= amount;
+  if (b.type === "camp" && !state.raid.campHit && opts.raidAlarm !== false) {
     state.raid.campHit = true;
     state.events.push({ type: "camp-hit", x: b.x, y: b.y });
   }
@@ -223,6 +351,8 @@ function hurtVillager(state, v, damage) {
 }
 
 // Villagers swing back at whatever is chewing on them (doc 04 section 4.3).
+// Bare hands = crushing: blots barely notice, which is the point of the
+// matrix - villagers hold the line against husks, not against everything.
 function strikeBack(state, v, dt) {
   v.attackCd = Math.max(0, (v.attackCd ?? 0) - dt);
   if (v.attackCd > 0) return;
@@ -230,7 +360,7 @@ function strikeBack(state, v, dt) {
   let best = null,
     bestD = B.VILLAGER_SWING_RANGE;
   for (const m of state.monsters) {
-    if (m.hp <= 0) continue;
+    if (m.hp <= 0 || m.held) continue;
     const d = Math.hypot(m.x - v.x, m.y - v.y);
     if (d < bestD) {
       bestD = d;
@@ -239,8 +369,7 @@ function strikeBack(state, v, dt) {
   }
   if (!best) return;
   v.attackCd = B.VILLAGER_ATTACK_TICKS;
-  best.hp -= B.VILLAGER_DAMAGE;
-  if (best.hp <= 0) killMonster(state, best);
+  damageMonster(state, best, B.VILLAGER_DAMAGE, B.VILLAGER_DAMAGE_TYPE);
 }
 
 export function killMonster(state, m) {
@@ -249,27 +378,20 @@ export function killMonster(state, m) {
   const def = B.MONSTERS[m.kind];
   if (def.splits && state.monsters.length < B.MONSTER_HARD_CAP) {
     for (let i = 0; i < def.splits.count; i++) {
-      const child = B.MONSTERS[def.splits.kind];
-      state.monsters.push({
-        id: state.nextId++,
-        kind: def.splits.kind,
-        x: m.x + (i - 0.5) * 0.4,
-        y: m.y + (i % 2 ? 0.3 : -0.3),
-        hp: child.hp,
-        facing: 1,
-        path: [],
-        pathI: 0,
-        attackCd: 0,
-        chewCd: 0,
-        repathAt: 0,
-      });
+      spawnMonsterAt(
+        state,
+        def.splits.kind,
+        m.x + (i - 0.5) * 0.4,
+        m.y + (i % 2 ? 0.3 : -0.3),
+      );
     }
   }
 }
 
-// ---- Towers (the M2 slice: one tier, no ammo economy until M3). Fires
-// over walls like RtR's bow tower; monsters first, nests as fallback
-// targets so defense can push the spawn points back.
+// ---- Towers (M3: ammo-fed, matrix-aware). Every shot spends one bolt
+// from the village pool (RtR bow towers pull arrows from storage); sentries
+// deal piercing, storm pylons magic - WHICH tower is built is the
+// counter-match decision the resist matrix exists to create.
 function tickTowers(state, dt) {
   advanceProjectiles(state, dt);
   for (const b of state.buildings) {
@@ -284,7 +406,7 @@ function tickTowers(state, dt) {
       kind = null,
       bestD = spec.range;
     for (const m of state.monsters) {
-      if (m.hp <= 0) continue;
+      if (m.hp <= 0 || m.held) continue; // the god's hand is not a target
       const d = Math.hypot(m.x - cx, m.y - cy);
       if (d < bestD) {
         bestD = d;
@@ -304,13 +426,22 @@ function tickTowers(state, dt) {
       }
     }
     if (!target) continue;
+    // The empty-magazine check: towers hold, they don't improvise. One
+    // nudge per night so a dry pool reads as a decision point, not spam.
+    if ((state.resources.bolts ?? 0) < 1) {
+      if (B.TOWERS_WARN_EMPTY && !state.flags.boltsWarned) {
+        state.flags.boltsWarned = true;
+        state.events.push({ type: "bolts-out" });
+      }
+      continue;
+    }
+    state.resources.bolts -= 1;
     b.reload = spec.reload;
     const tx = kind === "monster" ? target.x : target.x + 0.5;
     const ty = kind === "monster" ? target.y : target.y + 0.5;
-    state.projectiles.push({ x: cx, y: cy, tx, ty, t: 0, dur: 0.12 });
-    target.hp -= spec.damage;
-    if (kind === "monster" && target.hp <= 0) killMonster(state, target);
-    else if (kind === "nest" && target.hp <= 0) finishBuildingIfDestroyed(state, target);
+    state.projectiles.push({ x: cx, y: cy, tx, ty, t: 0, dur: 0.12, kind: "bolt" });
+    if (kind === "monster") damageMonster(state, target, spec.damage, spec.type);
+    else damageBuilding(state, target, spec.damage);
   }
 }
 
@@ -339,7 +470,7 @@ function nearestVillager(state, m, range) {
   let best = null,
     bestD = range;
   for (const v of state.villagers) {
-    if (v.dead) continue;
+    if (v.dead || v.held) continue; // airborne villagers are out of reach
     const d = Math.hypot(v.x - m.x, v.y - m.y);
     if (d < bestD) {
       bestD = d;
