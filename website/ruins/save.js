@@ -3,16 +3,18 @@
 // the seeded RNG state is included so replays stay reproducible.
 import { createGame } from "./game.js";
 import { MAP_SIZE } from "./balance.js";
+import * as B2 from "./balance.js";
 import { F_TREE, F_ROCK, F_BUSH } from "./world.js";
 import { indexWaterTiles } from "./villager.js";
 import { footprint } from "./buildings.js";
 import { findCreature } from "./spells.js";
 
 export const SAVE_KEY = "ruins-save-v1";
-// v3: the god hand - influence, held creatures, pending meteors. v2 blobs
-// (M2 islands) load with a fresh god state; v1 predates raids entirely and
-// is treated as a fresh island.
-export const SAVE_VERSION = 3;
+// v4: the climb - camp tier + pending upgrade on the camp building,
+// per-villager faith, boards/blocks/meals resources, monster levels.
+// v3 blobs (M3 islands) load with defaults for all of those; v1/v2 are
+// treated as fresh islands.
+export const SAVE_VERSION = 4;
 
 function rleEncode(arr) {
   const out = [];
@@ -89,9 +91,11 @@ function hydrate(data) {
   Object.assign(state.clock, data.clock);
   state.lastDawn = data.lastDawn;
   state.lost = data.lost ?? null;
-  state.resources = { ...data.resources };
-  state.jobCounts = { ...data.jobCounts };
-  state.flags = { ...data.flags, wallsDirty: true };
+  // v3 islands predate boards/blocks/meals: merge over the zero defaults
+  // instead of letting undefined poison the arithmetic.
+  state.resources = { ...state.resources, ...data.resources };
+  state.jobCounts = { ...state.jobCounts, ...data.jobCounts };
+  state.flags = { ...state.flags, wallsDirty: true };
   state.nextId = data.nextId;
   state.stats = { ...data.stats };
   rleDecode(data.terrain, state.world.terrain);
@@ -129,6 +133,34 @@ function hydrate(data) {
   state.monsters = data.monsters ?? [];
   state.projectiles = [];
   state.corpses = data.corpses;
+  // ---- v4 migration seams ----
+  // Faith is a need like any other; v3 villagers simply start believing.
+  for (const v of state.villagers) if (v.faith === undefined) v.faith = 60;
+  // Monster levels (threat-scaled power) default to 1; maxHp backs out of
+  // the current hp for the damage bar.
+  for (const m of state.monsters) {
+    if (m.level === undefined) m.level = 1;
+    if (m.maxHp === undefined) m.maxHp = m.hp;
+  }
+  // A v3 camp has no tier. Rather than stranding a 20-building village at
+  // the tier-1 limit of 8, infer the smallest rung that legally houses
+  // what already stands.
+  const camp = state.buildings.find((b) => b.type === "camp");
+  if (camp && !camp.tier) {
+    let built = 0;
+    for (const b of state.buildings) {
+      const d = B2.BUILDINGS[b.type];
+      if (d.corrupted || (d.wall && !d.gate)) continue;
+      built++;
+    }
+    camp.tier = 1;
+    for (const t of B2.CAMP_TIERS)
+      if (t.buildLimit >= built) {
+        camp.tier = B2.CAMP_TIERS.indexOf(t) + 1;
+        break;
+      }
+    camp.tier = Math.max(camp.tier, 1);
+  }
   // Re-link a held creature by id (entities exist now); if it is gone, the
   // hand opens rather than carrying a ghost.
   if (state.god.held) {

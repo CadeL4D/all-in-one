@@ -1,11 +1,17 @@
 // Building placement, construction sites, storage pool caps, and the slow
 // building-side production (well water, plot claiming). Villager-side work
-// lives in villager.js; this module is the content/table half.
+// lives in villager.js; this module is the content/table half. The camp is
+// special: its stats (storage, radius, builder jobs, hp) come from the
+// town-center tier ladder in balance.js, so every camp stat lookup must go
+// through def() below - never B.BUILDINGS.camp directly.
 import {
   BUILDINGS,
   DISMANTLE_REFUND,
+  CAMP_TIERS,
+  CAMP_MAX_TIER,
   CAMP_TILE,
   WELL_WATER_PER_DAY,
+  CISTERN_WATER_PER_DAY,
   DAY_TICKS,
   BUILD_TICKS_PER_RESOURCE,
   JOBS,
@@ -15,12 +21,60 @@ import {
 } from "./balance.js";
 import { T_GRASS, T_DIRT, F_NONE, F_STUMP, F_PLOT, idx } from "./world.js";
 
+// The effective definition of a placed building. Everything but the camp
+// is its static table entry; the camp merges in its current tier's stats.
+export function def(b) {
+  if (b.type !== "camp") return BUILDINGS[b.type];
+  const tier = CAMP_TIERS[Math.min(CAMP_MAX_TIER, Math.max(1, b.tier ?? 1)) - 1];
+  return {
+    ...BUILDINGS.camp,
+    name: tier.name,
+    hp: tier.hp,
+    storage: tier.storage,
+    radius: tier.radius,
+    jobs: { builder: tier.builders },
+    tier: b.tier ?? 1,
+  };
+}
+
+export function campTierStats(tier) {
+  return CAMP_TIERS[Math.min(CAMP_MAX_TIER, Math.max(1, tier)) - 1];
+}
+
+export function findCamp(state) {
+  return state.buildings.find((b) => b.type === "camp") ?? null;
+}
+
 export function footprint(type, x, y) {
   const size = BUILDINGS[type].size;
   const tiles = [];
   for (let dy = 0; dy < size; dy++)
     for (let dx = 0; dx < size; dx++) tiles.push(idx(x + dx, y + dy));
   return tiles;
+}
+
+// RtR build-limit rule (doc 02 section 1): walls never count, gates do,
+// corrupted buildings are the enemy's, not yours.
+export function countBuilt(state) {
+  let n = 0;
+  for (const b of state.buildings) {
+    const d = BUILDINGS[b.type];
+    if (d.corrupted) continue;
+    if (d.wall && !d.gate) continue;
+    n++;
+  }
+  return n;
+}
+
+export function buildLimit(state) {
+  const camp = findCamp(state);
+  return camp ? campTierStats(camp.tier ?? 1).buildLimit : 0;
+}
+
+// RtR castle-tier bonus: +1% global work speed per rung above Camp.
+export function workSpeedMult(state) {
+  const camp = findCamp(state);
+  return camp ? campTierStats(camp.tier ?? 1).workMult : 1;
 }
 
 export function canPlace(state, type, x, y) {
@@ -33,6 +87,10 @@ export function canPlace(state, type, x, y) {
     return { ok: false, reason: "Too far from your buildings" };
   if (x < 0 || y < 0 || x + def.size > world.size || y + def.size > world.size)
     return { ok: false, reason: "Off the map" };
+  // The build limit is the town ladder's teeth: wall off the map freely,
+  // but new buildings need a bigger camp (RtR slots rule).
+  if (!def.wall && !def.corrupted && countBuilt(state) >= buildLimit(state))
+    return { ok: false, reason: "Build limit reached — upgrade the camp" };
   for (const i of footprint(type, x, y)) {
     const t = world.terrain[i];
     if (t !== T_GRASS && t !== T_DIRT) return { ok: false, reason: "Needs open ground" };
@@ -47,8 +105,11 @@ export function canPlace(state, type, x, y) {
 // RtR build rule: range radiates from finished structures, not just the
 // camp. Walls chain outward at short reach - that chain is how a village
 // pushes a fence line out to box the corruption in (the Threat lever).
-// Enemy nests deliberately extend nothing.
+// Fire pits are the long arm (RtR range-12 fire pits): they project build
+// range well past the wall line, which is exactly how the community
+// encircles corruption. Enemy nests deliberately extend nothing.
 const CHAIN_REACH = 3;
+const FIREPIT_REACH = 8;
 function chainedInRange(state, type, x, y) {
   const def = BUILDINGS[type];
   for (const b of state.buildings) {
@@ -56,7 +117,8 @@ function chainedInRange(state, type, x, y) {
     const bs = BUILDINGS[b.type].size;
     const gapX = Math.max(b.x - (x + def.size), x - (b.x + bs), 0);
     const gapY = Math.max(b.y - (y + def.size), y - (b.y + bs), 0);
-    if (Math.max(gapX, gapY) <= CHAIN_REACH) return true;
+    const reach = BUILDINGS[b.type].firePit ? FIREPIT_REACH : CHAIN_REACH;
+    if (Math.max(gapX, gapY) <= reach) return true;
   }
   return false;
 }
@@ -77,8 +139,8 @@ export function canPlaceInRun(state, type, x, y, runKeys) {
 }
 
 export function campRange(state) {
-  const camp = state.buildings.find((b) => b.type === "camp");
-  return camp ? BUILDINGS.camp.radius : 0;
+  const camp = findCamp(state);
+  return camp ? def(camp).radius : 0;
 }
 
 export function placeSite(state, type, x, y) {
@@ -89,6 +151,8 @@ export function placeSite(state, type, x, y) {
     type,
     x,
     y,
+    tier: type === "camp" ? 1 : undefined, // town ladder rung (camp only)
+    upgrade: null, // pending camp upgrade site (camp only)
     complete: false,
     hp: def.hp,
     delivered: 0, // total resources hauled to the site so far
@@ -98,7 +162,7 @@ export function placeSite(state, type, x, y) {
     occupants: 0,
     plots: [],
   };
-  building.workNeeded = totalCost(def) * BUILD_TICKS_PER_RESOURCE;
+  building.workNeeded = totalCost(def.cost) * BUILD_TICKS_PER_RESOURCE;
   for (const i of footprint(type, x, y)) {
     state.buildingAt[i] = id;
     if (def.gate) state.gateTiles.add(i);
@@ -109,13 +173,15 @@ export function placeSite(state, type, x, y) {
   return building;
 }
 
-function totalCost(def) {
-  return Object.values(def.cost).reduce((a, b) => a + b, 0);
+function totalCost(cost) {
+  return Object.values(cost).reduce((a, b) => a + b, 0);
 }
 
 // The first resource this site is still short of (null = fully supplied).
+// Covers camp upgrades too: an upgrading camp is its own site.
 export function nextMissingRes(site) {
-  for (const [res, n] of Object.entries(BUILDINGS[site.type].cost))
+  const cost = site.upgrade ? CAMP_TIERS[site.upgrade.toTier - 1].cost : BUILDINGS[site.type].cost;
+  for (const [res, n] of Object.entries(cost))
     if ((site.deliveredRes?.[res] ?? 0) < n) return res;
   return null;
 }
@@ -148,6 +214,42 @@ export function siteComplete(state, building) {
     }
   }
   state.events.push({ type: "built", x: building.x, y: building.y, name: def.name });
+}
+
+// ---- The climb: camp upgrades are construction the village performs on
+// itself. The camp keeps working while the scaffold is up (raids never
+// find it half-built); builders haul the tier's cost and raise it, like
+// any site. applyCampUpgrade is called when the work bar fills.
+
+export function startCampUpgrade(state) {
+  const camp = findCamp(state);
+  if (!camp) return { ok: false, reason: "The camp has fallen" };
+  if (camp.upgrade) return { ok: false, reason: "The camp is already rising" };
+  const tier = camp.tier ?? 1;
+  if (tier >= CAMP_MAX_TIER) return { ok: false, reason: "The Stronghold is the last rung" };
+  const cost = CAMP_TIERS[tier].cost; // cost of the NEXT tier (index = tier)
+  if (totalCost(cost) === 0) return { ok: false, reason: "Nothing to raise" };
+  camp.upgrade = {
+    toTier: tier + 1,
+    workNeeded: totalCost(cost) * BUILD_TICKS_PER_RESOURCE,
+  };
+  state.events.push({ type: "upgrade-started", name: CAMP_TIERS[tier].name, to: CAMP_TIERS[tier].name });
+  return { ok: true };
+}
+
+// Filled work bar -> the new rung. Stat bumps are instant and generous
+// (full heal): the celebration is the point (pillar 8).
+export function applyCampUpgrade(state) {
+  const camp = findCamp(state);
+  if (!camp?.upgrade) return null;
+  const toTier = camp.upgrade.toTier;
+  camp.tier = toTier;
+  camp.upgrade = null;
+  camp.hp = campTierStats(toTier).hp;
+  state.stats.built++;
+  state.flags.wallsDirty = true; // breach math changes with the new hp
+  state.events.push({ type: "camp-upgraded", tier: toTier, name: campTierStats(toTier).name, x: camp.x, y: camp.y });
+  return camp;
 }
 
 export function dismantle(state, buildingId) {
@@ -209,29 +311,30 @@ function removeBuildingAt(state, building) {
 
 function capOf(state) {
   let cap = 0;
-  for (const b of state.buildings) if (b.complete) cap += BUILDINGS[b.type].storage;
+  for (const b of state.buildings) if (b.complete) cap += def(b).storage;
   return cap;
 }
 
 export function storageCap(state) {
   let cap = 0;
-  for (const b of state.buildings) if (b.complete) cap += BUILDINGS[b.type].storage;
+  for (const b of state.buildings) if (b.complete) cap += def(b).storage;
   return cap;
 }
 
 export function housingCap(state) {
   let cap = 0;
-  for (const b of state.buildings) if (b.complete) cap += BUILDINGS[b.type].houses;
+  for (const b of state.buildings) if (b.complete) cap += def(b).houses;
   return cap;
 }
 
-// Job slots offered by all completed buildings, per job key.
+// Job slots offered by all completed buildings, per job key. The camp's
+// builder count is the tier's (the ladder's other teeth).
 export function jobSlots(state) {
   const slots = {};
   for (const job of Object.keys(JOBS)) slots[job] = 0;
   for (const b of state.buildings) {
     if (!b.complete) continue;
-    for (const [job, n] of Object.entries(BUILDINGS[b.type].jobs)) slots[job] += n;
+    for (const [job, n] of Object.entries(def(b).jobs)) slots[job] += n;
   }
   return slots;
 }
@@ -252,16 +355,19 @@ export function buildingCenter(b) {
   return { x: b.x + BUILDINGS[b.type].size / 2, y: b.y + BUILDINGS[b.type].size / 2 };
 }
 
-// Buildings slowly produce: wells seep clean water; sawpits fletch tower
-// bolts from stored wood between felling (M3 ammo economy - towers draw
-// the shared pool dry, the woodcutter line refills it).
+// Buildings slowly produce: wells and cisterns seep clean water; sawpits
+// fletch tower bolts from stored wood between felling (M3 ammo economy -
+// towers draw the shared pool dry, the woodcutter line refills it).
 export function tickProduction(state, dt) {
   const cap = storageCap(state);
-  const perTick = WELL_WATER_PER_DAY / DAY_TICKS;
+  const wellPerTick = WELL_WATER_PER_DAY / DAY_TICKS;
+  const cisternPerTick = CISTERN_WATER_PER_DAY / DAY_TICKS;
   for (const b of state.buildings) {
     if (!b.complete) continue;
     if (b.type === "well" && state.resources.water < cap)
-      state.resources.water = Math.min(cap, state.resources.water + perTick * dt);
+      state.resources.water = Math.min(cap, state.resources.water + wellPerTick * dt);
+    if (b.type === "cistern" && state.resources.water < cap)
+      state.resources.water = Math.min(cap, state.resources.water + cisternPerTick * dt);
     if (
       b.type === "sawpit" &&
       (state.clock.tick + b.id) % BOLT_CRAFT_TICKS < dt &&

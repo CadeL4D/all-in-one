@@ -2,6 +2,7 @@
 // All art is procedural and original - no external assets. Rendering only
 // samples sim state; it never mutates it.
 import * as B from "./balance.js";
+import * as bd from "./buildings.js";
 import { T_GRASS, T_DIRT, T_WATER, F_TREE, F_ROCK, F_BUSH, F_STUMP, F_PLOT, F_SAPLING } from "./world.js";
 
 const P = {
@@ -60,6 +61,15 @@ const P = {
   pylonOrb: "#aee6ff",
   bolt: "#ffd97a",
   hand: "#ffe9a3",
+  // M4 palette: bonewalkers, warded masonry, prayer motes, shrine stone.
+  bone: "#ddd8c0",
+  boneHi: "#f2eedd",
+  boneLo: "#a8a289",
+  curtain: "#8e97a8",
+  curtainHi: "#aab3c4",
+  prayer: "#e6c9ff",
+  cloth: "#c95f74",
+  leafDark: "#356b38",
 };
 
 const hash = (i) => {
@@ -307,24 +317,17 @@ export function createRenderer(canvas, stateRef) {
 
   function drawBuildings(state) {
     for (const b of state.buildings) {
-      const def = B.BUILDINGS[b.type];
+      const def = bd.def(b);
       const X = px(b.x),
         Y = px(b.y),
         S = def.size * B.TILE;
       if (!b.complete) drawSite(state, b, X, Y, S);
-      else if (b.type === "camp") drawCamp(X, Y, S);
-      else if (b.type === "home") drawHome(X, Y, S);
-      else if (b.type === "farm") drawFarm(X, Y, S);
-      else if (b.type === "well") drawWell(X, Y, S);
-      else if (b.type === "sawpit") drawSawpit(X, Y, S);
-      else if (b.type === "storehouse") drawStorehouse(X, Y, S);
-      else if (b.type === "nest") drawNest(X, Y, S);
-      else if (b.type === "fence") drawFence(X, Y, S);
-      else if (b.type === "stoneWall") drawStoneWall(X, Y, S);
-      else if (b.type === "gate") drawGate(X, Y, S);
-      else if (b.type === "tower") drawTower(X, Y, S);
-      else if (b.type === "stormPylon") drawStormPylon(X, Y, S);
-      else if (b.type === "quarry") drawQuarry(X, Y, S);
+      else {
+        const art = BUILDING_ART[b.type];
+        if (art) art(X, Y, S, b);
+        // An upgrading camp shows its scaffold, tier or not.
+        if (b.upgrade) drawUpgradeScaffold(X, Y, S);
+      }
       // Damage bar: only when it actually hurts (readable raids).
       if (b.complete && b.hp < def.hp) {
         const w = S - 4;
@@ -339,6 +342,17 @@ export function createRenderer(canvas, stateRef) {
         g.strokeRect(X + 0.5, Y + 0.5, S - 1, S - 1);
       }
     }
+  }
+
+  // Bamboo ladder + posts around a camp that is raising its next rung.
+  function drawUpgradeScaffold(X, Y, S) {
+    g.strokeStyle = "#caa96a";
+    g.setLineDash([2, 2]);
+    g.strokeRect(X + 0.5, Y + 0.5, S - 1, S - 1);
+    g.setLineDash([]);
+    g.fillStyle = P.plank;
+    g.fillRect(X + 1, Y + 1, 2, 2);
+    g.fillRect(X + S - 3, Y + S - 3, 2, 2);
   }
 
   function drawSite(state, b, X, Y, S) {
@@ -368,7 +382,10 @@ export function createRenderer(canvas, stateRef) {
     }
   }
 
-  function drawCamp(X, Y, S) {
+  // The camp grows with its tier: tent -> palisade -> stone footing ->
+  // corner towers -> gold banner. Same silhouette, rising grandeur.
+  function drawCamp(X, Y, S, b) {
+    const tier = b?.tier ?? 1;
     // Tent
     g.fillStyle = P.shadow;
     g.fillRect(X + 3, Y + S - 3, S - 8, 2);
@@ -378,10 +395,10 @@ export function createRenderer(canvas, stateRef) {
     g.fillRect(X + 4, Y + 8, 14, 3);
     g.fillStyle = "#8a5a34";
     g.fillRect(X + 9, Y + 12, 4, 5); // doorway
-    // Banner pole
+    // Banner pole; the flag climbs the colors as the village climbs tiers.
     g.fillStyle = "#6b6f76";
     g.fillRect(X + S - 5, Y + 2, 1, 12);
-    g.fillStyle = "#5f9e5f";
+    g.fillStyle = tier >= 7 ? "#ffd97a" : tier >= 3 ? "#c95f74" : "#5f9e5f";
     g.fillRect(X + S - 4, Y + 2, 3, 4);
     // Fire pit (glows at night - drawn in glow pass)
     g.fillStyle = P.rockLo;
@@ -390,6 +407,33 @@ export function createRenderer(canvas, stateRef) {
     const flick = 1 + Math.sin(view.time * 0.02) * 0.3;
     g.fillRect(X + 4, Y + S - 4, 3, 1);
     g.fillRect(X + 5, Y + S - 5 - (flick > 1.1 ? 1 : 0), 1, 1);
+    // Tier dressing: tier 2+ palisade posts, 3+ side tents, 5+ stone
+    // footing, 6+ corner watch posts, 8 gold trim on the tent.
+    if (tier >= 2) {
+      g.fillStyle = P.wood;
+      g.fillRect(X + 1, Y + S - 8, 2, 6);
+      g.fillRect(X + 1, Y + S - 12, 2, 2);
+    }
+    if (tier >= 3) {
+      g.fillStyle = "#c9a254";
+      g.fillRect(X + 1, Y + 9, 4, 8); // second tent
+      g.fillStyle = "#8a5a34";
+      g.fillRect(X + 2, Y + 13, 2, 4);
+    }
+    if (tier >= 5) {
+      g.fillStyle = P.stone;
+      g.fillRect(X + 3, Y + 17, 16, 2); // stone footing under the tent line
+    }
+    if (tier >= 6) {
+      g.fillStyle = P.rock;
+      g.fillRect(X + S - 4, Y + S - 6, 3, 5); // corner post
+      g.fillStyle = P.rockHi;
+      g.fillRect(X + S - 4, Y + S - 6, 3, 1);
+    }
+    if (tier >= 8) {
+      g.fillStyle = "#ffd97a";
+      g.fillRect(X + 4, Y + 8, 14, 1); // gilded ridge
+    }
   }
 
   function drawHome(X, Y, S) {
@@ -577,8 +621,7 @@ export function createRenderer(canvas, stateRef) {
     g.fillRect(X + 2, Y + 2, 8, 2);
   }
 
-  function drawNest(X, Y, S) {
-    const pulse = Math.sin(view.time * 0.004) * 0.5 + 0.5;
+  function drawNest(X, Y, S) {    const pulse = Math.sin(view.time * 0.004) * 0.5 + 0.5;
     g.fillStyle = P.shadow;
     g.fillRect(X + 1, Y + 13, 14, 2);
     g.fillStyle = P.nest;
@@ -595,6 +638,393 @@ export function createRenderer(canvas, stateRef) {
       g.fillRect(X + 6, Y + 9, 4, 2); // inner glow when about to spawn
     }
   }
+
+  // ---- M4 structures. Same 16px-per-tile vocabulary: shadow line, body,
+  // roof band, one telling detail per building (silhouette discipline).
+
+  function drawCottage(X, Y, S) {
+    // Home shape on a stone skirt, sturdier and a touch grander.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + S - 3, S - 4, 2);
+    g.fillStyle = P.stone;
+    g.fillRect(X + 2, Y + 13, S - 4, 4);
+    g.fillStyle = P.plaster;
+    g.fillRect(X + 3, Y + 8, S - 6, 5);
+    g.fillStyle = P.roof;
+    g.fillRect(X + 1, Y + 3, S - 2, 5);
+    g.fillStyle = P.roofHi;
+    g.fillRect(X + 1, Y + 3, S - 2, 2);
+    g.fillStyle = P.wood;
+    g.fillRect(X + 4, Y + 10, 3, 3); // door
+    g.fillStyle = "#ffd97a";
+    g.fillRect(X + S - 7, Y + 9, 2, 2); // window
+  }
+
+  function drawManor(X, Y, S) {
+    // The 3x3 prestige house: two joined roofs and a proper chimney.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 3, Y + S - 3, S - 6, 2);
+    g.fillStyle = P.plaster;
+    g.fillRect(X + 4, Y + 16, S - 8, 12);
+    g.fillStyle = P.wood;
+    g.fillRect(X + 4, Y + 24, S - 8, 2); // timber frame line
+    g.fillStyle = P.roof;
+    g.fillRect(X + 2, Y + 8, 20, 8);
+    g.fillRect(X + 24, Y + 12, 20, 6);
+    g.fillStyle = P.roofHi;
+    g.fillRect(X + 2, Y + 8, 20, 2);
+    g.fillRect(X + 24, Y + 12, 20, 2);
+    g.fillStyle = P.stone;
+    g.fillRect(X + 40, Y + 6, 4, 6); // chimney
+    g.fillStyle = P.wood;
+    g.fillRect(X + 12, Y + 20, 4, 8); // door
+    g.fillStyle = "#ffd97a";
+    g.fillRect(X + 20, Y + 19, 3, 3);
+    g.fillRect(X + 30, Y + 20, 3, 3);
+  }
+
+  function drawOrchard(X, Y, S) {
+    drawFarm(X, Y, S);
+    // Fruit trees stumped among the rows: rounder crowns, berry dots.
+    g.fillStyle = P.leafDark;
+    g.fillRect(X + 3, Y + 5, 5, 4);
+    g.fillRect(X + 10, Y + 4, 6, 5);
+    g.fillStyle = P.berry;
+    g.fillRect(X + 4, Y + 6, 1, 1);
+    g.fillRect(X + 12, Y + 5, 1, 1);
+    g.fillRect(X + 14, Y + 7, 1, 1);
+  }
+
+  function drawCistern(X, Y, S) {
+    // A squat stone tank: the well's big sibling.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 1, Y + 13, 14, 1);
+    g.fillStyle = P.stone;
+    g.fillRect(X + 2, Y + 5, 12, 9);
+    g.fillStyle = P.rockHi;
+    g.fillRect(X + 2, Y + 5, 12, 2);
+    g.fillStyle = "#20262e";
+    g.fillRect(X + 4, Y + 7, 8, 5); // open water
+    g.fillStyle = P.shimmer;
+    const shim = Math.floor(view.time / 400) % 2;
+    g.fillRect(X + 5 + shim, Y + 9, 3, 1);
+    g.fillStyle = P.rockLo;
+    g.fillRect(X + 3, Y + 6, 1, 7);
+    g.fillRect(X + 12, Y + 6, 1, 7);
+  }
+
+  function drawSawmill(X, Y, S) {
+    // Sawpit body plus a water wheel on the gable - "boards made here".
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + S - 3, S - 4, 2);
+    g.fillStyle = P.plank;
+    g.fillRect(X + 2, Y + 6, S - 4, 10);
+    g.fillStyle = "#a8813f";
+    g.fillRect(X + 2, Y + 10, S - 4, 1);
+    g.fillStyle = P.roof;
+    g.fillRect(X + 1, Y + 2, S - 2, 4);
+    // Wheel: spokes rotate slowly.
+    const cx = X + 4,
+      cy = Y + 12;
+    g.fillStyle = P.wood;
+    g.fillRect(cx - 3, cy - 3, 6, 6);
+    g.fillStyle = P.woodHi;
+    const spoke = Math.floor(view.time / 300) % 4;
+    g.fillRect(cx - 1, cy - 3 + spoke, 2, 1);
+    g.fillRect(cx - 1, cy + 2 - spoke, 2, 1);
+    // Fresh boards leaning by the door.
+    g.fillStyle = P.plank;
+    g.fillRect(X + S - 7, Y + S - 7, 2, 5);
+    g.fillRect(X + S - 4, Y + S - 6, 2, 4);
+  }
+
+  function drawStonecarver(X, Y, S) {
+    // A stonecutter's yard: rock face behind, dressed blocks out front.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + S - 3, S - 4, 2);
+    g.fillStyle = P.rock;
+    g.fillRect(X + 2, Y + 4, S - 4, 12);
+    g.fillStyle = P.rockHi;
+    g.fillRect(X + 2, Y + 4, S - 4, 2);
+    g.fillStyle = P.rockLo;
+    g.fillRect(X + 2, Y + 9, S - 4, 1);
+    g.fillRect(X + 8, Y + 5, 1, 4);
+    g.fillRect(X + 5, Y + 11, 1, 4);
+    // Chisel marks + dressed blocks.
+    g.fillStyle = P.stone;
+    g.fillRect(X + 3, Y + S - 7, 4, 3);
+    g.fillRect(X + 8, Y + S - 6, 4, 3);
+    g.fillStyle = P.curtainHi;
+    g.fillRect(X + 3, Y + S - 7, 4, 1);
+    g.fillRect(X + 8, Y + S - 6, 4, 1);
+  }
+
+  function drawGranary(X, Y, S) {
+    // Storehouse chassis with sacked grain bulging at the seams.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + S - 3, S - 4, 2);
+    g.fillStyle = P.stone;
+    g.fillRect(X + 2, Y + 12, S - 4, 4);
+    g.fillStyle = P.plank;
+    g.fillRect(X + 2, Y + 6, S - 4, 6);
+    g.fillStyle = P.roof;
+    g.fillRect(X + 1, Y + 2, S - 2, 4);
+    g.fillStyle = "#d9b156"; // grain sacks
+    g.fillRect(X + 3, Y + S - 6, 4, 4);
+    g.fillRect(X + 9, Y + S - 5, 4, 3);
+    g.fillStyle = "#b3893a";
+    g.fillRect(X + 4, Y + S - 5, 2, 1);
+    g.fillRect(X + 10, Y + S - 4, 2, 1);
+  }
+
+  function drawKitchen(X, Y, S) {
+    // House with a smoking chimney and a pot by the door.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + S - 3, S - 4, 2);
+    g.fillStyle = P.plaster;
+    g.fillRect(X + 3, Y + 8, S - 6, 7);
+    g.fillStyle = P.roof;
+    g.fillRect(X + 1, Y + 3, S - 2, 5);
+    g.fillStyle = P.roofHi;
+    g.fillRect(X + 1, Y + 3, S - 2, 2);
+    g.fillStyle = P.stone;
+    g.fillRect(X + S - 6, Y + 1, 3, 3); // chimney
+    g.fillStyle = "rgba(226,226,226,0.55)"; // smoke
+    const puff = Math.floor(view.time / 350) % 3;
+    g.fillRect(X + S - 7 + puff, Y - 2 - puff, 2, 2);
+    g.fillStyle = P.wood;
+    g.fillRect(X + 4, Y + 11, 3, 4); // door
+    g.fillStyle = "#6f4526";
+    g.fillRect(X + S - 8, Y + S - 5, 4, 3); // stock pot
+    g.fillStyle = P.fire;
+    g.fillRect(X + S - 7, Y + S - 2, 2, 1);
+  }
+
+  function drawWaystation(X, Y, S) {
+    // A roadside lean-to with a signpost: the wanderer's beacon.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + S - 3, S - 4, 2);
+    g.fillStyle = P.wood;
+    g.fillRect(X + 2, Y + 9, S - 4, 7);
+    g.fillStyle = P.woodHi;
+    g.fillRect(X + 2, Y + 9, S - 4, 2);
+    g.fillStyle = P.roof;
+    g.fillRect(X + 4, Y + 4, S - 6, 5); // slanted canopy
+    g.fillStyle = P.roofHi;
+    g.fillRect(X + 4, Y + 4, S - 6, 2);
+    g.fillStyle = "#6b6f76";
+    g.fillRect(X + S - 5, Y + 3, 1, 12); // signpost
+    g.fillStyle = P.plank;
+    g.fillRect(X + S - 8, Y + 5, 5, 3); // sign board
+    g.fillStyle = "#6f4526";
+    g.fillRect(X + S - 7, Y + 6, 3, 1);
+  }
+
+  function drawShrine(X, Y, S) {
+    // A ring of standing stones cradling a lit altar.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + S - 3, S - 4, 2);
+    g.fillStyle = P.rockLo;
+    g.fillRect(X + 2, Y + 13, S - 4, 2); // stone ring base
+    g.fillStyle = P.stone;
+    g.fillRect(X + 3, Y + 4, 3, 10); // flanking stones
+    g.fillRect(X + S - 6, Y + 4, 3, 10);
+    g.fillStyle = P.rockHi;
+    g.fillRect(X + 3, Y + 4, 1, 10);
+    g.fillRect(X + S - 6, Y + 4, 1, 10);
+    g.fillStyle = P.rock;
+    g.fillRect(X + 7, Y + 9, S - 14, 4); // altar slab
+    // Candle flames: the light Occultists tend.
+    const flick = Math.floor(view.time / 260 + 1) % 2;
+    g.fillStyle = P.prayer;
+    g.fillRect(X + 8, Y + 6 - flick, 2, 3);
+    g.fillRect(X + S - 10, Y + 7 - (1 - flick), 2, 3);
+    g.fillStyle = "#fff3d6";
+    g.fillRect(X + 8, Y + 8, 1, 1);
+    g.fillRect(X + S - 10, Y + 9, 1, 1);
+  }
+
+  function drawClinic(X, Y, S) {
+    // Plaster house flying the healer's pale banner.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + S - 3, S - 4, 2);
+    g.fillStyle = "#f4efe2";
+    g.fillRect(X + 3, Y + 8, S - 6, 7);
+    g.fillStyle = P.roof;
+    g.fillRect(X + 1, Y + 3, S - 2, 5);
+    g.fillStyle = "#8d99ae";
+    g.fillRect(X + 1, Y + 3, S - 2, 1);
+    g.fillStyle = "#6b6f76";
+    g.fillRect(X + S - 4, Y + 1, 1, 10); // banner pole
+    g.fillStyle = "#e0d3b0";
+    g.fillRect(X + S - 3, Y + 2, 2, 5);
+    g.fillStyle = "#d1603d";
+    g.fillRect(X + S - 3, Y + 3, 2, 1);
+    g.fillRect(X + S - 3 + 0.5, Y + 2, 1, 5); // the cross
+    g.fillStyle = P.wood;
+    g.fillRect(X + 5, Y + 11, 3, 4); // door
+  }
+
+  function drawWatchpost(X, Y, S) {
+    // A timber lookout: tall legs, hooded crow's nest, pennant.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 2, Y + S - 3, S - 4, 2);
+    g.fillStyle = P.wood;
+    g.fillRect(X + 4, Y + 8, 2, 8);
+    g.fillRect(X + S - 6, Y + 8, 2, 8); // legs
+    g.fillStyle = "#6f4526";
+    g.fillRect(X + 4, Y + 11, S - 8, 1); // brace
+    g.fillStyle = P.woodHi;
+    g.fillRect(X + 3, Y + 3, S - 6, 5); // nest
+    g.fillStyle = P.roof;
+    g.fillRect(X + 2, Y + 1, S - 4, 3); // hood
+    g.fillStyle = "#6b6f76";
+    g.fillRect(X + S - 3, Y + 2, 1, 6); // pennant
+    g.fillStyle = "#d1603d";
+    const flutter = Math.floor(view.time / 300) % 2;
+    g.fillRect(X + S - 2, Y + 2, 2, 2 + flutter);
+    g.fillStyle = "#20262e";
+    g.fillRect(X + 6, Y + 4, 2, 2); // watch slit
+  }
+
+  function drawFirePit(X, Y, S) {
+    // Stone ring, restless flame - a little campfire you can place.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 3, Y + 12, 10, 1);
+    g.fillStyle = P.rockLo;
+    g.fillRect(X + 3, Y + 10, 10, 3);
+    g.fillStyle = P.rockHi;
+    g.fillRect(X + 3, Y + 10, 10, 1);
+    const flick = Math.floor(view.time / 130 + X) % 2;
+    g.fillStyle = P.fire;
+    g.fillRect(X + 6, Y + 8 - flick, 4, 3);
+    g.fillRect(X + 7, Y + 6 - flick, 2, 2);
+    g.fillStyle = P.emberCore;
+    g.fillRect(X + 7, Y + 10, 2, 2);
+    g.fillStyle = P.emberHi;
+    g.fillRect(X + 5 + flick * 5, Y + 6, 1, 1); // sparks
+    g.fillRect(X + 10 - flick * 4, Y + 5, 1, 1);
+  }
+
+  function drawCurtainWall(X, Y, S) {
+    // Taller, grayer, crenellated - and dotted with ward-stones that glow
+    // faintly (this is the wall wraiths cannot cross).
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 1, Y + 14, 14, 1);
+    g.fillStyle = P.curtain;
+    g.fillRect(X + 1, Y + 1, 14, 13);
+    g.fillStyle = P.curtainHi;
+    g.fillRect(X + 1, Y + 1, 14, 2);
+    g.fillStyle = "#6f7890";
+    g.fillRect(X + 1, Y + 1, 2, 3); // crenellations
+    g.fillRect(X + 6, Y + 1, 2, 3);
+    g.fillRect(X + 12, Y + 1, 2, 3);
+    g.fillStyle = "#5d6678";
+    g.fillRect(X + 1, Y + 7, 6, 1);
+    g.fillRect(X + 9, Y + 11, 6, 1);
+    g.fillRect(X + 8, Y + 4, 1, 3);
+    // Ward glow, breathing.
+    const glow = Math.sin(view.time * 0.002 + X) > 0.2;
+    if (glow) {
+      g.fillStyle = "rgba(174,230,255,0.7)";
+      g.fillRect(X + 4, Y + 9, 1, 1);
+      g.fillRect(X + 11, Y + 5, 1, 1);
+    }
+  }
+
+  function drawStoneGate(X, Y, S) {
+    // The gate's chassis in stone: same friendly lintel, heavier posts.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 1, Y + 14, 14, 1);
+    g.fillStyle = P.stone;
+    g.fillRect(X + 1, Y + 2, 4, 13);
+    g.fillRect(X + 11, Y + 2, 4, 13);
+    g.fillStyle = P.rockHi;
+    g.fillRect(X + 1, Y + 2, 4, 2);
+    g.fillRect(X + 11, Y + 2, 4, 2);
+    g.fillStyle = "#5f9e5f";
+    g.fillRect(X + 5, Y + 2, 6, 2);
+    g.fillStyle = P.rockLo;
+    g.fillRect(X + 5, Y + 10, 6, 5);
+    g.fillStyle = P.stone;
+    g.fillRect(X + 6, Y + 11, 4, 4); // stone portcullis
+  }
+
+  function drawBallista(X, Y, S) {
+    // A cradled great-bow on a timber base: reads "long shot" at a glance.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 1, Y + 14, 14, 2);
+    g.fillStyle = P.rockLo;
+    g.fillRect(X + 3, Y + 8, 10, 7);
+    g.fillStyle = P.rock;
+    g.fillRect(X + 3, Y + 8, 10, 2);
+    g.fillStyle = P.wood;
+    g.fillRect(X + 7, Y + 2, 2, 7); // stock
+    g.strokeStyle = P.woodHi;
+    g.lineWidth = 1;
+    g.beginPath(); // the bow arms
+    g.moveTo(X + 2, Y + 6);
+    g.quadraticCurveTo(X + 8, Y + 1, X + 14, Y + 6);
+    g.stroke();
+    g.strokeStyle = "#e8e2d0";
+    g.beginPath(); // the string
+    g.moveTo(X + 2, Y + 6);
+    g.lineTo(X + 14, Y + 6);
+    g.stroke();
+  }
+
+  function drawSlingTower(X, Y, S) {
+    // A squat catapult: stone bucket arm, cruder than the sentry tower.
+    g.fillStyle = P.shadow;
+    g.fillRect(X + 1, Y + 14, 14, 2);
+    g.fillStyle = P.rockLo;
+    g.fillRect(X + 3, Y + 7, 10, 8);
+    g.fillStyle = P.rock;
+    g.fillRect(X + 3, Y + 7, 10, 2);
+    g.fillStyle = P.wood;
+    g.fillRect(X + 7, Y + 2, 2, 7); // throwing arm
+    g.fillStyle = P.woodHi;
+    g.fillRect(X + 7, Y + 2, 2, 2);
+    g.fillStyle = P.stone;
+    g.fillRect(X + 5, Y + 1, 5, 3); // the stone in the bucket
+    g.fillStyle = P.rockHi;
+    g.fillRect(X + 6, Y + 1, 2, 1);
+  }
+
+  // One art dispatch for the world, the ghost preview, and wall paint -
+  // the preview can never disagree with the placed building.
+  const BUILDING_ART = {
+    camp: drawCamp,
+    home: drawHome,
+    cottage: drawCottage,
+    manor: drawManor,
+    farm: drawFarm,
+    orchard: drawOrchard,
+    well: drawWell,
+    cistern: drawCistern,
+    sawpit: drawSawpit,
+    sawmill: drawSawmill,
+    quarry: drawQuarry,
+    stonecarver: drawStonecarver,
+    storehouse: drawStorehouse,
+    granary: drawGranary,
+    kitchen: drawKitchen,
+    waystation: drawWaystation,
+    shrine: drawShrine,
+    clinic: drawClinic,
+    watchpost: drawWatchpost,
+    firePit: drawFirePit,
+    fence: drawFence,
+    stoneWall: drawStoneWall,
+    curtainWall: drawCurtainWall,
+    gate: drawGate,
+    stoneGate: drawStoneGate,
+    tower: drawTower,
+    ballista: drawBallista,
+    slingTower: drawSlingTower,
+    stormPylon: drawStormPylon,
+    nest: drawNest,
+  };
 
   function drawCorpses(state) {
     for (const c of state.corpses) {
@@ -616,7 +1046,7 @@ export function createRenderer(canvas, stateRef) {
     g.strokeStyle = "rgba(255,224,138,0.5)";
     g.setLineDash([4, 3]);
     g.beginPath();
-    g.arc(px(c.x), px(c.y), B.BUILDINGS.camp.radius * B.TILE, 0, Math.PI * 2);
+    g.arc(px(c.x), px(c.y), bd.def(camp).radius * B.TILE, 0, Math.PI * 2);
     g.stroke();
     g.setLineDash([]);
   }
@@ -687,6 +1117,24 @@ export function createRenderer(canvas, stateRef) {
         g.fillStyle = P.emberHi;
         g.fillRect(X + 3 * s, Y - 3 * s - j, 1, 1); // drifting sparks
         g.fillRect(X - 4 * s, Y - 5 * s + j, 1, 1);
+      } else if (m.kind === "bonewalker") {
+        // Bonewalker: a rattling skeleton at a sprint - bone-white, lean,
+        // long strides (reads "fast" next to the slouching husk).
+        const j = bob ? 1 : -1;
+        g.fillStyle = P.bone;
+        g.fillRect(X - 2 * s, Y - 2 * s, 4 * s, 5 * s); // ribcage
+        g.fillStyle = P.boneHi;
+        g.fillRect(X - 2 * s, Y - 2 * s, 4 * s, 1 * s);
+        g.fillStyle = P.bone;
+        g.fillRect(X - 1 * s, Y - 4 * s, 2 * s, 2 * s); // skull
+        g.fillStyle = "#2a2418";
+        g.fillRect(X - 1 * s, Y - 3.5 * s, 1, 1);
+        g.fillRect(X + 0.5 * s, Y - 3.5 * s, 1, 1); // hollow sockets
+        g.fillStyle = P.boneLo;
+        g.fillRect(X - 3 * s, Y - (j > 0 ? 1 : 2) * s, 1, 3 * s); // pumping arms
+        g.fillRect(X + 2 * s, Y - (j > 0 ? 2 : 1) * s, 1, 3 * s);
+        g.fillRect(X - 2 * s + j, Y + 3 * s, 1, 2 * s); // striding legs
+        g.fillRect(X + 1 * s - j, Y + 3 * s, 1, 2 * s);
       } else {
         // Husk: hunched husk of a villager, arms dangling.
         g.fillStyle = P.husk;
@@ -699,6 +1147,21 @@ export function createRenderer(canvas, stateRef) {
         g.fillStyle = P.husk;
         g.fillRect(X - 3 * s, Y - (bob ? 0 : 1) * s, 1, 3 * s); // arms
         g.fillRect(X + 2 * s, Y - (bob ? 0 : 1) * s, 1, 3 * s);
+      }
+      // Threat levels: gold pips above the head, one per level past 1
+      // (doc 04's "stronger individuals" made readable at a glance).
+      const lvl = m.level ?? 1;
+      if (lvl > 1) {
+        g.fillStyle = "#ffd97a";
+        for (let k = 0; k < lvl - 1; k++) g.fillRect(X - (lvl - 1) + k * 3, Y - 8, 2, 2);
+      }
+      // Monster health bar only when wounded (readable raids).
+      if (m.hp < (m.maxHp ?? m.hp) - 0.5) {
+        const frac = Math.max(0, m.hp) / m.maxHp;
+        g.fillStyle = "#3a3f45";
+        g.fillRect(X - 5, Y + 6, 10, 2);
+        g.fillStyle = frac > 0.4 ? "#e26d5a" : "#8c3a30";
+        g.fillRect(X - 5, Y + 6, 10 * frac, 2);
       }
     }
   }
@@ -802,6 +1265,19 @@ export function createRenderer(canvas, stateRef) {
         g.arc(px(p.x), px(p.y), r, 0, Math.PI * 2);
         g.stroke();
         g.lineWidth = 1;
+      } else if (p.kind === "prayer") {
+        // A rite finished: violet motes drifting up to the god's purse.
+        const a = 1 - t;
+        g.fillStyle = `rgba(230,201,255,${a})`;
+        for (let k = 0; k < 4; k++) {
+          const ang = k * 1.57 + p.t * 2;
+          g.fillRect(
+            px(p.x) + Math.cos(ang) * 4 - 1,
+            px(p.y) - t * 14 + Math.sin(ang) * 2 - 1,
+            2,
+            2,
+          );
+        }
       } else if (p.kind === "heal" || p.kind === "mend") {
         // Rising motes inside the spell's circle: green for flesh, gold
         // for stone.
@@ -856,6 +1332,14 @@ export function createRenderer(canvas, stateRef) {
       else if (sleeping && !v.home) drawBubble(X, Y - 9 * s, "z", "#9db7e8");
       else if (v.hunger < 12) drawBubble(X, Y - 9 * s, "!", "#e26d5a");
       else if (v.thirst < 12) drawBubble(X, Y - 9 * s, "!", "#5a9bd6");
+      // Doubt: the red-hand mark of low faith (doc 03 section 5.3) - the
+      // god should SEE who has stopped believing.
+      if ((v.faith ?? 100) < 25 && !v.bubble) {
+        g.fillStyle = "#d1603d";
+        g.fillRect(X - 2, Y - 10 * s, 4, 3);
+        g.fillRect(X - 3, Y - 9 * s, 1, 1);
+        g.fillRect(X + 2, Y - 9 * s, 1, 1);
+      }
     }
   }
 
@@ -881,24 +1365,14 @@ export function createRenderer(canvas, stateRef) {
         g.fillStyle = valid ? "rgba(126,196,102,0.4)" : "rgba(226,109,90,0.4)";
         g.fillRect(px(x + dx), px(y + dy), B.TILE, B.TILE);
       }
-    if (type === "home") drawHome(px(x), px(y), S);
-    else if (type === "farm") drawFarm(px(x), px(y), S);
-    else if (type === "well") drawWell(px(x), px(y), S);
-    else if (type === "sawpit") drawSawpit(px(x), px(y), S);
-    else if (type === "storehouse") drawStorehouse(px(x), px(y), S);
-    else if (type === "camp") drawCamp(px(x), px(y), S);
-    else if (type === "fence") drawFence(px(x), px(y), S);
-    else if (type === "stoneWall") drawStoneWall(px(x), px(y), S);
-    else if (type === "gate") drawGate(px(x), px(y), S);
-    else if (type === "tower") drawTower(px(x), px(y), S);
-    else if (type === "stormPylon") drawStormPylon(px(x), px(y), S);
-    else if (type === "quarry") drawQuarry(px(x), px(y), S);
-    if (valid && B.BUILDINGS[type].tower) {
+    const art = BUILDING_ART[type];
+    if (art) art(px(x), px(y), S);
+    if (valid && def.tower) {
       // Sentry coverage preview: the whole point of a tower is its circle.
       g.strokeStyle = "rgba(255,217,122,0.55)";
       g.setLineDash([3, 3]);
       g.beginPath();
-      g.arc(px(x) + B.TILE / 2, px(y) + B.TILE / 2, B.BUILDINGS[type].tower.range * B.TILE, 0, Math.PI * 2);
+      g.arc(px(x) + B.TILE / 2, px(y) + B.TILE / 2, def.tower.range * B.TILE, 0, Math.PI * 2);
       g.stroke();
       g.setLineDash([]);
     }
@@ -910,13 +1384,13 @@ export function createRenderer(canvas, stateRef) {
   // Painted wall run preview: green where it will land.
   function drawPaint(state) {
     if (!view.paint || !view.paint.tiles.size) return;
-    const draw = { fence: drawFence, stoneWall: drawStoneWall, gate: drawGate }[view.paint.type];
     g.globalAlpha = 0.75;
     for (const key of view.paint.tiles) {
       const [x, y] = key.split(",").map(Number);
       g.fillStyle = "rgba(126,196,102,0.3)";
       g.fillRect(px(x), px(y), B.TILE, B.TILE);
-      draw(px(x), px(y), B.TILE);
+      const art = BUILDING_ART[view.paint.type];
+      if (art) art(px(x), px(y), B.TILE);
     }
     g.globalAlpha = 1;
   }
@@ -947,6 +1421,27 @@ export function createRenderer(canvas, stateRef) {
       if (b.type !== "home" || !b.complete) continue;
       g.fillStyle = `rgba(255,217,122,${0.35 * (1 - dl)})`;
       g.fillRect(px(b.x) + 12, px(b.y) + 11, 2, 2);
+    }
+    // Fire pits are beacons in the dark (and the shrine's candles burn
+    // all night - a believing village glows).
+    for (const b of state.buildings) {
+      if (!b.complete) continue;
+      if (b.type === "firePit") {
+        const flick = 0.7 + Math.sin(view.time * 0.02 + b.id) * 0.15;
+        const r = 2.6 * B.TILE * flick;
+        const grad = g.createRadialGradient(px(b.x + 0.5), px(b.y + 0.5), 1, px(b.x + 0.5), px(b.y + 0.5), r);
+        grad.addColorStop(0, `rgba(255,180,84,${0.3 * (1 - dl)})`);
+        grad.addColorStop(1, "rgba(255,180,84,0)");
+        g.fillStyle = grad;
+        g.fillRect(px(b.x + 0.5) - r, px(b.y + 0.5) - r, r * 2, r * 2);
+      } else if (b.type === "shrine") {
+        const r = 1.8 * B.TILE;
+        const grad = g.createRadialGradient(px(b.x + 1), px(b.y + 1), 1, px(b.x + 1), px(b.y + 1), r);
+        grad.addColorStop(0, `rgba(230,201,255,${0.22 * (1 - dl)})`);
+        grad.addColorStop(1, "rgba(230,201,255,0)");
+        g.fillStyle = grad;
+        g.fillRect(px(b.x + 1) - r, px(b.y + 1) - r, r * 2, r * 2);
+      }
     }
     g.globalCompositeOperation = "source-over";
   }

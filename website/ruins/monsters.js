@@ -11,13 +11,25 @@ import * as B from "./balance.js";
 import { tilePassable } from "./world.js";
 import { findPath, adjacentOpen } from "./path.js";
 import * as bd from "./buildings.js";
-import { killVillager } from "./villager.js";
+import { killVillager, faithPulse } from "./villager.js";
 
 export function createRaidState() {
   return {
     active: false,
     campHit: false, // one "the camp is under attack" alarm per raid
   };
+}
+
+// Threat-scaled strength (doc 04 section 3.2): every 25 Corruption Threat
+// is a level - "less monsters, stronger individuals" rebalance.
+export function monsterLevel(state) {
+  const threat = state.corruption?.threat ?? 0;
+  return Math.min(B.MONSTER_LEVEL_MAX, 1 + Math.floor(threat / B.MONSTER_LEVEL_PER_THREAT));
+}
+
+export function monsterDamage(m) {
+  const def = B.MONSTERS[m.kind];
+  return def.damage * (1 + B.MONSTER_DAMAGE_PER_LEVEL * ((m.level ?? 1) - 1));
 }
 
 // ---- Raid size. Escalation is nests + days + threat (doc 04 sections
@@ -57,15 +69,18 @@ export function spawnRaid(state) {
 }
 
 // One construction site for every monster entering the world: raids,
-// slime splits, and meteor-sprung emberlings all look identical.
-export function spawnMonsterAt(state, kind, x, y) {
+// slime splits, and meteor-sprung emberlings all look identical. Level
+// rides the Corruption Threat (spawn-time snapshot, like RtR's "Blood
+// Moon slimes spawn at the corruption's level").
+export function spawnMonsterAt(state, kind, x, y, level = monsterLevel(state)) {
   const def = B.MONSTERS[kind];
   const m = {
     id: state.nextId++,
     kind,
     x,
     y,
-    hp: def.hp,
+    level,
+    hp: def.hp * (1 + B.MONSTER_HP_PER_LEVEL * (level - 1)),
     facing: 1,
     path: [],
     pathI: 0,
@@ -73,6 +88,7 @@ export function spawnMonsterAt(state, kind, x, y) {
     chewCd: 0,
     repathAt: 0,
   };
+  m.maxHp = m.hp;
   state.monsters.push(m);
   return m;
 }
@@ -89,9 +105,11 @@ function pickKind(state) {
   if (day >= B.EMBERLING_ARRIVAL_DAY && roll < (band += B.EMBERLING_CHANCE))
     return "emberling";
   if (day >= B.WRAITH_ARRIVAL_DAY && roll < (band += B.WRAITH_CHANCE)) return "wraith";
+  if (day >= B.BONEWALKER_ARRIVAL_DAY && roll < (band += B.BONEWALKER_CHANCE)) return "bonewalker";
   if (roll < (band += B.BLOT_CHANCE)) return "blot";
   return "husk";
 }
+export { pickKind };
 
 // ---- Per-tick driver, called from stepGame.
 export function tickMonsters(state, dt) {
@@ -121,7 +139,7 @@ export function tickMonsters(state, dt) {
     if (prey) {
       if (m.attackCd <= 0) {
         m.attackCd = def.attackTicks;
-        hurtVillager(state, prey, def.damage);
+        hurtVillager(state, prey, monsterDamage(m));
       }
       strikeBack(state, prey, dt);
       continue; // engaged: no marching while the duel lasts
@@ -157,7 +175,7 @@ export function tickMonsters(state, dt) {
           }
           if (m.chewCd <= 0) {
             m.chewCd = def.attackTicks;
-            chew(state, b, def.damage);
+            chew(state, b, monsterDamage(m));
           }
           break; // no movement while chewing
         }
@@ -182,7 +200,7 @@ export function tickMonsters(state, dt) {
       const c = bd.buildingCenter(camp);
       if (Math.hypot(c.x - m.x, c.y - m.y) < 2.3 && m.chewCd <= 0) {
         m.chewCd = def.attackTicks;
-        chew(state, camp, def.damage);
+        chew(state, camp, monsterDamage(m));
       }
     }
   }
@@ -190,13 +208,15 @@ export function tickMonsters(state, dt) {
 }
 
 // Wraith passability: wall tiles (fence/stone wall, never gates) a phaser
-// may glide through. Cached until walls change, like the breach grid.
+// may glide through. Curtain walls are warded masonry - no phaser crosses
+// them (doc 04 section 4.2: only crylithium stops spectres). Cached until
+// walls change, like the breach grid.
 function phaseTiles(state) {
   if (!state.phaseTiles) {
     state.phaseTiles = new Set();
     for (const b of state.buildings) {
       const d = B.BUILDINGS[b.type];
-      if (!d.wall || d.gate) continue;
+      if (!d.wall || d.gate || d.blocksPhasers) continue;
       for (const i of bd.footprint(b.type, b.x, b.y)) state.phaseTiles.add(i);
     }
   }
@@ -239,7 +259,7 @@ function rangedStrike(state, m, def) {
   const tx = kind === "villager" ? target.x : bd.buildingCenter(target).x;
   const ty = kind === "villager" ? target.y : bd.buildingCenter(target).y;
   state.projectiles.push({ x: cx, y: cy, tx, ty, t: 0, dur: 0.16, kind: "fireball" });
-  if (kind === "villager") hurtVillager(state, target, def.damage);
+  if (kind === "villager") hurtVillager(state, target, monsterDamage(m));
   else {
     target.hp -= def.damage;
     if (target.type === "camp" && !state.raid.campHit) {
@@ -285,14 +305,16 @@ function breachRoute(state, m, camp) {
 
 // Time-to-break grid, cached until walls change. Costs use one reference
 // dps (the husk's): only the ORDERING of structures matters for routing.
-// Non-structure blockers (water, trees, rocks) are never breachable.
+// Non-structure blockers (water, trees, rocks) are never breachable, and
+// neither are fire pits - monsters simply refuse to attack them (RtR rule).
 function breachCost(state) {
   if (!state.breakCost) {
     const total = state.world.size * state.world.size;
     const grid = new Float32Array(total);
     const dpsPerTick = B.MONSTERS.husk.damage / B.MONSTERS.husk.attackTicks;
     for (const b of state.buildings) {
-      const chewTicks = b.hp / dpsPerTick;
+      const def = B.BUILDINGS[b.type];
+      const chewTicks = def.untargetable ? Infinity : b.hp / dpsPerTick;
       for (const i of bd.footprint(b.type, b.x, b.y)) grid[i] = chewTicks;
     }
     state.breakCost = grid;
@@ -376,6 +398,8 @@ export function killMonster(state, m) {
   m.hp = 0;
   state.stats.slain++;
   const def = B.MONSTERS[m.kind];
+  // Witnesses believe a little harder when the monsters die (doc 03 §5.3).
+  faithPulse(state, m.x, m.y, B.WITNESS_KILL_FAITH);
   if (def.splits && state.monsters.length < B.MONSTER_HARD_CAP) {
     for (let i = 0; i < def.splits.count; i++) {
       spawnMonsterAt(
@@ -383,6 +407,7 @@ export function killMonster(state, m) {
         def.splits.kind,
         m.x + (i - 0.5) * 0.4,
         m.y + (i % 2 ? 0.3 : -0.3),
+        m.level ?? 1,
       );
     }
   }
@@ -426,16 +451,20 @@ function tickTowers(state, dt) {
       }
     }
     if (!target) continue;
-    // The empty-magazine check: towers hold, they don't improvise. One
-    // nudge per night so a dry pool reads as a decision point, not spam.
-    if ((state.resources.bolts ?? 0) < 1) {
+    // The empty-magazine check: towers hold, they don't improvise. Ammo is
+    // per-tower (bolts for the archery line, raw stone for slings - every
+    // sling stone is a wall you didn't build). One nudge per night so a
+    // dry pool reads as a decision point, not spam.
+    const ammo = spec.ammo ?? "bolts";
+    const perShot = spec.ammoPerShot ?? 1;
+    if ((state.resources[ammo] ?? 0) < perShot) {
       if (B.TOWERS_WARN_EMPTY && !state.flags.boltsWarned) {
         state.flags.boltsWarned = true;
-        state.events.push({ type: "bolts-out" });
+        state.events.push({ type: "bolts-out", ammo });
       }
       continue;
     }
-    state.resources.bolts -= 1;
+    state.resources[ammo] -= perShot;
     b.reload = spec.reload;
     const tx = kind === "monster" ? target.x : target.x + 0.5;
     const ty = kind === "monster" ? target.y : target.y + 0.5;

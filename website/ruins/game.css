@@ -428,6 +428,15 @@ button:focus-visible {
   font-variant-numeric: tabular-nums;
   color: #f2e4c4;
 }
+.influence-faith {
+  color: var(--dim);
+  font-size: 11px;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 #spell-slots {
   display: flex;
   gap: 6px;
@@ -592,6 +601,10 @@ button:focus-visible {
   font-size: 13px;
   margin: 4px 0 10px;
 }
+.sheet-note.warn {
+  color: #e2a35a;
+  font-weight: 600;
+}
 .build-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -720,6 +733,12 @@ button:focus-visible {
 .insp-actions .danger {
   border-color: #e26d5a66;
   color: #f0b3a6;
+}
+.insp-actions .primary {
+  background: #3c523f;
+  border-color: #71906599;
+  color: #dcead0;
+  font-weight: 700;
 }
 
 /* ---- Dialogs ---- */

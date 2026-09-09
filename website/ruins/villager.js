@@ -2,10 +2,12 @@
 // loops. There is NO direct ordering - the player sets headcounts and
 // buildings; villagers choose their own targets (master plan pillar 1).
 // Villagers overlap freely: no unit-unit collision (standing veto).
+// M4 adds faith (doc 03 section 5.3) and the craft/pray/hunt/tend jobs.
 import * as B from "./balance.js";
 import { nearestTile, tilePassable, F_TREE, F_BUSH, F_STUMP } from "./world.js";
 import { findPath, adjacentOpen } from "./path.js";
 import * as bd from "./buildings.js";
+import { damageMonster } from "./monsters.js";
 
 export function createVillager(state, x, y, age = "adult") {
   const id = state.nextId++;
@@ -19,6 +21,7 @@ export function createVillager(state, x, y, age = "adult") {
     thirst: B.MAX_NEED * 0.9,
     energy: B.MAX_NEED * 0.85,
     health: B.MAX_NEED,
+    faith: B.FAITH_START, // belief in the god; scales their influence worth
     job: null,
     workBuilding: null,
     home: null,
@@ -39,6 +42,16 @@ export function createVillager(state, x, y, age = "adult") {
 
 const perTick = (perDay) => perDay / B.DAY_TICKS;
 
+// Faith witness pulse (doc 03 section 5.3): anything the village deems
+// good or terrible nudges the faith of everyone who saw it.
+export function faithPulse(state, x, y, amount, radius = B.WITNESS_RADIUS, exceptId = null) {
+  for (const v of state.villagers) {
+    if (v.dead || v.id === exceptId) continue;
+    if (Math.hypot(v.x - x, v.y - y) > radius) continue;
+    v.faith = Math.max(0, Math.min(B.MAX_NEED, v.faith + amount));
+  }
+}
+
 export function tickVillager(state, v, dt) {
   if (v.dead || v.held) return; // held: dangling from the god hand, world on pause
   const working = isWorking(v);
@@ -49,9 +62,13 @@ export function tickVillager(state, v, dt) {
   if (v.age === "child") hungerRate *= B.HUNGER_CHILD_MULT;
   v.hunger = Math.max(0, v.hunger - hungerRate * dt);
   v.thirst = Math.max(0, v.thirst - perTick(B.THIRST_DECAY_PER_DAY) * dt);
+  v.faith = Math.max(0, v.faith - perTick(B.FAITH_DECAY_PER_DAY) * dt);
 
   if (v.task && v.task.kind === "sleep") {
     v.energy = Math.min(B.MAX_NEED, v.energy + perTick(B.SLEEP_RESTORE_PER_DAY) * (v.home ? 1 : 0.6) * dt);
+    // A real bed is a blessing: housed sleep slowly restores faith (the
+    // housing faith bonus, doc 03 section 5.3).
+    if (v.home) v.faith = Math.min(B.MAX_NEED, v.faith + perTick(B.FAITH_HOME_PER_DAY) * dt);
   } else {
     v.energy = Math.max(0, v.energy - perTick(B.ENERGY_DECAY_PER_DAY) * dt);
   }
@@ -106,7 +123,7 @@ export function tickVillager(state, v, dt) {
 function isWorking(v) {
   return (
     v.task &&
-    ["chop", "mine", "plant", "harvestPlot", "harvestBush", "build", "fetch", "deliver"].includes(v.task.kind)
+    ["chop", "mine", "plant", "harvestPlot", "harvestBush", "build", "fetch", "deliver", "craft", "pray", "hunt", "tend"].includes(v.task.kind)
   );
 }
 
@@ -123,6 +140,8 @@ export function killVillager(state, v, cause) {
     const home = state.buildings.find((b) => b.id === v.home);
     if (home) home.occupants = Math.max(0, home.occupants - 1);
   }
+  // Watching your neighbor fall shakes the belief that the god is watching.
+  faithPulse(state, v.x, v.y, B.WITNESS_DEATH_FAITH, B.WITNESS_RADIUS, v.id);
   state.events.push({ type: "died", name: v.name, cause, x: v.x, y: v.y });
 }
 
@@ -134,7 +153,7 @@ function decide(state, v) {
   if (v.age === "adult" && v.home === null) findHome(state, v);
 
   // Starving thoughts become bubbles even before the walk begins.
-  if (v.hunger < B.EAT_THRESHOLD && state.resources.food >= 1) {
+  if (v.hunger < B.EAT_THRESHOLD && (state.resources.food >= 1 || state.resources.meals >= 1)) {
     const store = nearestStore(state, v);
     if (store) return startGoto(state, v, { kind: "eat", building: store.id }, store);
   }
@@ -180,8 +199,8 @@ function findHome(state, v) {
   const home = state.buildings.find(
     (b) =>
       b.complete &&
-      B.BUILDINGS[b.type].houses > 0 &&
-      b.occupants < B.BUILDINGS[b.type].houses,
+      bd.def(b).houses > 0 &&
+      b.occupants < bd.def(b).houses,
   );
   if (home) {
     v.home = home.id;
@@ -221,7 +240,7 @@ function tryHire(state, v) {
     if (bd.employedCount(state, job) >= (state.jobCounts[job] ?? 0)) continue;
     if (slots[job] <= 0) continue;
     const free = state.buildings.filter(
-      (b) => b.complete && (B.BUILDINGS[b.type].jobs?.[job] ?? 0) > b.workers.length,
+      (b) => b.complete && (bd.def(b).jobs?.[job] ?? 0) > b.workers.length,
     );
     free.sort((a, b2) => dist2(v, a) - dist2(v, b2));
     const spot = free[0];
@@ -249,6 +268,7 @@ function jobWork(state, v) {
     v.workBuilding = null;
     return false;
   }
+  const def = bd.def(workAt);
   const cap = bd.storageCap(state);
   if (v.carrying) return startHaul(state, v);
   if (v.job === "woodcutter" && state.resources.wood >= cap) return false;
@@ -259,8 +279,15 @@ function jobWork(state, v) {
     state.events.push({ type: "storage-full" });
   }
 
+  // ---- M4 professions: keyed off the workplace, not the job name, so a
+  // farm hand at an orchard and one at a farm share everything below.
+  if (def.craft) return startCraft(state, v, workAt, def.craft);
+  if (def.pray)
+    return startGoto(state, v, { kind: "pray", building: workAt.id, workLeft: B.PRAY_TICKS }, workAt);
+  if (def.guard) return startHunt(state, v, workAt, def);
+  if (def.heal) return startTend(state, v, workAt, def);
+
   if (v.job === "woodcutter") {
-    const def = B.BUILDINGS[workAt.type];
     const tree = nearestTile(
       state.world,
       state.world.trees,
@@ -271,7 +298,6 @@ function jobWork(state, v) {
   }
 
   if (v.job === "stonecutter") {
-    const def = B.BUILDINGS[workAt.type];
     const rock = nearestTile(
       state.world,
       state.world.rocks,
@@ -295,7 +321,6 @@ function jobWork(state, v) {
       return startGotoTile(state, v, { kind: "harvestPlot", target: ripe, workLeft: B.HARVEST_TICKS }, ripe);
     if (empty >= 0)
       return startGotoTile(state, v, { kind: "plant", target: empty, workLeft: B.PLANT_TICKS }, empty);
-    const def = B.BUILDINGS[workAt.type];
     const bush = nearestTile(
       state.world,
       state.world.bushes,
@@ -308,7 +333,8 @@ function jobWork(state, v) {
   }
 
   if (v.job === "builder") {
-    const site = state.buildings.find((b) => !b.complete);
+    // Camp upgrades are construction sites too: an upgrading camp counts.
+    const site = state.buildings.find((b) => !b.complete || b.upgrade);
     if (site) {
       const missing = bd.nextMissingRes(site);
       if (missing) {
@@ -325,6 +351,59 @@ function jobWork(state, v) {
     }
   }
   return false;
+}
+
+// Refiners (RtR maintain-threshold rule, simplified): work only while the
+// refined stock sits under its target and the inputs exist.
+function startCraft(state, v, workAt, spec) {
+  const [outRes] = Object.keys(spec.out);
+  if ((state.resources[outRes] ?? 0) >= (B.CRAFT_MAINTAIN[outRes] ?? Infinity)) return false;
+  for (const [res, n] of Object.entries(spec.in))
+    if ((state.resources[res] ?? 0) < n) return false;
+  return startGoto(state, v, { kind: "craft", building: workAt.id, workLeft: spec.ticks }, workAt);
+}
+
+// Guards pick their own quarry: the nearest raider inside the watchpost's
+// ring (plus a little slack), leashed so they never chase past the walls.
+function startHunt(state, v, workAt, def) {
+  const c = bd.buildingCenter(workAt);
+  let best = null,
+    bestD = def.radius + 4;
+  for (const m of state.monsters) {
+    if (m.hp <= 0 || m.held) continue;
+    const d = Math.hypot(m.x - c.x, m.y - c.y);
+    if (d < bestD) {
+      bestD = d;
+      best = m;
+    }
+  }
+  if (!best) return false;
+  v.task = { kind: "hunt", target: best.id, post: workAt.id, repathAt: 0 };
+  v.task.stage = "work"; // hunting manages its own chase, not startGoto
+  v.path = [];
+  v.activity = "Hunting";
+  return true;
+}
+
+// Healers tend the nearest wounded villager inside the clinic's ring.
+function startTend(state, v, workAt, def) {
+  const c = bd.buildingCenter(workAt);
+  let best = null,
+    bestD = def.radius;
+  for (const w of state.villagers) {
+    if (w.dead || w.id === v.id || w.held || w.health >= B.MAX_NEED - 22) continue;
+    const d = Math.hypot(w.x - c.x, w.y - c.y);
+    if (d < bestD) {
+      bestD = d;
+      best = w;
+    }
+  }
+  if (!best) return false;
+  v.task = { kind: "tend", target: best.id, workLeft: B.TEND_TICKS };
+  v.task.stage = "work";
+  v.path = [];
+  v.activity = "Tending";
+  return true;
 }
 
 // ---- Task execution.
@@ -412,8 +491,38 @@ function moveAlong(state, v, dt) {
   return v.path.length === 0;
 }
 
+// Chase a moving creature (guard after a raider, healer after a patient):
+// re-path on a short cadence, and when the grid says no (the quarry stands
+// on a wall it is chewing), close the last stretch in a straight line.
+function chase(state, v, target, dt, task) {
+  if (!v.path.length || state.clock.tick >= (task.repathAt ?? 0)) {
+    const size = state.world.size;
+    const here = Math.floor(v.y) * size + Math.floor(v.x);
+    const goal = Math.floor(target.y) * size + Math.floor(target.x);
+    if (here === goal) v.path = [];
+    else {
+      const path = findPath(state.world, here, goal, state.buildingAt, { through: state.gateTiles });
+      v.path = path ?? [];
+    }
+    task.repathAt = state.clock.tick + 45;
+  }
+  if (v.path.length) {
+    moveAlong(state, v, dt);
+    return;
+  }
+  const speed = B.WALK_TILES_PER_SECOND / B.TICKS_PER_SECOND;
+  const dx = target.x - v.x,
+    dy = target.y - v.y;
+  const d = Math.hypot(dx, dy) || 1;
+  v.x += (dx / d) * speed * dt;
+  v.y += (dy / d) * speed * dt;
+  if (Math.abs(dx) > 0.05) v.facing = dx > 0 ? 1 : -1;
+}
+
 function runTask(state, v, dt) {
   const task = v.task;
+  // Work ticks ride the camp-tier bonus (+1%/rung); walking never does.
+  const wdt = dt * bd.workSpeedMult(state);
   if (task.stage === "go") {
     const arrived = moveAlong(state, v, dt);
     if (!arrived) return;
@@ -425,11 +534,17 @@ function runTask(state, v, dt) {
   switch (task.kind) {
     case "eat": {
       v.activity = "Eating";
-      task.workLeft -= dt;
+      task.workLeft -= wdt;
       if (task.workLeft <= 0) {
-        const take = Math.min(B.EAT_AMOUNT, state.resources.food);
-        state.resources.food -= take;
-        v.hunger = Math.min(B.MAX_NEED, v.hunger + take);
+        // Kitchens first: a meal fills a worker whole in one stop.
+        if ((state.resources.meals ?? 0) >= 1) {
+          state.resources.meals -= 1;
+          v.hunger = Math.min(B.MAX_NEED, v.hunger + B.MEAL_EAT_AMOUNT);
+        } else {
+          const take = Math.min(B.EAT_AMOUNT, state.resources.food);
+          state.resources.food -= take;
+          v.hunger = Math.min(B.MAX_NEED, v.hunger + take);
+        }
         v.task = null;
       }
       return;
@@ -458,33 +573,115 @@ function runTask(state, v, dt) {
       v.activity = v.home ? "Sleeping" : "Sleeping rough";
       return; // woken by tickVillager
     }
+    case "craft": {
+      const shop = state.buildings.find((b) => b.id === task.building);
+      const spec = shop ? bd.def(shop).craft : null;
+      if (!spec) {
+        v.task = null;
+        return;
+      }
+      const [outRes, outN] = Object.entries(spec.out)[0];
+      v.activity = `Making ${outRes}`;
+      task.workLeft -= wdt;
+      if (task.workLeft <= 0) {
+        // Inputs may have run dry mid-craft: re-check, then convert.
+        let ok = (state.resources[outRes] ?? 0) < (B.CRAFT_MAINTAIN[outRes] ?? Infinity);
+        for (const [res, n] of Object.entries(spec.in)) if ((state.resources[res] ?? 0) < n) ok = false;
+        if (ok) {
+          for (const [res, n] of Object.entries(spec.in)) state.resources[res] -= n;
+          state.resources[outRes] = Math.min(bd.storageCap(state), (state.resources[outRes] ?? 0) + outN);
+        }
+        v.task = null;
+      }
+      return;
+    }
+    case "pray": {
+      v.activity = "Praying";
+      task.workLeft -= wdt;
+      if (task.workLeft <= 0) {
+        // The rite (doc 03 section 5.3): the praiser believes hardest,
+        // neighbors catch some, and free influence flows to the god.
+        v.faith = Math.min(B.MAX_NEED, v.faith + B.PRAY_FAITH_SELF);
+        faithPulse(state, v.x, v.y, B.PRAY_FAITH_NEARBY, B.PRAY_NEARBY_RADIUS, v.id);
+        state.god.influence += B.PRAY_INFLUENCE; // clamped by tickSpells
+        state.projectiles.push({ x: v.x, y: v.y, t: 0, dur: 0.5, kind: "prayer" });
+        v.task = null;
+      }
+      return;
+    }
+    case "hunt": {
+      const m = state.monsters.find((mm) => mm.id === task.target && mm.hp > 0 && !mm.held);
+      const post = state.buildings.find((b) => b.id === task.post);
+      if (!m || !post || !post.complete) {
+        v.task = null;
+        return;
+      }
+      const pc = bd.buildingCenter(post);
+      if (Math.hypot(m.x - pc.x, m.y - pc.y) > bd.def(post).radius + 6) {
+        v.task = null; // leashed: the quarry slipped the watchpost ring
+        return;
+      }
+      v.activity = "Hunting";
+      const d = Math.hypot(m.x - v.x, m.y - v.y);
+      if (d <= B.VILLAGER_SWING_RANGE) {
+        v.path = [];
+        v.attackCd = Math.max(0, (v.attackCd ?? 0) - dt);
+        if (v.attackCd <= 0) {
+          v.attackCd = B.VILLAGER_ATTACK_TICKS;
+          damageMonster(state, m, B.VILLAGER_DAMAGE, B.VILLAGER_DAMAGE_TYPE);
+        }
+        return;
+      }
+      chase(state, v, m, dt, task);
+      return;
+    }
+    case "tend": {
+      const patient = state.villagers.find((w) => w.id === task.target && !w.dead);
+      if (!patient || patient.health >= B.MAX_NEED - 2) {
+        v.task = null;
+        return;
+      }
+      v.activity = "Tending";
+      const d = Math.hypot(patient.x - v.x, patient.y - v.y);
+      if (d <= 1.5) {
+        v.path = [];
+        task.workLeft -= wdt;
+        if (task.workLeft <= 0) {
+          patient.health = Math.min(B.MAX_NEED, patient.health + B.TEND_HEAL);
+          v.task = null;
+        }
+        return;
+      }
+      chase(state, v, patient, dt, task);
+      return;
+    }
     case "chop": {
       v.activity = "Chopping wood";
-      v.task.workLeft -= dt;
+      v.task.workLeft -= wdt;
       if (v.task.workLeft <= 0) finishChop(state, v);
       return;
     }
     case "mine": {
       v.activity = "Mining stone";
-      v.task.workLeft -= dt;
+      v.task.workLeft -= wdt;
       if (v.task.workLeft <= 0) finishMine(state, v);
       return;
     }
     case "harvestPlot": {
       v.activity = "Harvesting";
-      v.task.workLeft -= dt;
+      v.task.workLeft -= wdt;
       if (v.task.workLeft <= 0) finishPlot(state, v);
       return;
     }
     case "harvestBush": {
       v.activity = "Picking berries";
-      v.task.workLeft -= dt;
+      v.task.workLeft -= wdt;
       if (v.task.workLeft <= 0) finishBush(state, v);
       return;
     }
     case "plant": {
       v.activity = "Planting";
-      v.task.workLeft -= dt;
+      v.task.workLeft -= wdt;
       if (v.task.workLeft <= 0) {
         const plot = state.world.plots.get(v.task.target);
         if (plot) plot.readyTick = state.clock.tick + B.CROP_GROWTH_TICKS;
@@ -494,7 +691,7 @@ function runTask(state, v, dt) {
     }
     case "fetch": {
       v.activity = `Fetching ${task.res}`;
-      task.workLeft = (task.workLeft ?? B.EAT_TICKS) - dt;
+      task.workLeft = (task.workLeft ?? B.EAT_TICKS) - wdt;
       if (task.workLeft <= 0) {
         if (state.resources[task.res] >= 1) {
           state.resources[task.res] -= 1;
@@ -519,13 +716,14 @@ function runTask(state, v, dt) {
         return;
       }
       const site = state.buildings.find((b) => b.id === task.building);
-      if (!site || site.complete) {
+      if (!site || (site.complete && !site.upgrade)) {
         v.carrying = null; // put it back
         state.resources[task.res] = Math.min(bd.storageCap(state), state.resources[task.res] + 1);
         v.task = null;
         return;
       }
-      const need = B.BUILDINGS[site.type].cost[task.res] ?? 0;
+      const cost = site.upgrade ? B.CAMP_TIERS[site.upgrade.toTier - 1].cost : B.BUILDINGS[site.type].cost;
+      const need = cost[task.res] ?? 0;
       if ((site.deliveredRes[task.res] ?? 0) >= need) return; // fully supplied; keep holding it
       site.deliveredRes[task.res] = (site.deliveredRes[task.res] ?? 0) + 1;
       site.delivered = (site.delivered ?? 0) + 1;
@@ -536,7 +734,7 @@ function runTask(state, v, dt) {
     case "build": {
       v.activity = "Building";
       const site = state.buildings.find((b) => b.id === task.building);
-      if (!site || site.complete) {
+      if (!site || (site.complete && !site.upgrade)) {
         v.task = null;
         return;
       }
@@ -544,7 +742,17 @@ function runTask(state, v, dt) {
         v.task = null; // a resource ran short: go fetch next decide()
         return;
       }
-      site.workDone += dt;
+      if (site.upgrade) {
+        site.upgrade.workDone = (site.upgrade.workDone ?? 0) + wdt;
+        if (site.upgrade.workDone >= site.upgrade.workNeeded) {
+          bd.applyCampUpgrade(state);
+          // The camp rises - the whole village believes a little harder.
+          for (const o of state.villagers)
+            if (!o.dead) o.faith = Math.min(B.MAX_NEED, o.faith + B.UPGRADE_FAITH);
+        }
+        return;
+      }
+      site.workDone += wdt;
       if (site.workDone >= site.workNeeded) bd.siteComplete(state, site);
       return;
     }

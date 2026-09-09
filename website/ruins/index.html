@@ -79,6 +79,7 @@
           <div class="influence-track" aria-hidden="true"><i id="influence-fill"></i></div>
           <b id="influence-text">0/0</b>
         </div>
+        <small class="influence-faith" id="influence-faith"></small>
         <div id="spell-slots" role="group" aria-label="God powers"></div>
       </div>
       <div id="castbar" hidden>
@@ -105,7 +106,10 @@
           <h2>Build</h2>
           <button class="sheet-close" aria-label="Close build menu">×</button>
         </div>
-        <div class="sheet-body" id="build-cards"></div>
+        <div class="sheet-body">
+          <p class="sheet-note" id="build-limit-note"></p>
+          <div id="build-cards"></div>
+        </div>
       </div>
       <div id="jobs-sheet" class="sheet" hidden>
         <div class="sheet-head">
@@ -190,7 +194,26 @@
           </li>
           <li>
             <b>Towers drink bolts.</b> Sawpits fletch them from stored wood —
-            keep both flowing before a long night.
+            keep both flowing before a long night. Sling Towers instead
+            throw raw stone: crushing damage that cracks bonewalkers, at the
+            price of your wall material.
+          </li>
+          <li>
+            <b>Refine what you harvest.</b> Sawmills turn wood into boards,
+            Stonecarvers turn stone into blocks, Kitchens turn food into
+            meals — one meal fills a worker whole. Boards and blocks raise
+            the finer buildings.
+          </li>
+          <li>
+            <b>Raise the camp.</b> Each tier lifts your build limit,
+            storage, range, work speed, and wanderer draw. Tap the camp and
+            raise it — the climb is the game.
+          </li>
+          <li>
+            <b>Faith is your power.</b> Influence's ceiling is what your
+            people believe you're worth. Shrines and seen miracles raise
+            belief; witnessed deaths and grabbed villagers lower it. A
+            doubting village is a poor god.
           </li>
         </ol>
         <p class="menu-tiny">

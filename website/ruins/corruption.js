@@ -5,6 +5,7 @@
 import * as B from "./balance.js";
 import { idx, inBounds, F_NONE, F_TREE, F_ROCK, T_WATER } from "./world.js";
 import * as bd from "./buildings.js";
+import { spawnMonsterAt, pickKind } from "./monsters.js";
 
 export function createCorruptionState() {
   return {
@@ -13,6 +14,13 @@ export function createCorruptionState() {
     grewToday: 0, // tiles converted since last dawn (0 => boxed in)
     nestCooldownUntil: 0, // destroyed nests rebuild after a pause
   };
+}
+
+// How much map the blight currently wants (doc 04 section 2.4): "Desire
+// increases over time as the day counter increases", capped so a long
+// game still has an equilibrium short of "the whole island".
+export function threatDesire(state) {
+  return Math.min(B.THREAT_DESIRE_CAP, B.THREAT_DESIRE_BASE + B.THREAT_DESIRE_PER_DAY * state.clock.day);
 }
 
 // Dev-confirmed placement (doc 04 section 2.2): "requires nearby wood and
@@ -130,8 +138,10 @@ function spreadEligible(state, i) {
 }
 
 // Slow reclaim: corruption adjacent to two finished village buildings
-// recedes at dawn (pre-god-hand pushback; RtR's uncorrupting may spawn an
-// enemy - that counterweight arrives with the threat-scaled raids here).
+// recedes at dawn - but every reclaimed tile ENRAGES the blight (doc 04
+// section 2.4: "pushing corruption back raises Corruption Threat") and
+// may spring a defender straight out of the dying tile, with odds set by
+// how angry it already is.
 function villagePressure(state) {
   const { world } = state;
   const size = world.size;
@@ -153,15 +163,39 @@ function villagePressure(state) {
     if (neighbors >= 2 && state.rng.chance(0.4)) reclaimed.push(i);
   }
   for (const i of reclaimed) uncorruptTile(state, i);
+  if (reclaimed.length) {
+    const c = state.corruption;
+    c.threat = Math.min(B.THREAT_MAX, c.threat + B.THREAT_PUSHBACK * reclaimed.length);
+    // The blight fights back: each reclaimed tile can birth a defender.
+    let sprung = 0;
+    const chance =
+      B.THREAT_SPAWN_CHANCE_BASE + (c.threat / B.THREAT_MAX) * B.THREAT_SPAWN_CHANCE_PER_THREAT;
+    for (const i of reclaimed) {
+      if (!state.rng.chance(chance)) continue;
+      if (state.monsters.length >= B.MONSTER_HARD_CAP) break;
+      const x = i % size,
+        y = Math.floor(i / size);
+      spawnMonsterAt(state, pickKind(state), x + 0.5, y + 0.5);
+      sprung++;
+    }
+    if (sprung)
+      state.events.push({ type: "blight-fought-back", x: reclaimed[0] % size + 0.5, y: Math.floor(reclaimed[0] / size) + 0.5, count: sprung });
+  }
   return reclaimed.length;
 }
 
-// Dawn beats: threat update (doc 04 section 2.4) + village pressure.
+// Dawn beats: the threat budget (doc 04 section 2.4) + village pressure.
+// Desire grows with the day counter; threat rises only while the blight is
+// boxed in AND short of the space it wants - undisturbed growth bleeds it
+// back to zero. Wealth and population are deliberately absent.
 export function corruptionDawn(state) {
   const c = state.corruption;
   if (!c.spawned) return;
-  if (c.grewToday === 0 && state.world.corrupted > 0) {
-    c.threat = Math.min(B.THREAT_MAX, c.threat + B.THREAT_RISE_PER_DAY);
+  const desire = threatDesire(state);
+  const shortfall = Math.max(0, desire - state.world.corrupted);
+  if (c.grewToday === 0 && state.world.corrupted > 0 && shortfall > 0) {
+    const gapBonus = Math.min(B.THREAT_RISE_GAP_BONUS, shortfall / 25);
+    c.threat = Math.min(B.THREAT_MAX, c.threat + B.THREAT_RISE_PER_DAY + gapBonus);
   } else {
     c.threat = Math.max(0, c.threat - B.THREAT_DECAY_PER_DAY);
   }

@@ -7,7 +7,9 @@ import * as bd from "./buildings.js";
 import { findPath } from "./path.js";
 
 // Called at creation and at every dawn: decides how many nomads the day
-// will bring and when they step onto the map.
+// will bring and when they step onto the map. The town ladder sweetens
+// the draw (RtR: upgrading the center raises nomad frequency) and each
+// finished Waystation coaxes one more wanderer in.
 export function scheduleNomads(state) {
   const day = state.clock.day;
   const pop = state.villagers.filter((v) => !v.dead).length + state.nomads.length;
@@ -22,7 +24,14 @@ export function scheduleNomads(state) {
   const supplies = (state.resources.food + state.resources.water) / Math.max(4, pop * 3);
   const supplyFactor = Math.min(1.2, Math.max(0.15, supplies));
   const roomFactor = 0.35 + 0.4 * Math.min(1, housing ? (housing - pop) / 4 : 0) + 0.25 * Math.min(1, freeJobs / 4);
-  let count = B.NOMADS_BASE_PER_DAY * roomFactor * supplyFactor * state.rng.range(0.6, 1.4);
+  const camp = bd.findCamp(state);
+  const tierMult = camp ? bd.campTierStats(camp.tier ?? 1).nomadMult : 1;
+  const waystations = Math.min(
+    3,
+    state.buildings.filter((b) => b.complete && B.BUILDINGS[b.type].waystation).length,
+  );
+  let count = B.NOMADS_BASE_PER_DAY * roomFactor * supplyFactor * tierMult * state.rng.range(0.6, 1.4);
+  count += waystations;
   if (day <= 3) count += 0.6; // early-game pity (RtR: more arrivals days 1-3)
   count = Math.min(B.NOMADS_MAX_PER_DAY, Math.floor(count));
 
@@ -124,7 +133,7 @@ export function rollBirths(state) {
   for (let i = 0; i < couples; i++) {
     if (pop + i >= B.POP_SOFT_CAP) break;
     if (!state.rng.chance(B.BIRTH_CHANCE_PER_COUPLE)) continue;
-    const homes = state.buildings.filter((b) => b.complete && B.BUILDINGS[b.type].houses > 0);
+    const homes = state.buildings.filter((b) => b.complete && bd.def(b).houses > 0);
     if (!homes.length) break;
     const home = homes[state.rng.int(0, homes.length - 1)];
     const v = createVillager(state, home.x + 1, home.y + 1, "child");
@@ -140,8 +149,8 @@ export function assignHomes(state) {
     const home = state.buildings.find(
       (b) =>
         b.complete &&
-        B.BUILDINGS[b.type].houses > 0 &&
-        b.occupants < B.BUILDINGS[b.type].houses,
+        bd.def(b).houses > 0 &&
+        b.occupants < bd.def(b).houses,
     );
     if (home) assignHome(state, v, home);
   }

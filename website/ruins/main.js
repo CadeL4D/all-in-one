@@ -2,7 +2,7 @@
 // command bridge between the UI and the sim. One-finger drag pans; pinch
 // zooms; build tools are modal so pan never fights placement (doc 05 B2).
 import * as B from "./balance.js";
-import { createGame, stepGame, placeBuilding, placeWallRun, setJobDesired } from "./game.js";
+import { createGame, stepGame, placeBuilding, placeWallRun, setJobDesired, upgradeCamp as upgradeCampCmd } from "./game.js";
 import { daylight, phaseInfo } from "./clock.js";
 import { createRenderer, screenToTile } from "./render.js";
 import * as bd from "./buildings.js";
@@ -95,6 +95,11 @@ const game = {
   },
   dismantle(id) {
     bd.dismantle(state, id);
+    ui.slow(state);
+  },
+  upgradeCamp() {
+    const result = upgradeCampCmd(state);
+    if (!result.ok && result.reason) toastNote(result.reason);
     ui.slow(state);
   },
   confirm(title, body, onYes) {
@@ -534,6 +539,8 @@ window.__ruins = {
   carryTo: (x, y) => moveHeld(state, x, y),
   fling: (dx, dy, speed) => releaseHeld(state, dx, dy, speed),
   influence: () => (state.god.influence = 9999),
+  // M4 the-climb hook.
+  upgradeCamp: () => upgradeCampCmd(state),
 };
 
 pwa();

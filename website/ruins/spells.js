@@ -1,8 +1,11 @@
 // The god hand (research doc 03 section 5): influence economy and the five
 // M3 spells. Influence regenerates as a share of a population-scaled maximum
-// - the god grows with the village (RtR's own rule, faith scaling lands in
-// M4). Every damage-dealing path funnels through monsters.damageMonster so
-// the resist matrix stays in one place. NOTHING here touches the DOM.
+// - the god grows with the village (RtR's own rule). Since M4 the per-
+// villager contribution scales with their FAITH (doc 03 section 1.4:
+// "50% faith = 50% of their potential") - a doubting village is a poorer
+// god, which is the whole reason to keep them believing. Every damage-
+// dealing path funnels through monsters.damageMonster so the resist matrix
+// stays in one place. NOTHING here touches the DOM.
 import * as B from "./balance.js";
 import { T_WATER } from "./world.js";
 import * as bd from "./buildings.js";
@@ -23,17 +26,20 @@ export function influenceMax(state) {
   let max = 0;
   for (const v of state.villagers) {
     if (v.dead) continue;
-    max += v.age === "child" ? B.INFLUENCE_PER_CHILD : B.INFLUENCE_PER_ADULT;
+    const worth = v.age === "child" ? B.INFLUENCE_PER_CHILD : B.INFLUENCE_PER_ADULT;
+    max += worth * (v.faith ?? B.FAITH_START) / B.MAX_NEED;
   }
-  return max;
+  return Math.round(max);
 }
 
 // Per-sim-tick driver, called from stepGame: regen, cast cooldown, falling
-// meteors, and the arc of a thrown creature.
+// meteors, and the arc of a thrown creature. Influence never sits above
+// the cap: a rite that lands on a full purse is spent (essence caps too).
 export function tickSpells(state, dt) {
   const god = state.god;
   const max = Math.max(influenceMax(state), 1);
   if (god.influence < max) god.influence = Math.min(max, god.influence + max * (B.INFLUENCE_REGEN_PER_DAY / B.DAY_TICKS) * dt);
+  else if (god.influence > max) god.influence = max;
   god.cooldown = Math.max(0, god.cooldown - dt);
 
   for (const meteor of god.meteors) {
@@ -149,6 +155,7 @@ function meteorImpact(state, x, y) {
     if (v.dead || v.held) continue;
     if (Math.hypot(v.x - x, v.y - y) <= spec.radius) {
       v.health -= spec.damage;
+      v.faith = Math.max(0, v.faith + B.METEOR_HURT_FAITH); // the rock was YOURS
       if (v.health <= 0) killVillager(state, v, "the god's wrath");
     }
   }
@@ -176,7 +183,11 @@ function castHeal(state, x, y) {
   if (!hurt.length) return { ok: false, reason: "No one hurt there" };
   const gate = spend(state, "heal");
   if (!gate.ok) return gate;
-  for (const v of hurt) v.health = Math.min(B.MAX_NEED, v.health + spec.amount);
+  for (const v of hurt) {
+    v.health = Math.min(B.MAX_NEED, v.health + spec.amount);
+    // Being visibly mended by the god is the strongest sermon there is.
+    v.faith = Math.min(B.MAX_NEED, v.faith + B.HEAL_FAITH);
+  }
   state.projectiles.push({ x, y, t: 0, dur: 0.4, kind: "heal", radius: spec.radius });
   return { ok: true };
 }
@@ -236,7 +247,12 @@ export function grabAt(state, x, y) {
   best.obj.heldZ = 0.6;
   best.obj.path = [];
   best.obj.pathI = 0;
-  if (best.kind === "villager") best.obj.task = null;
+  if (best.kind === "villager") {
+    best.obj.task = null;
+    // Being plucked skyward by an unseen hand is unnerving (doc 03: god
+    // actions are judged; grabbing mobs reads as negative).
+    best.obj.faith = Math.max(0, best.obj.faith + B.GRAB_VILLAGER_FAITH);
+  }
   return { ok: true, kind: best.kind };
 }
 

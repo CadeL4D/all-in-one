@@ -76,11 +76,13 @@ export const SAPLINGS_PER_DAY = 3; // trees slowly regrow away from the village
 
 // ---- Resources & storage. One big pool, capped by buildings (RtR rule);
 // harvesters stop when full ("they stop working if there's no space").
-// Bolts (M3) are the tower ammo: a crafted pool good, not a raw harvest.
-export const RESOURCES = ["wood", "food", "water", "stone", "bolts"];
+// Bolts (M3) are the tower ammo; boards/blocks/meals (M4) are the refined
+// chain - wood->boards, stone->blocks, food->meals (doc 02 section 2.2's
+// three chains that matter most, one per raw resource).
+export const RESOURCES = ["wood", "food", "water", "stone", "bolts", "boards", "blocks", "meals"];
 // RtR hands you up to 64 starting supplies incl. wood (Update 2 notes);
 // 64 wood covers well+farm+sawpit with margin - no bootstrap deadlock.
-export const START_RESOURCES = { wood: 64, food: 24, water: 30, stone: 0, bolts: 20 };
+export const START_RESOURCES = { wood: 64, food: 24, water: 30, stone: 0, bolts: 20, boards: 0, blocks: 0, meals: 0 };
 export const CAMP_STORAGE = 80; // holds the 64 starting wood (research camp
 // tiers reach 86 slots); keeps boot supplies inside the cap so the HUD
 // doesn't warn on day 1
@@ -90,6 +92,8 @@ export const HOME_STORAGE = 6;
 // thirst/day, so one well covers roughly a dozen of them.
 export const WELL_WATER_PER_DAY = 800;
 export const WELL_STORAGE = 60;
+// Cisterns are the tier-2 well: double the seep, stonework price.
+export const CISTERN_WATER_PER_DAY = 1600;
 
 // ---- Buildings (M1 set). Wood is the only build resource until walls.
 // Nest HP lives up here: the BUILDINGS table references it.
@@ -120,6 +124,26 @@ export const BUILDINGS = {
     radius: 0,
     hp: 80,
   },
+  cottage: {
+    name: "Cottage",
+    size: 2,
+    cost: { wood: 14, stone: 8 },
+    storage: 10,
+    houses: 6,
+    jobs: {},
+    radius: 0,
+    hp: 140,
+  },
+  manor: {
+    name: "Manor",
+    size: 3,
+    cost: { wood: 20, boards: 4, stone: 10 },
+    storage: 16,
+    houses: 10,
+    jobs: {},
+    radius: 0,
+    hp: 220,
+  },
   farm: {
     name: "Farm",
     size: 2,
@@ -131,6 +155,17 @@ export const BUILDINGS = {
     plots: 12, // claims up to N adjacent grass tiles as crop plots
     hp: 70,
   },
+  orchard: {
+    name: "Orchard",
+    size: 2,
+    cost: { wood: 24, boards: 2 },
+    storage: 14,
+    houses: 0,
+    jobs: { farmer: 3 },
+    radius: 10,
+    plots: 16,
+    hp: 100,
+  },
   well: {
     name: "Well",
     size: 1,
@@ -140,6 +175,16 @@ export const BUILDINGS = {
     jobs: {},
     radius: 0,
     hp: 60,
+  },
+  cistern: {
+    name: "Cistern",
+    size: 1,
+    cost: { wood: 10, stone: 14 },
+    storage: 100,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 110,
   },
   sawpit: {
     name: "Sawpit",
@@ -151,6 +196,19 @@ export const BUILDINGS = {
     radius: 11, // chops trees inside this ring
     hp: 70,
   },
+  sawmill: {
+    name: "Sawmill",
+    size: 2,
+    cost: { wood: 24, stone: 4 },
+    storage: 10,
+    houses: 0,
+    jobs: { carpenter: 2 },
+    radius: 0,
+    hp: 110,
+    // The refine chain, half one: carpenters saw boards while the stock
+    // sits under the maintain target (RtR refiners are threshold-driven).
+    craft: { in: { wood: 2 }, out: { boards: 1 }, ticks: 900 },
+  },
   storehouse: {
     name: "Storehouse",
     size: 2,
@@ -161,10 +219,85 @@ export const BUILDINGS = {
     radius: 0,
     hp: 90,
   },
-  // ---- M2 defense set. Wall stats follow the wiki Walls page ratios
+  granary: {
+    name: "Granary",
+    size: 2,
+    cost: { wood: 12, stone: 8 },
+    storage: 90,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 130,
+  },
+  kitchen: {
+    name: "Kitchen",
+    size: 2,
+    cost: { wood: 20, stone: 6 },
+    storage: 12,
+    houses: 0,
+    jobs: { cook: 2 },
+    radius: 0,
+    hp: 110,
+    // Refine chain, half three: two vegetables become one hearty meal -
+    // less value per raw vegetable, but one stop fills a worker whole
+    // (fewer walks to storage: the real cost of hunger is the trip).
+    craft: { in: { food: 2 }, out: { meals: 1 }, ticks: 800 },
+  },
+  waystation: {
+    name: "Waystation",
+    size: 2,
+    cost: { wood: 18, boards: 2 },
+    storage: 10,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 100,
+    // Growth lever: each finished waystation coaxes +1 wanderer per day
+    // (RtR Migration Way Station adjacent - ours stays single-village).
+    waystation: true,
+  },
+  shrine: {
+    name: "Shrine",
+    size: 2,
+    cost: { wood: 16, stone: 6 },
+    storage: 8,
+    houses: 0,
+    jobs: { occultist: 2 },
+    radius: 0,
+    hp: 110,
+    // The faith engine (doc 03 section 5.3): occultists pray here; each
+    // completed rite lifts their faith, nearby villagers' faith, and pipes
+    // free influence to the god (RtR essence altar, 3x3=9 essence rite).
+    pray: true,
+  },
+  clinic: {
+    name: "Clinic",
+    size: 2,
+    cost: { wood: 18, stone: 8 },
+    storage: 10,
+    houses: 0,
+    jobs: { healer: 2 },
+    radius: 14, // healers tend wounded villagers inside this ring
+    hp: 120,
+    heal: true,
+  },
+  watchpost: {
+    name: "Watchpost",
+    size: 2,
+    cost: { wood: 14, stone: 6 },
+    storage: 6,
+    houses: 0,
+    jobs: { guard: 3 },
+    radius: 12, // guards patrol for monsters inside this ring
+    hp: 150,
+    guard: true,
+  },
+  // ---- M2/M4 defense set. Wall stats follow the wiki Walls page ratios
   // (wood fence 100 HP @ 1 wood, stone wall 200 @ 2 stone; ours sits at
   // 240 so a stone ring outlives two raids of chewing). Walls are 1x1,
-  // don't count toward housing, and exist to be mazed with (pillar 6).
+  // don't count toward housing or the build limit, and exist to be mazed
+  // with (pillar 6). The curtain wall (M4) is the wraith answer: warded
+  // masonry no phaser can glide through (our crylithium analog).
   fence: {
     name: "Wood Fence",
     size: 1,
@@ -187,6 +320,18 @@ export const BUILDINGS = {
     hp: 240,
     wall: true,
   },
+  curtainWall: {
+    name: "Curtain Wall",
+    size: 1,
+    cost: { blocks: 1 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 460,
+    wall: true,
+    blocksPhasers: true, // wraiths cannot glide through (doc 04 section 4.2)
+  },
   gate: {
     name: "Gate",
     size: 1,
@@ -198,6 +343,18 @@ export const BUILDINGS = {
     hp: 320,
     wall: true,
     gate: true, // villagers & nomads pass; monsters must break it
+  },
+  stoneGate: {
+    name: "Stone Gate",
+    size: 1,
+    cost: { stone: 4, blocks: 1 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 620,
+    wall: true,
+    gate: true,
   },
   tower: {
     name: "Sentry Tower",
@@ -212,7 +369,36 @@ export const BUILDINGS = {
     // towers pull arrows from storage; ours skips the hauling, keeps the
     // economy). type feeds the resist matrix - sentries blunt flesh, not
     // blots or phasers.
-    tower: { range: 10, damage: 12, reload: 60, type: "pierce" },
+    tower: { range: 10, damage: 12, reload: 60, type: "pierce", ammo: "bolts", ammoPerShot: 1 },
+  },
+  ballista: {
+    name: "Ballista",
+    size: 1,
+    cost: { wood: 20, stone: 8, boards: 4 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 260,
+    // The long arm (RtR ballista niche): reaches across the maze, hits
+    // hard, drinks two bolts a shot. Community's "best tower" - it still
+    // cannot answer blots or wraiths; it just deletes husks and bonewalkers
+    // before they reach the gap.
+    tower: { range: 14, damage: 30, reload: 110, type: "pierce", ammo: "bolts", ammoPerShot: 2 },
+  },
+  slingTower: {
+    name: "Sling Tower",
+    size: 1,
+    cost: { wood: 10, stone: 12 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 200,
+    // The crush answer (RtR sling niche): bonewalkers shrug off pierce and
+    // crack under stone. Ammo is raw stone - every shot is a wall section
+    // you didn't build (the tumbler's stone-ball economy, made honest).
+    tower: { range: 8, damage: 14, reload: 55, type: "crush", ammo: "stone", ammoPerShot: 1 },
   },
   stormPylon: {
     name: "Storm Pylon",
@@ -226,7 +412,22 @@ export const BUILDINGS = {
     // M3 counter-match piece: magic damage, the only structure answer to
     // blots and wraiths (RtR's Elemental Bolt tower niche). Weaker raw dps
     // than the sentry on purpose - it is a specialist, not an upgrade.
-    tower: { range: 9, damage: 10, reload: 75, type: "magic" },
+    tower: { range: 9, damage: 10, reload: 75, type: "magic", ammo: "bolts", ammoPerShot: 1 },
+  },
+  // Cheap range extender (RtR Fire Pit, cost exact): projects build range
+  // past the wall line, and monsters refuse to attack it - the community's
+  // corruption-encirclement tool. It still blocks their feet.
+  firePit: {
+    name: "Fire Pit",
+    size: 1,
+    cost: { wood: 6 },
+    storage: 0,
+    houses: 0,
+    jobs: {},
+    radius: 0,
+    hp: 60,
+    firePit: true,
+    untargetable: true, // monsters will not attack it (doc 02 section 4.5)
   },
   quarry: {
     name: "Quarry",
@@ -237,6 +438,19 @@ export const BUILDINGS = {
     jobs: { stonecutter: 2 },
     radius: 9, // mines rocks inside this ring
     hp: 90,
+  },
+  stonecarver: {
+    name: "Stonecarver",
+    size: 2,
+    cost: { wood: 20, stone: 10 },
+    storage: 12,
+    houses: 0,
+    jobs: { mason: 2 },
+    radius: 0,
+    hp: 130,
+    // Refine chain, half two: blocks arm the curtain walls and stone gates
+    // that keep wraiths honest.
+    craft: { in: { stone: 2 }, out: { blocks: 1 }, ticks: 1000 },
   },
   // Corrupted nest (doc 04 section 2.3): the graveyard-equivalent spawn
   // point the corruption raises. Never player-placeable; it enters complete
@@ -256,6 +470,104 @@ export const BUILDINGS = {
 
 export const DISMANTLE_REFUND = 0.5; // fraction of cost refunded (RtR salvages)
 
+// ---- The town ladder (doc 02 section 3: RtR's 15-tier Camp->Castle table
+// compressed to 8 mobile tiers). The tier gates the WHOLE late game: build
+// limit (RtR: walls never count, gates do), builder jobs, storage, build
+// range, nomad draw, and work speed (+1%/tier global, RtR rule). Costs
+// follow the same resource ladder as RtR - wood/stone early, boards from
+// tier 5, blocks from tier 7.
+export const CAMP_TIERS = [
+  {
+    name: "Camp",
+    cost: { wood: 0 },
+    hp: 400,
+    storage: CAMP_STORAGE,
+    radius: 12,
+    builders: 4,
+    buildLimit: 8,
+    nomadMult: 1,
+    workMult: 1,
+  },
+  {
+    name: "Large Camp",
+    cost: { wood: 20 },
+    hp: 520,
+    storage: 110,
+    radius: 13,
+    builders: 5,
+    buildLimit: 12,
+    nomadMult: 1.1,
+    workMult: 1.03,
+  },
+  {
+    name: "Settlement",
+    cost: { wood: 30, stone: 10 },
+    hp: 650,
+    storage: 145,
+    radius: 14,
+    builders: 6,
+    buildLimit: 16,
+    nomadMult: 1.2,
+    workMult: 1.06,
+  },
+  {
+    name: "Large Settlement",
+    cost: { wood: 40, stone: 20 },
+    hp: 800,
+    storage: 185,
+    radius: 15,
+    builders: 6,
+    buildLimit: 20,
+    nomadMult: 1.35,
+    workMult: 1.09,
+  },
+  {
+    name: "Village Center",
+    cost: { wood: 30, stone: 20, boards: 6 },
+    hp: 1000,
+    storage: 230,
+    radius: 16,
+    builders: 7,
+    buildLimit: 26,
+    nomadMult: 1.5,
+    workMult: 1.12,
+  },
+  {
+    name: "Large Village",
+    cost: { wood: 40, stone: 30, boards: 8 },
+    hp: 1250,
+    storage: 280,
+    radius: 17,
+    builders: 8,
+    buildLimit: 32,
+    nomadMult: 1.65,
+    workMult: 1.15,
+  },
+  {
+    name: "Keep",
+    cost: { wood: 40, stone: 40, boards: 10, blocks: 6 },
+    hp: 1550,
+    storage: 340,
+    radius: 18,
+    builders: 9,
+    buildLimit: 38,
+    nomadMult: 1.8,
+    workMult: 1.18,
+  },
+  {
+    name: "Stronghold",
+    cost: { wood: 60, stone: 60, boards: 14, blocks: 10 },
+    hp: 1900,
+    storage: 400,
+    radius: 20,
+    builders: 10,
+    buildLimit: 44,
+    nomadMult: 2,
+    workMult: 1.22,
+  },
+];
+export const CAMP_MAX_TIER = CAMP_TIERS.length;
+
 // ---- Jobs. Self-selected from the idle pool; you only set headcounts
 // (RtR Jobs panel). Desired counts below are per-building defaults.
 export const JOBS = {
@@ -263,6 +575,12 @@ export const JOBS = {
   farmer: { name: "Farmer", color: "#7fb95c" },
   woodcutter: { name: "Woodcutter", color: "#b07845" },
   stonecutter: { name: "Stonecutter", color: "#9aa0a6" },
+  carpenter: { name: "Carpenter", color: "#c9a15f" },
+  mason: { name: "Mason", color: "#8d99ae" },
+  cook: { name: "Cook", color: "#e0915c" },
+  occultist: { name: "Occultist", color: "#b48ec8" },
+  healer: { name: "Healer", color: "#e0d3b0" },
+  guard: { name: "Guard", color: "#d1603d" },
 };
 
 // ---- Growth. Nomads are the primary channel (RtR Events): rate scales with
@@ -329,9 +647,8 @@ export const NEST_REBUILD_DELAY_DAYS = 2; // drones-equivalent rebuild pause
 // with the day counter; threat rises only when corruption is boxed in
 // (wants space, has none). Undisturbed growth decays threat to 0. NOTHING
 // else (wealth, population) feeds it - that is the system's identity.
+// (Rise/decay rates and the desire model live in the M4 section below.)
 export const THREAT_MAX = 100;
-export const THREAT_RISE_PER_DAY = 8; // boxed in
-export const THREAT_DECAY_PER_DAY = 12; // growing freely
 export const THREAT_SPAWN_MULT = 0.0125; // raid count x (1 + threat * this):
 // full bar = +125% raiders. Doc 04: threat scales "how powerful and numerous".
 
@@ -406,6 +723,19 @@ export const MONSTERS = {
     // showpiece.
     resists: { pierce: 1, crush: 1, magic: 1, fire: 0.1, water: 8 },
     color: "#e2813f",
+  },
+  bonewalker: {
+    name: "Bonewalker",
+    hp: 70,
+    damage: 4,
+    attackTicks: 50,
+    speed: 1.7, // the fastest thing on the field (doc 04: skeletons are fast)
+    splits: null,
+    // Skeleton analog (doc 04 section 1.5): arrow-proof and crush-brittle.
+    // Sentry-heavy villages meet their counter; slings, ballista stone
+    // shot, and villager fists (all crush) are the answer. Arrives M4.
+    resists: { pierce: 0.3, crush: 1.5, magic: 1, fire: 1, water: 1 },
+    color: "#ddd8c0",
   },
 };
 export const MONSTER_HARD_CAP = 24; // sim budget guard (splits can chain)
@@ -542,3 +872,68 @@ export const GRAB_MONSTER_MAX_DROP = 18; // crush damage cap on monsters
 export const GRAB_VILLAGER_MAX_DROP = 8; // villagers are fragile (RtR 1-10)
 export const GRAB_FLY_TICKS_PER_TILE = 8; // arc length scales with fling
 export const GRAB_MIN_FLY_TICKS = 12;
+
+// =====================================================================
+// M4 — The climb. Research base: doc 02 section 3 (the town ladder),
+// doc 03 sections 1.4/5.3 (faith-scaled influence, prayer), doc 04
+// sections 2.4/3.2 (the desire-vs-space threat budget and stronger-
+// individuals rebalance). Same convention: structure is faithful, values
+// are reasoned defaults rescaled to the 400 s day.
+// =====================================================================
+
+// ---- Meals (kitchen output). A meal is one eating stop that fills a
+// worker whole: fewer storage walks, which is where hunger really costs.
+export const MEAL_EAT_AMOUNT = 45; // vs 25 raw - the kitchen's whole point
+
+// ---- Craft maintain targets (RtR refiners are threshold-driven; ours
+// hold these flat stocks and then idle - no config UI on mobile).
+export const CRAFT_MAINTAIN = { boards: 30, blocks: 30, meals: 24 };
+
+// ---- Faith (doc 03 section 5.3). A per-villager 0-100 need and the M4
+// influence multiplier: max influence = sum(per-villager contribution x
+// their faith%). "50% faith = 50% of their potential" - Update 2 rule.
+export const FAITH_START = 60;
+export const FAITH_DECAY_PER_DAY = 3.5; // slow drift down without care
+export const FAITH_HOME_PER_DAY = 8; // sleeping in a real bed (housing bonus)
+export const PRAY_TICKS = 900; // one rite at the shrine (~15 s)
+export const PRAY_FAITH_SELF = 10;
+export const PRAY_FAITH_NEARBY = 4;
+export const PRAY_NEARBY_RADIUS = 4;
+export const PRAY_INFLUENCE = 8; // free essence piped to the god (rite math)
+export const WITNESS_KILL_FAITH = 3; // seeing a monster slain nearby
+export const WITNESS_DEATH_FAITH = -8; // seeing a villager fall
+export const WITNESS_RADIUS = 9;
+export const HEAL_FAITH = 12; // touched by the god's healing
+export const GRAB_VILLAGER_FAITH = -4; // being plucked up by the hand
+export const METEOR_HURT_FAITH = -15; // the god's rock landed on you
+export const UPGRADE_FAITH = 10; // the camp rises - everyone celebrates
+// Healing hands (clinic healers, our medic slice of doc 03 section 3.1).
+export const TEND_TICKS = 420;
+export const TEND_HEAL = 30; // one tending visit
+
+// ---- Corruption Threat v2 (doc 04 section 2.4 verbatim model). Desire
+// grows with the day counter; threat rises only while corruption is boxed
+// in AND short of the space it desires; undisturbed growth keeps it at 0.
+// Pushing back now RAISES threat and can spring a defender from the tile -
+// the counterweight that makes purging a decision, not a chore.
+export const THREAT_DESIRE_BASE = 40; // tiles the blight wants on day 0
+export const THREAT_DESIRE_PER_DAY = 10; // ...and this many more each day
+export const THREAT_DESIRE_CAP = 600;
+export const THREAT_RISE_PER_DAY = 8; // boxed in, short of desire
+export const THREAT_RISE_GAP_BONUS = 6; // extra per 25 tiles of shortfall
+export const THREAT_DECAY_PER_DAY = 12; // growing freely
+export const THREAT_PUSHBACK = 6; // per tile reclaimed by village pressure
+export const THREAT_SPAWN_CHANCE_BASE = 0.1; // uncorrupting may spring a
+export const THREAT_SPAWN_CHANCE_PER_THREAT = 0.35; // defender (doc 04 §2.4)
+// Threat scales COUNT (M3) and now POWER (doc 04 section 3.2): every 25
+// threat is a monster level - "less monsters, stronger individuals".
+export const MONSTER_LEVEL_PER_THREAT = 25;
+export const MONSTER_LEVEL_MAX = 4;
+export const MONSTER_HP_PER_LEVEL = 0.18; // +18% hp per level past 1
+export const MONSTER_DAMAGE_PER_LEVEL = 0.12; // +12% damage per level
+
+// ---- Bonewalker (doc 04 section 1.5, skeleton analog): fast, thick-boned,
+// shrugs off arrows - the piece that makes Sling Towers and villager fists
+// (both crush) matter. Arrives once pierce-heavy defenses feel safe.
+export const BONEWALKER_ARRIVAL_DAY = 10; // RtR skeletons day 5 of 18-min
+export const BONEWALKER_CHANCE = 0.2; // days; ours is ~9x faster, split the diff

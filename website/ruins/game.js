@@ -234,3 +234,9 @@ export function placeWallRun(state, type, tiles) {
 export function phaseOf(state) {
   return phaseInfo(state.clock);
 }
+
+// The climb: start raising the camp to its next rung. Builders treat the
+// camp as a construction site until the work bar fills (buildings.js).
+export function upgradeCamp(state) {
+  return bd.startCampUpgrade(state);
+}

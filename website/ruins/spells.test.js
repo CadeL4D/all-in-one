@@ -110,6 +110,7 @@ function villagerAt(s, x, y, over = {}) {
     carrying: null,
     path: [],
     facing: 1,
+    faith: 100, // M4: fixture villagers believe fully so worth = base
     ...over,
   };
   s.villagers.push(v);
@@ -357,6 +358,7 @@ test("grab: an emberling drowned in water is the showpiece", () => {
   tickSpells(s, 400);
   assert.equal(ember.hp, 0, "water is death to a fire spirit");
   const husk = spawnMonster(s, "husk", water.x - 3, water.y);
+  s.god.influence = 500; // no believers in this arena: re-grant the purse
   assert.ok(grabAt(s, husk.x, husk.y).ok);
   releaseHeld(s, 3, 0, 10);
   tickSpells(s, 400);
