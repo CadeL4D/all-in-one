@@ -737,6 +737,21 @@ export const MONSTERS = {
     resists: { pierce: 0.3, crush: 1.5, magic: 1, fire: 1, water: 1 },
     color: "#ddd8c0",
   },
+  bloodling: {
+    name: "Bloodling",
+    hp: 40,
+    damage: 3,
+    attackTicks: 50,
+    speed: 1.2,
+    splits: null,
+    // M5 Blood Moon slime (doc 04 section 1.3): rises IN the village at the
+    // corruption's level. Same counter-lesson as blots - storm magic and
+    // crushing hands - but it spawns past your walls, so the answer must
+    // already be standing.
+    resists: { pierce: 0.45, crush: 0.5, magic: 1.75, fire: 1, water: 1 },
+    blood: true,
+    color: "#c04a5a",
+  },
 };
 export const MONSTER_HARD_CAP = 24; // sim budget guard (splits can chain)
 export const BLOT_ARRIVAL_DAY = 5; // splitters join from night 5 (RtR slimes
@@ -937,3 +952,248 @@ export const MONSTER_DAMAGE_PER_LEVEL = 0.12; // +12% damage per level
 // (both crush) matter. Arrives once pierce-heavy defenses feel safe.
 export const BONEWALKER_ARRIVAL_DAY = 10; // RtR skeletons day 5 of 18-min
 export const BONEWALKER_CHANCE = 0.2; // days; ours is ~9x faster, split the diff
+
+// =====================================================================
+// M5 — Meta & world. Research base: doc 04 section 3.3 (special nights),
+// doc 01 sections 4-5 (modes, world map, god XP, perks), doc 03 section 1
+// (migration rules). Same convention: structure faithful, values reasoned
+// defaults rescaled to the 400 s day.
+// =====================================================================
+
+// ---- Special nights (doc 04 section 3.3). Decided each dawn for today
+// (eclipse, a DAY event) and tonight (the other three), deterministic off
+// the run seed. Weights are per-day chances; MOON_COOLDOWN keeps two
+// specials from stacking back-to-back while the village is still bruised.
+export const MOON_START_DAY = 7; // let walls + counters land first (pillar 10)
+export const MOON_COOLDOWN_DAYS = 3; // quiet nights after any special
+export const MOON_CHANCE = {
+  full: 0.1, // a breather that banks pressure for tomorrow
+  eclipse: 0.06, // the day siege - rarest, scariest
+  blood: 0.08, // the horde night
+  meteor: 0.07, // the bombardment
+};
+export const MOON_NIGHTMARE_MULT = 1.5; // bad-moon weights x this in
+// Nightmare (doc 01 section 4.1: Nightmare only notes "full moons less
+// frequent" - we read that as the mode trading breathers for disasters).
+// Full Moon: raiders rise but do NOT march (doc 04: "they do not walk to
+// your village"); they crumble at dawn like any night. The debt doubles the
+// NEXT night's raid - the whole moon is a question: cull them now (towers,
+// Grab) or bank the problem.
+export const MOON_FULL_NEXT_MULT = 2;
+export const MOON_FULL_REGEN_MULT = 1.5; // essence gathers on calm ground
+// Eclipse: replaces midday (doc 04 section 3.3) with continuous spawning +
+// attacks; night still comes on top. The drip keeps it a siege, not a spike.
+export const ECLIPSE_START_PHASE = 2; // midday
+export const ECLIPSE_END_PHASE = 4; // through dusk's edge (exclusive)
+export const ECLIPSE_DRIP_TICKS = 2600; // one extra raider every ~43 s
+// Blood Moon: blood slimes rise IN the village at corruption-matching level
+// (doc 04 section 1.3); normal night raids continue alongside.
+export const BLOOD_DRIP_TICKS = 2200; // one bloodling every ~37 s of night
+export const BLOOD_VILLAGE_RADIUS = 9; // spawn ring around the camp
+export const BLOOD_MAX = 6; // sim-budget guard on village spawns
+// Meteor Shower: N strikes over the night on random ground, biased toward
+// the village (the sky is not neutral). Reuses the Meteor spell impact,
+// emberling gamble included (doc 04 section 1.7).
+export const METEOR_SHOWER_COUNT = 7;
+export const METEOR_SHOWER_VILLAGE_SHARE = 0.55; // this fraction target town
+
+// ---- God XP & perks (doc 01 section 5.2: XP from nearly everything,
+// spent on the world map; perks are global and persist through loss).
+// DIVERGENCE for pillar 10: no chest lottery - each earned pick chooses
+// one of three offered boons outright. The grind ratio is preserved.
+export const PERK_XP = {
+  nomad: 5, // a wanderer joined
+  built: 3, // a building finished
+  upgraded: 25, // the camp rose a rung
+  slain: 2, // a monster died
+  birth: 5, // a child born
+  cast: 1, // a spell cast (the god acted)
+  night: 2, // a raid survived to its dawn
+  moonEclipse: 15,
+  moonBlood: 15,
+  moonMeteor: 10,
+  migrant: 10, // settlers walked to another region
+  founded: 30, // a new region was founded
+  cleared: 40, // a region scrubbed clean of blight, forever
+};
+export const XP_FIRST_PICK = 80; // ~one pick inside the first long session
+export const XP_PICK_GROWTH = 1.3; // each pick costs 30% more XP than the last
+
+// The perk pool. maxRank caps stacking; the effect line names the exact
+// multiplier used in code (perkMult in meta.js is the only reader).
+export const PERKS = {
+  work: {
+    name: "Busy Hands",
+    desc: "+10% work speed",
+    maxRank: 3,
+  },
+  water: {
+    name: "Deep Springs",
+    desc: "+25% well and cistern water",
+    maxRank: 2,
+  },
+  crops: {
+    name: "Fertile Rows",
+    desc: "+20% crop harvests",
+    maxRank: 2,
+  },
+  wood: {
+    name: "Keen Axes",
+    desc: "+1 wood per tree",
+    maxRank: 2,
+  },
+  stone: {
+    name: "Sharp Picks",
+    desc: "+1 stone per rock",
+    maxRank: 2,
+  },
+  nomads: {
+    name: "Wandering Hearts",
+    desc: "+0.3 wanderers per day",
+    maxRank: 3,
+  },
+  faith: {
+    name: "Devout Voices",
+    desc: "faith fades 50% slower",
+    maxRank: 2,
+  },
+  spells: {
+    name: "Storm Covenant",
+    desc: "spells cost 10% less",
+    maxRank: 2,
+  },
+  towers: {
+    name: "Nightwatch",
+    desc: "towers hit 10% harder",
+    maxRank: 2,
+  },
+  influence: {
+    name: "Second Wind",
+    desc: "influence returns 20% faster",
+    maxRank: 2,
+  },
+  hunger: {
+    name: "Iron Stomachs",
+    desc: "starvation and thirst hurt 30% less",
+    maxRank: 2,
+  },
+  ward: {
+    name: "Moonlit Ward",
+    desc: "evil moons run 20% milder",
+    maxRank: 1,
+  },
+};
+export const PERK_CHOICES = 3; // boons offered per pick
+
+// ---- Regions & biomes (doc 01 section 4.2: connected regions, migration,
+// per-region difficulty; doc 03 section 1: migrants are young healthy
+// adults, local pop must be 15+ to send). Three regions, three biomes, one
+// save: the world map sheet travels between them (each region's sim sleeps
+// in the save; only the active one ticks - a battery-friendly divergence).
+export const REGIONS = [
+  {
+    id: "greenwood",
+    name: "Greenwood",
+    biome: "verdant",
+    stars: 1,
+    blurb: "Soft hills, deep woods. Where the wilds first took you in.",
+  },
+  {
+    id: "ashen",
+    name: "Ashen Steppe",
+    biome: "dry",
+    stars: 2,
+    blurb: "Sparse trees, bare rock, long sightlines. Raiders come early and hungry.",
+  },
+  {
+    id: "mirefen",
+    name: "Mirefen",
+    biome: "marsh",
+    stars: 3,
+    blurb: "Drowned ground veined with water. The blight here has an appetite.",
+  },
+];
+// Per-star difficulty knobs (index = stars-1): monsters arrive earlier,
+// raids run bigger, the blight wants more ground.
+export const REGION_DIFF = [
+  { arriveMult: 1, raidMult: 1, desireMult: 1 },
+  { arriveMult: 0.8, raidMult: 1.15, desireMult: 1.15 },
+  { arriveMult: 0.65, raidMult: 1.3, desireMult: 1.3 },
+];
+// Biome worldgen (world.js reads these): water cut raises the sea share;
+// forest/rock/bush cut lower = more of that feature. Growth mult scales
+// crop maturation (dry soil is stingy, muck is generous).
+export const BIOMES = {
+  verdant: { water: 0.3, dirt: 0.36, forest: 0.6, rocky: 0.78, berry: 0.8, growth: 1 },
+  dry: { water: 0.22, dirt: 0.3, forest: 0.72, rocky: 0.68, berry: 0.84, growth: 1.15 },
+  marsh: { water: 0.4, dirt: 0.44, forest: 0.56, rocky: 0.82, berry: 0.72, growth: 0.9 },
+};
+export const FOUND_TIER = 3; // the world opens once the camp is a Settlement
+export const FOUND_COST = { wood: 60, food: 40 }; // the founding caravan
+export const FOUND_SETTLERS = 6; // young adults who walk out at dawn
+export const FOUND_START_BOOST = { wood: 40, food: 30, water: 30, stone: 10, bolts: 20 };
+export const MIGRATE_MIN_POP = 15; // RtR rule: pop must be 15+ to send at all
+export const MIGRATE_MAX_BATCH = 8; // UI stepper ceiling per departure
+export const MIGRATE_HEALTH = 60; // "young, healthy adults" (no children)
+
+// ---- Modes (doc 01 section 4.1: Traditional / Survival / Nightmare /
+// Peaceful / Sandbox / Custom). One knob set, read by monsters.js,
+// corruption.js and moons.js. Custom is the user-tuned subset of the same
+// knobs; Sandbox adds an infinite purse (live god-hand manipulation).
+export const MODES = {
+  traditional: {
+    name: "Traditional",
+    blurb: "The intended first climb. Blight lands on day 2, raids from night 3.",
+    corruptionDay: 2,
+    raidStartDay: 3,
+    arrivalMult: 1,
+    raidMult: 1,
+    threatMult: 1,
+    peaceful: false,
+    infiniteInfluence: false,
+  },
+  peaceful: {
+    name: "Peaceful",
+    blurb: "No blight, no raids, no moons. Just villagekeeping.",
+    corruptionDay: Infinity,
+    raidStartDay: Infinity,
+    arrivalMult: 1,
+    raidMult: 0,
+    threatMult: 0,
+    peaceful: true,
+    infiniteInfluence: false,
+  },
+  nightmare: {
+    name: "Nightmare",
+    blurb: "Blight at dawn day 1, raids from night 2, evil moons far likelier.",
+    corruptionDay: 1,
+    raidStartDay: 2,
+    arrivalMult: 0.7,
+    raidMult: 1.25,
+    threatMult: 1.3,
+    peaceful: false,
+    infiniteInfluence: false,
+  },
+  custom: {
+    name: "Custom",
+    blurb: "Tune the wilds yourself: monster pace, raid size, and whether they come at all.",
+    corruptionDay: 2,
+    raidStartDay: 3,
+    arrivalMult: 1,
+    raidMult: 1,
+    threatMult: 1,
+    peaceful: false,
+    infiniteInfluence: false,
+  },
+  sandbox: {
+    name: "Sandbox",
+    blurb: "The god's purse never empties. Everything else plays by the normal rules.",
+    corruptionDay: 2,
+    raidStartDay: 3,
+    arrivalMult: 1,
+    raidMult: 1,
+    threatMult: 1,
+    peaceful: false,
+    infiniteInfluence: true,
+  },
+};

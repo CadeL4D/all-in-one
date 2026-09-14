@@ -1,6 +1,8 @@
 // Tile grid, terrain generation, and the harvestable feature layer.
 // Generation is fully seeded: same seed -> same island (deterministic tests).
-import { MAP_SIZE, CAMP_TILE, CLEAR_RADIUS } from "./balance.js";
+// M5: generation is parameterized by BIOME (balance.js) - same code, three
+// flavors of wilds. The biome key rides on the world for the renderer.
+import { MAP_SIZE, CAMP_TILE, CLEAR_RADIUS, BIOMES } from "./balance.js";
 
 export const T_GRASS = 0;
 export const T_DIRT = 1;
@@ -21,7 +23,7 @@ export function inBounds(x, y) {
   return x >= 0 && y >= 0 && x >= 0 && y < MAP_SIZE && x < MAP_SIZE && y < MAP_SIZE;
 }
 
-export function createWorld(seed) {
+export function createWorld(seed, biome = "verdant") {
   const size = MAP_SIZE;
   const terrain = new Uint8Array(size * size);
   const feature = new Uint8Array(size * size);
@@ -31,6 +33,7 @@ export function createWorld(seed) {
   const corruption = new Uint8Array(size * size);
   const world = {
     seed,
+    biome,
     size,
     terrain,
     feature,
@@ -117,6 +120,7 @@ function noiseField(size, seed, scale) {
 
 function generate(world) {
   const { size, terrain, feature } = world;
+  const bio = BIOMES[world.biome] ?? BIOMES.verdant;
   const height = noiseField(size, world.seed ^ 0x9e3779b9, 18);
   const forest = noiseField(size, world.seed ^ 0x1234abcd, 9);
   const rocky = noiseField(size, world.seed ^ 0x55aa55aa, 7);
@@ -125,7 +129,7 @@ function generate(world) {
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = idx(x, y);
-      terrain[i] = height[i] < 0.3 ? T_WATER : height[i] < 0.36 ? T_DIRT : T_GRASS;
+      terrain[i] = height[i] < bio.water ? T_WATER : height[i] < bio.dirt ? T_DIRT : T_GRASS;
     }
   }
 
@@ -146,13 +150,13 @@ function generate(world) {
       const i = idx(x, y);
       if (terrain[i] !== T_GRASS) continue;
       if (campDist(x, y) <= CLEAR_RADIUS) continue;
-      if (forest[i] > 0.6) {
+      if (forest[i] > bio.forest) {
         feature[i] = F_TREE;
         world.trees.add(i);
-      } else if (rocky[i] > 0.78) {
+      } else if (rocky[i] > bio.rocky) {
         feature[i] = F_ROCK;
         world.rocks.add(i);
-      } else if (berry[i] > 0.8) {
+      } else if (berry[i] > bio.berry) {
         feature[i] = F_BUSH;
         world.bushes.add(i);
       }

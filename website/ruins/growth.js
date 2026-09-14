@@ -5,6 +5,7 @@ import { createVillager } from "./villager.js";
 import * as B from "./balance.js";
 import * as bd from "./buildings.js";
 import { findPath } from "./path.js";
+import { addXp, perkRank } from "./meta.js";
 
 // Called at creation and at every dawn: decides how many nomads the day
 // will bring and when they step onto the map. The town ladder sweetens
@@ -31,7 +32,7 @@ export function scheduleNomads(state) {
     state.buildings.filter((b) => b.complete && B.BUILDINGS[b.type].waystation).length,
   );
   let count = B.NOMADS_BASE_PER_DAY * roomFactor * supplyFactor * tierMult * state.rng.range(0.6, 1.4);
-  count += waystations;
+  count += waystations + 0.3 * perkRank(state, "nomads"); // Wandering Hearts
   if (day <= 3) count += 0.6; // early-game pity (RtR: more arrivals days 1-3)
   count = Math.min(B.NOMADS_MAX_PER_DAY, Math.floor(count));
 
@@ -63,6 +64,7 @@ export function tickNomads(state, dt) {
     if (!n.path.length) {
       n.arrived = true;
       createVillager(state, n.x, n.y, "adult");
+      addXp(state, "nomad"); // a wanderer joined (god XP, doc 01 section 5.2)
       state.events.push({ type: "nomad-joined", name: n.name, x: n.x, y: n.y });
       continue;
     }
@@ -138,6 +140,7 @@ export function rollBirths(state) {
     const home = homes[state.rng.int(0, homes.length - 1)];
     const v = createVillager(state, home.x + 1, home.y + 1, "child");
     assignHome(state, v, home);
+    addXp(state, "birth");
     state.events.push({ type: "birth", name: v.name, x: v.x, y: v.y });
   }
 }

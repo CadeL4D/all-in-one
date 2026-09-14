@@ -46,6 +46,7 @@
           <div class="day-block">
             <b id="day">Day 1</b>
             <span id="clockphase">Dawn</span>
+            <span id="moon-chip" class="moon-chip" hidden></span>
           </div>
           <div class="daytrack" aria-hidden="true"><i id="day-progress"></i></div>
           <div class="threat" id="threat" title="Corruption Threat — rises while the blight is boxed in">
@@ -71,7 +72,8 @@
         <button id="look" class="active"><span>⌖</span>Look</button
         ><button id="build-open"><span>⌂</span>Build</button
         ><button id="jobs-open"><span>⚗</span>Jobs</button
-        ><button id="god-open"><span>✦</span>God</button>
+        ><button id="god-open"><span>✦</span>God</button
+        ><button id="map-open"><span>◎</span>Map</button>
       </nav>
       <div id="spellbar" hidden>
         <div class="influence" title="Influence — your village's faith made spendable">
@@ -81,6 +83,13 @@
         </div>
         <small class="influence-faith" id="influence-faith"></small>
         <div id="spell-slots" role="group" aria-label="God powers"></div>
+        <div class="perk-strip">
+          <div class="xp-track" title="God experience — play well, earn boons that outlive every village">
+            <i id="xp-fill"></i>
+          </div>
+          <small id="xp-text">0 XP</small>
+          <button id="perks-open" class="perk-button">Boons <b id="perk-picks-badge" hidden>0</b></button>
+        </div>
       </div>
       <div id="castbar" hidden>
         <div>
@@ -131,6 +140,28 @@
           <button class="sheet-close" aria-label="Close inspector">×</button>
         </div>
         <div class="sheet-body" id="inspector-body"></div>
+      </div>
+      <div id="perk-sheet" class="sheet" hidden>
+        <div class="sheet-head">
+          <h2>Boons</h2>
+          <button class="sheet-close" aria-label="Close boons">×</button>
+        </div>
+        <div class="sheet-body">
+          <p class="sheet-note" id="perk-note"></p>
+          <div id="perk-choices"></div>
+          <h3 class="build-tab">Mastered</h3>
+          <div id="perk-owned"></div>
+        </div>
+      </div>
+      <div id="map-sheet" class="sheet" hidden>
+        <div class="sheet-head">
+          <h2>The Wilds</h2>
+          <button class="sheet-close" aria-label="Close map">×</button>
+        </div>
+        <div class="sheet-body">
+          <p class="sheet-note" id="map-note"></p>
+          <div id="region-cards"></div>
+        </div>
       </div>
       <dialog id="menu-dialog">
         <button class="dialog-close" id="menu-close" aria-label="Close menu"
@@ -215,11 +246,67 @@
             belief; witnessed deaths and grabbed villagers lower it. A
             doubting village is a poor god.
           </li>
+          <li>
+            <b>Watch the sky.</b> Some nights the moon changes everything:
+            a <b>Full Moon</b> means raiders rise but never march — cull
+            them, because tomorrow's raid doubles. An <b>Eclipse</b> turns
+            midday into a siege. A <b>Blood Moon</b> spawns red bloodlings
+            inside your walls — storm magic answers them. A <b>Meteor
+            Shower</b> rains burning stone on everything, yours included.
+          </li>
+          <li>
+            <b>Play well, earn Boons.</b> Everything you do feeds god
+            experience; every earned pick buys a permanent boon from the God
+            panel. Boons outlive villages — loss keeps them.
+          </li>
+          <li>
+            <b>The world is wider than this island.</b> Raise the camp to a
+            Settlement and the Map opens: fund a caravan, send settlers,
+            found a second village in harsher wilds. Migrate folk between
+            your regions — pop 15 or more, healthy adults only.
+          </li>
         </ol>
         <p class="menu-tiny">
           Everything saves on its own — leave anytime, one day at 2× is a
           three-minute session.
         </p>
+      </dialog>
+      <dialog id="mode-dialog">
+        <button class="dialog-close" id="mode-close" aria-label="Close mode picker"
+          >×</button
+        >
+        <h2>How wild should the wilds be?</h2>
+        <div id="mode-cards"></div>
+        <div id="custom-tuners" hidden>
+          <p class="sheet-note">Custom — tune it yourself:</p>
+          <div class="tuner-row">
+            <span>Monsters</span>
+            <div class="tuner-options" id="tuner-peaceful">
+              <button data-v="off">None</button>
+              <button data-v="on" class="active">On</button>
+            </div>
+          </div>
+          <div class="tuner-row">
+            <span>Their pace</span>
+            <div class="tuner-options" id="tuner-pace">
+              <button data-v="late">Late</button>
+              <button data-v="normal" class="active">Normal</button>
+              <button data-v="early">Early</button>
+            </div>
+          </div>
+          <div class="tuner-row">
+            <span>Raid size</span>
+            <div class="tuner-options" id="tuner-raids">
+              <button data-v="0.5">Small</button>
+              <button data-v="1" class="active">Normal</button>
+              <button data-v="1.5">Big</button>
+            </div>
+          </div>
+        </div>
+        <div class="menu-buttons">
+          <button id="mode-start" class="primary">Settle in</button>
+        </div>
+        <p class="menu-tiny">Your boons carry over — every village you ever raise.</p>
       </dialog>
       <dialog id="confirm-dialog">
         <h2 id="confirm-title">Are you sure?</h2>
@@ -230,15 +317,16 @@
         </div>
       </dialog>
       <dialog id="loss-dialog">
-        <h2>The village has fallen</h2>
+        <h2 id="loss-title">The village has fallen</h2>
         <p class="menu-note" id="loss-cause">The camp has fallen.</p>
         <div class="insp-rows" id="loss-stats"></div>
-        <p class="menu-tiny">
+        <p class="menu-tiny" id="loss-note">
           Every fall teaches the next village — the wilds keep the blight, you
           keep the know-how.
         </p>
-        <div class="menu-buttons">
-          <button id="loss-restart" class="primary">Rise again</button>
+        <div class="menu-buttons" id="loss-buttons">
+          <button id="loss-map" class="primary" hidden>Other regions stand</button
+          ><button id="loss-restart" class="primary">Rise again</button>
         </div>
       </dialog>
     </main>

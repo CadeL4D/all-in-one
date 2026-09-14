@@ -3,7 +3,9 @@
 // #1 flaw; we replace it with one-line, first-time-only hints).
 import * as B from "./balance.js";
 import * as bd from "./buildings.js";
-import { influenceMax } from "./spells.js";
+import { influenceMax, spellCost } from "./spells.js";
+import { nextPickCost, perkRank, rollPerkChoices, pickPerk } from "./meta.js";
+import { canFound, canMigrate, foundRegion, migrateTo, migratableCount, regionDef } from "./regions.js";
 
 const RES_STYLE = {
   wood: { color: "#b98a54", label: "Wood" },
@@ -77,6 +79,18 @@ const HINTS = {
     "The blight fought your walls. Reclaiming corrupted ground raises Threat and springs defenders — purge only when you can survive the answer.",
   bonewalker:
     "Bonewalkers! Their bones shed tower bolts — crush them instead: a Sling Tower, or guards with bare hands.",
+  moonFull:
+    "A Full Moon rises tonight: the raiders will NOT march. Cull them at their nests — tomorrow's raid is doubled if you don't.",
+  moonEclipse:
+    "An Eclipse swallows midday — raiders spawn and attack all through the day. This is a siege; hold your walls.",
+  moonBlood:
+    "A Blood Moon tonight: red bloodlings will rise INSIDE your village. Storm magic and crushing hands answer them.",
+  moonMeteor:
+    "A Meteor Shower tonight — burning stone falls on everything, yours included. Scatter what you can't afford to lose.",
+  perks:
+    "Your deeds feed god experience — and experience becomes Boons: permanent blessings that survive every fall. Open God to claim one.",
+  regions:
+    "The world is wider than this island. Raise the camp to a Settlement, then open the Map: a funded caravan can found a second village in harsher wilds.",
 };
 
 export function createUI(game) {
@@ -91,6 +105,8 @@ export function createUI(game) {
     selected: null,
     castKey: null, // armed spell key while casting
     godOpen: false,
+    perkChoices: null, // the three offered boons while a pick is banked
+    migrateN: {}, // per-region stepper: id -> settlers to send
   };
 
   const hintEl = $("hint");
@@ -171,6 +187,16 @@ export function createUI(game) {
     const threat = state.corruption?.threat ?? 0;
     $("threat-fill").style.width = `${Math.round((threat / B.THREAT_MAX) * 100)}%`;
     $("threat").classList.toggle("hot", threat > 0);
+    // The moon chip: tonight's special, named from the moment it's decided
+    // (dawn) so the whole day is a telegraph (pillar 2).
+    const chip = $("moon-chip");
+    const moon = state.moon?.eclipse ? "eclipse" : state.moon?.day;
+    if (moon) {
+      const names = { full: "Full Moon", eclipse: "Eclipse", blood: "Blood Moon", meteor: "Meteor Shower" };
+      chip.textContent = names[moon];
+      chip.className = `moon-chip ${moon}`;
+      chip.hidden = false;
+    } else chip.hidden = true;
   }
 
   function renderSpeed(state, speed) {
@@ -347,7 +373,7 @@ export function createUI(game) {
     const state = game.getState();
     const max = influenceMax(state);
     $("influence-fill").style.width = `${Math.round((state.god.influence / Math.max(1, max)) * 100)}%`;
-    $("influence-text").textContent = `${Math.floor(state.god.influence)}/${max}`;
+    $("influence-text").textContent = `${Math.floor(state.god.influence)}/${max}${state.mode?.infiniteInfluence ? " ∞" : ""}`;
     // The purse's size IS the village's belief (M4): show the average.
     const alive = state.villagers.filter((v) => !v.dead);
     const avg = alive.length
@@ -360,11 +386,27 @@ export function createUI(game) {
       const spec = B.SPELLS[key];
       const btn = document.createElement("button");
       btn.className = `spell-slot${ui.castKey === key ? " armed" : ""}`;
-      btn.innerHTML = `<i>${spec.icon}</i><b>${spec.name}</b><small>${spec.cost}</small>`;
-      btn.disabled = state.god.influence < spec.cost && ui.castKey !== key;
+      const cost = spellCost(state, key);
+      btn.innerHTML = `<i>${spec.icon}</i><b>${spec.name}</b><small>${cost}</small>`;
+      btn.disabled = !state.mode?.infiniteInfluence && state.god.influence < cost && ui.castKey !== key;
       btn.onclick = () => game.armSpell(key);
       slots.appendChild(btn);
     }
+    // The meta strip: god XP progress + banked boon picks (M5).
+    refreshMetaHud();
+  }
+
+  // The banked-picks badge must stay honest wherever picks change - the
+  // boons sheet spends them without re-rendering the whole spellbar.
+  function refreshMetaHud() {
+    const meta = game.getState().meta;
+    const need = nextPickCost(meta);
+    const prog = Math.max(0, Math.min(1, (meta.xp - meta.spent) / need));
+    $("xp-fill").style.width = `${Math.round(prog * 100)}%`;
+    $("xp-text").textContent = `${Math.max(0, meta.xp - meta.spent)}/${need} XP`;
+    const badge = $("perk-picks-badge");
+    badge.hidden = meta.picks <= 0;
+    badge.textContent = meta.picks;
   }
 
   function setGodPanel(open) {
@@ -372,6 +414,144 @@ export function createUI(game) {
     if (open) renderSpellbar();
     $("spellbar").hidden = !open || !!ui.castKey;
     setDock(open ? "god-open" : "look");
+  }
+
+  // ---- Boons sheet (M5 meta): claim banked picks from three offered.
+  function renderPerkSheet() {
+    const state = game.getState();
+    const meta = state.meta;
+    $("perk-note").textContent = meta.picks
+      ? `Choose one of the offered boons — ${meta.picks} pick${meta.picks === 1 ? "" : "s"} banked. Boons never expire and survive every fall.`
+      : "Boons come from god experience: building, raising, defending, growing. Keep playing and the next pick will come.";
+    const choicesBox = $("perk-choices");
+    choicesBox.innerHTML = "";
+    if (meta.picks > 0) {
+      if (!ui.perkChoices?.length) ui.perkChoices = rollPerkChoices(state, state.rng);
+      for (const key of ui.perkChoices) {
+        const spec = B.PERKS[key];
+        const card = document.createElement("button");
+        card.className = "perk-card";
+        const rank = perkRank(state, key);
+        card.innerHTML = `<b>${spec.name}</b><span class="rank">${rank ? `rank ${rank} → ${rank + 1}` : "new"}</span><small>${spec.desc}.</small>`;
+        card.onclick = () => {
+          const result = pickPerk(state, key);
+          if (result.ok) {
+            ui.perkChoices = null;
+            game.saveNow();
+            refreshMetaHud();
+            renderPerkSheet();
+          } else if (result.reason) toast(result.reason, null, "info");
+        };
+        choicesBox.appendChild(card);
+      }
+    } else ui.perkChoices = null;
+    const owned = $("perk-owned");
+    owned.innerHTML = "";
+    const ranks = Object.entries(meta.perks).filter(([, r]) => r > 0);
+    if (!ranks.length) owned.innerHTML = `<p class="sheet-note">None yet — your first boon is one good session away.</p>`;
+    for (const [key, rank] of ranks) {
+      const row = document.createElement("div");
+      row.className = "perk-row";
+      row.innerHTML = `<span>${B.PERKS[key].name}</span><b>rank ${rank}/${B.PERKS[key].maxRank} — ${B.PERKS[key].desc}</b>`;
+      owned.appendChild(row);
+    }
+  }
+
+  // ---- Map sheet (M5 regions): travel, found, migrate.
+  function renderMap() {
+    const state = game.getState();
+    const wrapper = game.getWrapper?.();
+    $("map-note").textContent =
+      state.mode.key === "peaceful"
+        ? "A quiet world. The other regions wait for whoever walks there."
+        : "Harsher wilds breed worse nights — but a second village means a second chance.";
+    const box = $("region-cards");
+    box.innerHTML = "";
+    for (const def of B.REGIONS) {
+      const entry = state.regions.find((r) => r.id === def.id);
+      const stats = entry.id === state.regionId
+        ? {
+            day: state.clock.day,
+            pop: state.villagers.length,
+            status: state.lost ? "lost" : state.corruption.cleared ? "cleared" : "alive",
+          }
+        : wrapper?.regions?.find((r) => r.id === def.id) ?? {};
+      const isActive = entry.id === state.regionId;
+      const card = document.createElement("div");
+      card.className = `region-card${isActive ? " active-region" : ""}${stats.status === "lost" ? " locked" : ""}`;
+      const statusLine = isActive
+        ? `<b>${state.lost ? "fallen" : state.corruption.cleared ? "cleared — blight-free forever" : "you are here"}</b>`
+        : entry.founded
+          ? `<b class="${stats.status === "lost" ? "status-lost" : stats.status === "cleared" ? "status-cleared" : ""}">${stats.status === "lost" ? `fallen, day ${stats.day ?? "?"}` : stats.status === "cleared" ? "cleared — blight-free" : `village · day ${stats.day ?? "?"}`}</b>`
+          : `<b>unsettled</b>`;
+      card.innerHTML = `
+        <h4>${def.name} <span class="stars">${"★".repeat(def.stars)}${"☆".repeat(3 - def.stars)}</span></h4>
+        <p>${def.blurb}</p>
+        <div class="region-meta">${statusLine}${entry.founded && stats.status !== "lost" ? `<span>pop <b>${stats.pop ?? (isActive ? state.villagers.length : "—")}</b></span>` : ""}</div>
+        <div class="region-actions"></div>`;
+      const actions = card.querySelector(".region-actions");
+
+      if (isActive) {
+        const here = document.createElement("span");
+        here.textContent = "Found new villages from the other wilds' cards below.";
+        actions.appendChild(here);
+      } else if (stats.status === "lost") {
+        const note = document.createElement("span");
+        note.textContent = "A lost region can never be walked again.";
+        actions.appendChild(note);
+      } else if (entry.founded) {
+        const travel = document.createElement("button");
+        travel.className = "primary";
+        travel.textContent = "Travel";
+        travel.onclick = () => game.travel(def.id);
+        actions.appendChild(travel);
+        // Migrate box: send healthy adults (RtR rule: pop 15+).
+        const mig = document.createElement("div");
+        mig.className = "migrate-box";
+        const room = Math.min(B.MIGRATE_MAX_BATCH, migratableCount(state), state.villagers.length - 4);
+        const canSend = canMigrate(state, def.id);
+        mig.innerHTML = `
+          <button aria-label="Fewer settlers" ${ui.migrateN?.[def.id] <= 1 ? "disabled" : ""}>−</button>
+          <span><b id="mig-count-${def.id}">${ui.migrateN?.[def.id] ?? Math.min(3, Math.max(1, room))}</b> settlers</span>
+          <button aria-label="More settlers" ${(ui.migrateN?.[def.id] ?? 3) >= room ? "disabled" : ""}>+</button>
+          <button class="primary" ${canSend.ok && room > 0 ? "" : "disabled"}>Send at dawn</button>`;
+        const [minus, plus, send] = mig.querySelectorAll("button");
+        ui.migrateN[def.id] = Math.min(ui.migrateN?.[def.id] ?? Math.min(3, Math.max(1, room)), Math.max(1, room));
+        minus.onclick = () => {
+          ui.migrateN[def.id] = Math.max(1, (ui.migrateN[def.id] ?? 1) - 1);
+          renderMap();
+        };
+        plus.onclick = () => {
+          ui.migrateN[def.id] = Math.min(room, (ui.migrateN[def.id] ?? 1) + 1);
+          renderMap();
+        };
+        send.onclick = () => {
+          const result = migrateTo(state, def.id, ui.migrateN[def.id] ?? 1);
+          if (result.ok) {
+            game.saveNow();
+            renderMap();
+          } else if (result.reason) toast(result.reason, null, "info");
+        };
+        if (!canSend.ok) mig.title = canSend.reason;
+        card.appendChild(mig);
+      } else {
+        const findCheck = canFound(state, def.id);
+        const btn = document.createElement("button");
+        btn.className = "primary";
+        btn.textContent = `Send a caravan (${Object.entries(B.FOUND_COST).map(([r, n]) => `${n} ${RES_STYLE[r].label.toLowerCase()}`).join(" + ")} + ${B.FOUND_SETTLERS} settlers)`;
+        btn.disabled = !findCheck.ok;
+        btn.title = findCheck.ok ? "" : findCheck.reason;
+        btn.onclick = () => {
+          const result = foundRegion(state, def.id);
+          if (result.ok) {
+            game.saveNow();
+            renderMap();
+          } else if (result.reason) toast(result.reason, null, "info");
+        };
+        actions.appendChild(btn);
+      }
+      box.appendChild(card);
+    }
   }
 
   // ---- Inspector ----
@@ -386,7 +566,7 @@ export function createUI(game) {
       const home = state.buildings.find((b) => b.id === v.home);
       body.innerHTML = `
         <div class="insp-rows">
-          <div class="insp-row"><span>Doing</span><b>${v.activity}</b></div>
+          <div class="insp-row"><span>Doing</span><b>${v.migrating ? "Packing to leave at dawn" : v.activity}</b></div>
           <div class="insp-row"><span>Job</span><b>${job}</b></div>
           <div class="insp-row"><span>Home</span><b>${home ? bd.def(home).name : "none"}</b></div>
           ${v.carrying ? `<div class="insp-row"><span>Carrying</span><b>${RES_STYLE[v.carrying].label}</b></div>` : ""}
@@ -549,6 +729,48 @@ export function createUI(game) {
     ],
     "site-placed": (e) =>
       e.count ? [`${e.name} sites placed`, "Builders will haul the materials.", "good"] : null,
+    // ---- M5: moons, boons, regions ----
+    moon: (e) => {
+      const text = {
+        full: ["The Full Moon rises", "Raiders will stir but not march. Tomorrow's raid doubles — cull them tonight.", "info"],
+        blood: ["The Blood Moon rises", "Red bloodlings will climb out of your own streets before dawn.", "bad"],
+        meteor: ["A Meteor Shower begins", "Burning stone falls all night — on everything. Tap impacts to watch.", "bad"],
+        eclipse: ["An Eclipse is coming today", "When midday darkens, raiders will march. This is a day siege.", "bad"],
+      };
+      return text[e.moon] ?? null;
+    },
+    "eclipse-rise": () => ["Midday turns to night", "The eclipse has begun — raiders pour from the nests.", "bad"],
+    "bloodling-sprung": (e) => [
+      "A bloodling rises in the village",
+      "Storm magic melts them; tower bolts barely scratch. Tap to look.",
+      "bad",
+    ],
+    "perk-earned": (e) => [
+      "A boon is earned",
+      "The god grows with every deed. Open God → Boons to claim it.",
+      "good",
+    ],
+    "perk-picked": (e) => [`${e.name} mastered`, `Rank ${e.rank}. Its blessing covers every village you will ever raise.`, "good"],
+    "region-founded": (e) => [
+      `Settlers will raise ${e.name}`,
+      `${e.settlers} able villagers leave at dawn with the caravan. Travel there from the Map when they've had time to build.`,
+      "good",
+    ],
+    "migrants-scheduled": (e) => [
+      `${e.count} villager${e.count === 1 ? "" : "s"} packing for ${e.name}`,
+      "They finish today's work and walk out at dawn.",
+      "info",
+    ],
+    "migrants-left": (e) => [
+      `${e.count} settler${e.count === 1 ? "" : "s"} walked out`,
+      "Bound for another region. They'll be waiting at its camp.",
+      "info",
+    ],
+    "region-cleared": () => [
+      "This region is clean",
+      "The last of the blight is gone — free of corruption, forever. The wilds remember.",
+      "good",
+    ],
   };
   function toast(title, sub, kind, fly) {
     const box = $("toasts");
@@ -591,12 +813,25 @@ export function createUI(game) {
       if (e.type === "bolts-out") showHint("bolts");
       if (e.type === "blight-fought-back") showHint("pushback");
       if (e.type === "raid-start" && state.clock.day >= B.BONEWALKER_ARRIVAL_DAY) showHint("bonewalker");
+      if (e.type === "moon") showHint(`moon${e.moon === "full" ? "Full" : e.moon === "eclipse" ? "Eclipse" : e.moon === "blood" ? "Blood" : "Meteor"}`);
+      if (e.type === "perk-earned") showHint("perks");
+      if (e.type === "region-founded") showHint("regions");
       if (e.type === "dawn") game.saveNow();
     }
   }
 
   function showLoss(lost) {
     const dlg = $("loss-dialog");
+    const state = game.getState();
+    // M5: a fallen region is a chapter, not the book - if other founded
+    // regions still stand, the world goes on from the Map.
+    const wrapper = game.getWrapper?.();
+    const othersLive = state.regions.some((r) => {
+      if (!r.founded || r.id === state.regionId) return false;
+      const stats = wrapper?.regions?.find((w) => w.id === r.id);
+      return !stats || stats.status !== "lost";
+    });
+    $("loss-title").textContent = othersLive ? "The region has fallen" : "The village has fallen";
     $("loss-cause").textContent = lost.cause;
     $("loss-stats").innerHTML = [
       ["Days survived", lost.day],
@@ -606,6 +841,10 @@ export function createUI(game) {
     ]
       .map(([k, v]) => `<div class="insp-row"><span>${k}</span><b>${v}</b></div>`)
       .join("");
+    $("loss-note").textContent = othersLive
+      ? "The wilds keep this ground. Your boons and your other villages remain — travel on."
+      : "Every fall teaches the next village — the wilds keep the blight, you keep the know-how, and your boons keep their blessing.";
+    $("loss-map").hidden = !othersLive;
     dlg.showModal();
   }
 
@@ -655,6 +894,10 @@ export function createUI(game) {
         : 100;
       if (alive.length >= 6 && avg < 42) showHint("faith");
     }
+    if (!ui.hintShown.regions) {
+      const camp = bd.findCamp(state);
+      if ((camp?.tier ?? 1) >= B.FOUND_TIER) showHint("regions");
+    }
     const complete = state.buildings.filter((b) => b.complete).length;
     if (complete >= 3) showHint("jobs");
   }
@@ -662,6 +905,8 @@ export function createUI(game) {
   function closeSheets() {
     $("build-sheet").hidden = true;
     $("jobs-sheet").hidden = true;
+    $("perk-sheet").hidden = true;
+    $("map-sheet").hidden = true;
     setGodPanel(false);
     closeInspector();
   }
@@ -696,6 +941,28 @@ export function createUI(game) {
     closeSheets();
     if (opening) setGodPanel(true);
   };
+  $("map-open").onclick = () => {
+    const sheet = $("map-sheet");
+    const opening = sheet.hidden;
+    game.exitModes();
+    closeSheets();
+    if (opening) {
+      renderMap();
+      sheet.hidden = false;
+      setDock("map-open");
+    } else setDock("look");
+  };
+  $("perks-open").onclick = () => {
+    const sheet = $("perk-sheet");
+    const opening = sheet.hidden;
+    game.exitModes();
+    closeSheets();
+    if (opening) {
+      renderPerkSheet();
+      sheet.hidden = false;
+      setDock("god-open");
+    } else setDock("look");
+  };
   $("cancel-cast").onclick = () => game.disarmSpell();
   document.querySelectorAll(".sheet-close").forEach((b) => (b.onclick = closeSheet));
   function closeSheet() {
@@ -703,7 +970,7 @@ export function createUI(game) {
     setDock("look");
   }
   function setDock(active) {
-    ["look", "build-open", "jobs-open", "god-open"].forEach((id) =>
+    ["look", "build-open", "jobs-open", "god-open", "map-open"].forEach((id) =>
       $(id).classList.toggle("active", id === active),
     );
   }
@@ -738,6 +1005,14 @@ export function createUI(game) {
       },
     );
   $("loss-restart").onclick = () => game.restart();
+  $("loss-map").onclick = () => {
+    $("loss-dialog").close();
+    game.exitModes();
+    closeSheets();
+    renderMap();
+    $("map-sheet").hidden = false;
+    setDock("map-open");
+  };
 
   // Public: called every frame (cheap parts) + slower tick (1 Hz).
   ui.frame = (state, phase, speed) => {
@@ -750,6 +1025,8 @@ export function createUI(game) {
     observeHints(state);
     if (!$("jobs-sheet").hidden) renderJobs();
     if (!$("build-sheet").hidden) renderBuildLimit(state);
+    if (!$("map-sheet").hidden) renderMap();
+    if (!$("perk-sheet").hidden) renderPerkSheet();
     if (ui.placing) updatePlacementInfo(state, ui.placing.type);
     if (ui.godOpen) renderSpellbar();
     // A camp mid-upgrade shows live progress in the inspector.

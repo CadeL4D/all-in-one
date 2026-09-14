@@ -11,6 +11,7 @@ import { T_WATER } from "./world.js";
 import * as bd from "./buildings.js";
 import { damageMonster, damageBuilding, spawnMonsterAt } from "./monsters.js";
 import { killVillager } from "./villager.js";
+import { addXp, perkMult } from "./meta.js";
 
 export function createGodState() {
   return {
@@ -32,13 +33,23 @@ export function influenceMax(state) {
   return Math.round(max);
 }
 
+// The Storm Covenant discount, applied at every purse edge.
+export function spellCost(state, key) {
+  return Math.max(1, Math.round(B.SPELLS[key].cost * perkMult(state, "spells", -0.1)));
+}
+
 // Per-sim-tick driver, called from stepGame: regen, cast cooldown, falling
-// meteors, and the arc of a thrown creature. Influence never sits above
-// the cap: a rite that lands on a full purse is spent (essence caps too).
+// meteors, and the arc of a thrown creature. Influence never sits above the
+// cap: a rite that lands on a full purse is spent (essence caps too).
+// Sandbox mode keeps the purse full (doc 01 section 4.1: live manipulation);
+// a full moon gathers extra essence from the calm ground (M5).
 export function tickSpells(state, dt) {
   const god = state.god;
   const max = Math.max(influenceMax(state), 1);
-  if (god.influence < max) god.influence = Math.min(max, god.influence + max * (B.INFLUENCE_REGEN_PER_DAY / B.DAY_TICKS) * dt);
+  const moonCalm = state.moon?.pacified ? B.MOON_FULL_REGEN_MULT : 1;
+  const regen = max * (B.INFLUENCE_REGEN_PER_DAY / B.DAY_TICKS) * perkMult(state, "influence", 0.2) * moonCalm;
+  if (state.mode?.infiniteInfluence) god.influence = max;
+  else if (god.influence < max) god.influence = Math.min(max, god.influence + regen * dt);
   else if (god.influence > max) god.influence = max;
   god.cooldown = Math.max(0, god.cooldown - dt);
 
@@ -70,14 +81,18 @@ export function tickSpells(state, dt) {
 }
 
 // Shared cost gate: cooldown first (a recharging hand takes no coin), then
-// influence. Nothing is charged on a denied or whiffed cast.
+// influence. Nothing is charged on a denied or whiffed cast - and a cast
+// that lands is god XP (doc 01 section 5.2); every caller gates on having
+// found a real target first.
 function spend(state, key) {
   const spec = B.SPELLS[key];
   if (state.god.cooldown > 0) return { ok: false, reason: "The god hand is recharging" };
-  if (state.god.influence < spec.cost)
-    return { ok: false, reason: `Not enough influence — ${spec.cost} needed` };
-  state.god.influence -= spec.cost;
+  const cost = spellCost(state, key);
+  if (!state.mode?.infiniteInfluence && state.god.influence < cost)
+    return { ok: false, reason: `Not enough influence — ${cost} needed` };
+  if (!state.mode?.infiniteInfluence) state.god.influence -= cost;
   state.god.cooldown = spec.cooldown ?? 0;
+  addXp(state, "cast");
   return { ok: true };
 }
 

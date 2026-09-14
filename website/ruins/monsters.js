@@ -12,6 +12,8 @@ import { tilePassable } from "./world.js";
 import { findPath, adjacentOpen } from "./path.js";
 import * as bd from "./buildings.js";
 import { killVillager, faithPulse } from "./villager.js";
+import { addXp, perkMult } from "./meta.js";
+import { diffOf } from "./regions.js";
 
 export function createRaidState() {
   return {
@@ -23,7 +25,7 @@ export function createRaidState() {
 // Threat-scaled strength (doc 04 section 3.2): every 25 Corruption Threat
 // is a level - "less monsters, stronger individuals" rebalance.
 export function monsterLevel(state) {
-  const threat = state.corruption?.threat ?? 0;
+  const threat = (state.corruption?.threat ?? 0) * (state.mode?.threatMult ?? 1);
   return Math.min(B.MONSTER_LEVEL_MAX, 1 + Math.floor(threat / B.MONSTER_LEVEL_PER_THREAT));
 }
 
@@ -32,15 +34,25 @@ export function monsterDamage(m) {
   return def.damage * (1 + B.MONSTER_DAMAGE_PER_LEVEL * ((m.level ?? 1) - 1));
 }
 
+// Species arrival gate: the documented day, scaled by mode pace and region
+// difficulty (M5 - harder wilds bring the menagerie sooner).
+function arrived(state, baseDay) {
+  const mult = (state.mode?.arrivalMult ?? 1) * diffOf(state).arriveMult;
+  return state.clock.day >= Math.max(1, Math.round(baseDay * mult));
+}
+
 // ---- Raid size. Escalation is nests + days + threat (doc 04 sections
-// 2.3/2.4); village wealth is deliberately absent from the formula.
+// 2.3/2.4); village wealth is deliberately absent from the formula. Mode,
+// region difficulty and the full-moon debt are the M5 multipliers on top.
 export function raidSize(state) {
   const nests = state.buildings.filter((b) => b.type === "nest" && b.complete).length;
-  const days = Math.min(B.RAID_CAP, Math.max(0, state.clock.day - B.RAID_START_DAY));
-  const threatMult = 1 + (state.corruption?.threat ?? 0) * B.THREAT_SPAWN_MULT;
+  const days = Math.min(B.RAID_CAP, Math.max(0, state.clock.day - (state.mode?.raidStartDay ?? B.RAID_START_DAY)));
+  const threatMult = 1 + (state.corruption?.threat ?? 0) * (state.mode?.threatMult ?? 1) * B.THREAT_SPAWN_MULT;
+  const scale =
+    (state.mode?.raidMult ?? 1) * diffOf(state).raidMult * (state.moon?.tonightMult ?? 1);
   const raw =
     B.RAID_BASE_COUNT + B.RAID_PER_DAY * days + B.RAID_PER_NEST * Math.max(0, nests - 1);
-  return Math.max(1, Math.min(B.RAID_MAX_COUNT, Math.round(raw * threatMult)));
+  return Math.max(1, Math.min(B.RAID_MAX_COUNT, Math.round(raw * threatMult * scale)));
 }
 
 export function spawnRaid(state) {
@@ -95,17 +107,18 @@ export function spawnMonsterAt(state, kind, x, y, level = monsterLevel(state)) {
 
 function pickKind(state) {
   const day = state.clock.day;
-  if (day < B.BLOT_ARRIVAL_DAY) return "husk";
+  if (!arrived(state, B.BLOT_ARRIVAL_DAY)) return "husk";
   const roll = state.rng.next();
   // Each ARRIVED species claims a band off the top of the roll; husks keep
   // whatever remains, so they thin out as the menagerie arrives. Bands of
   // species not yet on the field stay unclaimed (a day-5 roll of 0.4 is a
   // husk, not a blot riding the wraith's absent share).
   let band = 0;
-  if (day >= B.EMBERLING_ARRIVAL_DAY && roll < (band += B.EMBERLING_CHANCE))
+  if (arrived(state, B.EMBERLING_ARRIVAL_DAY) && roll < (band += B.EMBERLING_CHANCE))
     return "emberling";
-  if (day >= B.WRAITH_ARRIVAL_DAY && roll < (band += B.WRAITH_CHANCE)) return "wraith";
-  if (day >= B.BONEWALKER_ARRIVAL_DAY && roll < (band += B.BONEWALKER_CHANCE)) return "bonewalker";
+  if (arrived(state, B.WRAITH_ARRIVAL_DAY) && roll < (band += B.WRAITH_CHANCE)) return "wraith";
+  if (arrived(state, B.BONEWALKER_ARRIVAL_DAY) && roll < (band += B.BONEWALKER_CHANCE))
+    return "bonewalker";
   if (roll < (band += B.BLOT_CHANCE)) return "blot";
   return "husk";
 }
@@ -148,6 +161,26 @@ export function tickMonsters(state, dt) {
     // Ranged monsters (RtR fire elemental): stop at range and shoot the
     // nearest villager, else any finished village building - walls included.
     if (def.ranged && rangedStrike(state, m, def)) continue;
+
+    // Full Moon (doc 04 section 3.3): raiders rise but "do not walk to your
+    // village". They drift around the nest instead - a night to cull them
+    // at leisure, or to regret sparing them when tomorrow's debt comes due.
+    if (state.moon?.pacified) {
+      if (state.clock.tick % 90 === 0) {
+        const size = state.world.size;
+        const angle = state.rng.range(0, Math.PI * 2);
+        const nx = m.x + Math.cos(angle) * 0.6,
+          ny = m.y + Math.sin(angle) * 0.6;
+        if (nx > 0.5 && ny > 0.5 && nx < size - 0.5 && ny < size - 0.5) {
+          const i = Math.floor(ny) * size + Math.floor(nx);
+          if (tilePassable(state.world, i) && state.buildingAt[i] === -1) {
+            m.x = nx;
+            m.y = ny;
+          }
+        }
+      }
+      continue;
+    }
 
     // A failed route must back off too: repathing a boxed-in raider every
     // tick is a full-grid A* storm (two searches x monsters x every tick).
@@ -397,6 +430,7 @@ function strikeBack(state, v, dt) {
 export function killMonster(state, m) {
   m.hp = 0;
   state.stats.slain++;
+  addXp(state, "slain");
   const def = B.MONSTERS[m.kind];
   // Witnesses believe a little harder when the monsters die (doc 03 §5.3).
   faithPulse(state, m.x, m.y, B.WITNESS_KILL_FAITH);
@@ -466,11 +500,12 @@ function tickTowers(state, dt) {
     }
     state.resources[ammo] -= perShot;
     b.reload = spec.reload;
+    const shot = spec.damage * perkMult(state, "towers", 0.1); // Nightwatch
     const tx = kind === "monster" ? target.x : target.x + 0.5;
     const ty = kind === "monster" ? target.y : target.y + 0.5;
     state.projectiles.push({ x: cx, y: cy, tx, ty, t: 0, dur: 0.12, kind: "bolt" });
-    if (kind === "monster") damageMonster(state, target, spec.damage, spec.type);
-    else damageBuilding(state, target, spec.damage);
+    if (kind === "monster") damageMonster(state, target, shot, spec.type);
+    else damageBuilding(state, target, shot);
   }
 }
 
@@ -481,9 +516,10 @@ function advanceProjectiles(state, dt) {
   state.projectiles = state.projectiles.filter((p) => p.t < p.dur);
 }
 
-// ---- Night bookkeeping. Called from stepGame on phase edges.
+// ---- Night bookkeeping. Called from stepGame on phase edges. Peaceful
+// mode simply never raids (doc 01 section 4.1: "no monster spawns").
 export function raidsAtNightfall(state) {
-  if (state.clock.day < B.RAID_START_DAY) return;
+  if (state.clock.day < (state.mode?.raidStartDay ?? B.RAID_START_DAY)) return;
   spawnRaid(state);
 }
 
@@ -492,6 +528,7 @@ export function raidsAtDawn(state) {
   state.monsters = [];
   state.raid.active = false;
   state.raid.campHit = false;
+  addXp(state, "night"); // the village held until morning (god XP, doc 01 §5.2)
   state.events.push({ type: "monsters-retreat" });
 }
 

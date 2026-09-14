@@ -20,6 +20,7 @@ import {
   BOLT_CRAFT_YIELD,
 } from "./balance.js";
 import { T_GRASS, T_DIRT, F_NONE, F_STUMP, F_PLOT, idx } from "./world.js";
+import { addXp, perkMult } from "./meta.js";
 
 // The effective definition of a placed building. Everything but the camp
 // is its static table entry; the camp merges in its current tier's stats.
@@ -71,10 +72,12 @@ export function buildLimit(state) {
   return camp ? campTierStats(camp.tier ?? 1).buildLimit : 0;
 }
 
-// RtR castle-tier bonus: +1% global work speed per rung above Camp.
+// RtR castle-tier bonus: +1% global work speed per rung above Camp, and
+// the Busy Hands perk rides on top (M5 meta).
 export function workSpeedMult(state) {
   const camp = findCamp(state);
-  return camp ? campTierStats(camp.tier ?? 1).workMult : 1;
+  const tier = camp ? campTierStats(camp.tier ?? 1).workMult : 1;
+  return tier * perkMult(state, "work", 0.1);
 }
 
 export function canPlace(state, type, x, y) {
@@ -189,6 +192,7 @@ export function nextMissingRes(site) {
 export function siteComplete(state, building) {
   building.complete = true;
   state.stats.built++;
+  addXp(state, "built");
   const def = BUILDINGS[building.type];
   // A finished farm claims its crop plots on nearby open grass.
   if (def.plots) {
@@ -247,6 +251,7 @@ export function applyCampUpgrade(state) {
   camp.upgrade = null;
   camp.hp = campTierStats(toTier).hp;
   state.stats.built++;
+  addXp(state, "upgraded");
   state.flags.wallsDirty = true; // breach math changes with the new hp
   state.events.push({ type: "camp-upgraded", tier: toTier, name: campTierStats(toTier).name, x: camp.x, y: camp.y });
   return camp;
@@ -360,8 +365,9 @@ export function buildingCenter(b) {
 // towers draw the shared pool dry, the woodcutter line refills it).
 export function tickProduction(state, dt) {
   const cap = storageCap(state);
-  const wellPerTick = WELL_WATER_PER_DAY / DAY_TICKS;
-  const cisternPerTick = CISTERN_WATER_PER_DAY / DAY_TICKS;
+  const waterPerk = perkMult(state, "water", 0.25); // Deep Springs
+  const wellPerTick = (WELL_WATER_PER_DAY / DAY_TICKS) * waterPerk;
+  const cisternPerTick = (CISTERN_WATER_PER_DAY / DAY_TICKS) * waterPerk;
   for (const b of state.buildings) {
     if (!b.complete) continue;
     if (b.type === "well" && state.resources.water < cap)

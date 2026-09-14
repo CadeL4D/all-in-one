@@ -78,8 +78,41 @@ const hash = (i) => {
   return h >>> 0;
 };
 
+// M5 biome skins (pillar 7: palette discipline reads at zoom-out). Applied
+// once per renderer over the shared base - one page, one biome.
+const BIOME_SKINS = {
+  verdant: {},
+  dry: {
+    grass1: "#b3a55e",
+    grass2: "#aa9c57",
+    tuft: "#c6b878",
+    dry: "#cdbb70",
+    dirt: "#b08b5f",
+    treeA: "#5c7f3a",
+    treeB: "#6f9048",
+    treeC: "#4d6b31",
+    bush: "#6b8a3c",
+  },
+  marsh: {
+    grass1: "#5f9e6c",
+    grass2: "#589465",
+    tuft: "#7ab384",
+    dry: "#6fa278",
+    dirt: "#8a7a5a",
+    water: "#46807f",
+    waterDeep: "#3b7271",
+    shimmer: "#8fc9c0",
+    treeA: "#2f6b52",
+    treeB: "#3d7f61",
+    treeC: "#285945",
+    bush: "#3f7d55",
+    berry: "#c9705f",
+  },
+};
+
 export function createRenderer(canvas, stateRef) {
   const g = canvas.getContext("2d");
+  Object.assign(P, BIOME_SKINS[stateRef.world.biome] ?? {});
   const view = {
     camera: { x: B.CAMP_TILE.x + 1, y: B.CAMP_TILE.y + 1, zoom: 2 },
     ghost: null, // {type, x, y, valid}
@@ -1075,7 +1108,19 @@ export function createRenderer(canvas, stateRef) {
       g.fillStyle = P.shadow;
       const shrink = (m.heldZ ?? 0) * 2;
       g.fillRect(X - 3 * s + shrink, Y + 4 * s + (m.heldZ ?? 0) * B.TILE, 6 * s - shrink * 2, 1);
-      if (m.kind === "blot" || m.kind === "blotling") {
+      if (m.kind === "bloodling") {
+        // Bloodling: a red blotkin with a wet gleam - it reads as "blot,
+        // but wrong" at any zoom (the Blood Moon's tell).
+        const j = bob ? 1 : 0;
+        g.fillStyle = "#c04a5a";
+        g.fillRect(X - 4 * s, Y - 3 * s + j, 8 * s, 7 * s - j);
+        g.fillRect(X - 2 * s, Y - 5 * s + j, 4 * s, 2 * s);
+        g.fillStyle = "#e88a97";
+        g.fillRect(X - 2 * s, Y - 4 * s + j, 3 * s, 2 * s);
+        g.fillStyle = "#3d0f18";
+        g.fillRect(X - 2 * s, Y - 1 * s + j, 1, 1);
+        g.fillRect(X + 1 * s, Y - 1 * s + j, 1, 1);
+      } else if (m.kind === "blot" || m.kind === "blotling") {
         // Blob: jiggly dome with a darker core.
         const j = bob ? 1 : 0;
         g.fillStyle = P.blot;
@@ -1397,11 +1442,16 @@ export function createRenderer(canvas, stateRef) {
 
   function drawNight(state) {
     const dl = state.daylight ?? 1;
-    if (dl >= 0.99) return;
+    if (dl >= 0.99 && !bloodTintOn(state)) return;
     // Screen-space grade first...
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = `rgba(11,18,51,${(1 - dl) * 0.55})`;
     g.fillRect(0, 0, canvas.width, canvas.height);
+    // The Blood Moon stains the dark itself (readable at a glance).
+    if (bloodTintOn(state)) {
+      g.fillStyle = "rgba(120,20,40,0.16)";
+      g.fillRect(0, 0, canvas.width, canvas.height);
+    }
     const { camera } = view;
     const z = camera.zoom;
     g.setTransform(z, 0, 0, z, canvas.width / 2 - camera.x * B.TILE * z, canvas.height / 2 - camera.y * B.TILE * z);
@@ -1444,6 +1494,10 @@ export function createRenderer(canvas, stateRef) {
       }
     }
     g.globalCompositeOperation = "source-over";
+  }
+
+  function bloodTintOn(state) {
+    return state.moon?.day === "blood" && state.clock.phaseIndex === 5;
   }
 
   function drawSelection(state) {

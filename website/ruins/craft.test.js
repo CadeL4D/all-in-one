@@ -7,7 +7,7 @@ import { createGame, stepGame, placeBuilding } from "./game.js";
 import { createVillager } from "./villager.js";
 import * as bd from "./buildings.js";
 import * as B from "./balance.js";
-import { serialize, deserialize } from "./save.js";
+import { serializeSim, deserializeSim } from "./save.js";
 import { tickMonsters } from "./monsters.js";
 
 function arena(seed = 7700) {
@@ -295,7 +295,7 @@ test("sling towers throw stone; ballistas drink two bolts a shot", () => {
   assert.ok(boltsBefore - s2.resources.bolts >= 2, "two bolts per shot");
 });
 
-test("save v4 round-trips the climb; v3 islands migrate with defaults", () => {
+test("save v5 round-trips the climb; v3 islands migrate with defaults", () => {
   const s = createGame(7777);
   const camp = s.buildings.find((b) => b.type === "camp");
   camp.tier = 3;
@@ -303,10 +303,10 @@ test("save v4 round-trips the climb; v3 islands migrate with defaults", () => {
   s.resources.boards = 12;
   s.resources.blocks = 3;
   s.resources.meals = 9;
-  const blob = JSON.parse(JSON.stringify(serialize(s)));
+  const blob = JSON.parse(JSON.stringify(serializeSim(s)));
   assert.equal(blob.v, 4);
-  const back = deserialize(blob);
-  assert.ok(back, "v4 round-trips");
+  const back = deserializeSim(blob);
+  assert.ok(back, "v4 sim blob round-trips");
   assert.equal(back.buildings.find((b) => b.type === "camp").tier, 3);
   assert.equal(back.villagers[0].faith, 77);
   assert.equal(back.resources.boards, 12);
@@ -314,12 +314,12 @@ test("save v4 round-trips the climb; v3 islands migrate with defaults", () => {
   assert.equal(bd.buildLimit(back), B.CAMP_TIERS[2].buildLimit);
 
   // A v3-shaped blob: no tier, no faith, no refined resources.
-  const v3 = JSON.parse(JSON.stringify(serialize(s)));
+  const v3 = JSON.parse(JSON.stringify(serializeSim(s)));
   v3.v = 3;
   delete v3.buildings.find((b) => b.type === "camp").tier;
   for (const v of v3.villagers) delete v.faith;
   for (const r of ["boards", "blocks", "meals"]) delete v3.resources[r];
-  const old = deserialize(v3);
+  const old = deserializeSim(v3);
   assert.ok(old, "v3 islands still load");
   const oldCamp = old.buildings.find((b) => b.type === "camp");
   assert.ok(oldCamp.tier >= 1, "camp tier defaulted");

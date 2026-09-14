@@ -821,3 +821,259 @@ dialog p {
     width: 46px;
   }
 }
+
+/* ---- M5: moons, boons, regions, modes ---- */
+.moon-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+  background: rgba(11, 18, 51, 0.55);
+  color: var(--text);
+}
+.moon-chip.full {
+  background: #dfe8ff;
+  color: #23305e;
+}
+.moon-chip.eclipse {
+  background: #2b2531;
+  color: #d9c8ff;
+}
+.moon-chip.blood {
+  background: #4a1620;
+  color: #ffb3bd;
+}
+.moon-chip.meteor {
+  background: #3d2708;
+  color: #ffd27a;
+}
+
+/* God panel: XP strip + boons button */
+.perk-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.xp-track {
+  flex: 1;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.xp-track i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #b48ec8, #e6c9ff);
+  transition: width 0.4s ease;
+}
+#xp-text {
+  color: var(--dim);
+  white-space: nowrap;
+  font-size: 11px;
+}
+.perk-button {
+  position: relative;
+  border: 1px solid #6d4b8f;
+  background: rgba(109, 75, 143, 0.18);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.perk-button b {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #b48ec8;
+  color: #231430;
+  font-size: 12px;
+}
+
+/* Perk sheet */
+.perk-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  cursor: pointer;
+  color: var(--text);
+}
+.perk-card small {
+  display: block;
+  color: var(--dim);
+  margin-top: 3px;
+}
+.perk-card .rank {
+  float: right;
+  color: #b48ec8;
+  font-size: 12px;
+}
+.perk-row {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 7px 2px;
+  color: var(--dim);
+}
+.perk-row b {
+  color: var(--text);
+}
+
+/* Region cards */
+.region-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 10px 0;
+  background: rgba(255, 255, 255, 0.04);
+}
+.region-card.active-region {
+  border-color: #7fb95c;
+}
+.region-card.locked {
+  opacity: 0.75;
+}
+.region-card h4 {
+  margin: 0 0 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.region-card .stars {
+  color: #ffd97a;
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+.region-card p {
+  margin: 4px 0 8px;
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.region-card .region-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+.region-card .region-meta b {
+  color: var(--text);
+}
+.region-card .status-lost {
+  color: #d1603d;
+}
+.region-card .status-cleared {
+  color: #7fb95c;
+}
+.region-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.region-actions button {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.region-actions button.primary {
+  background: #3f5a34;
+  border-color: #7fb95c;
+}
+.region-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.migrate-box {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dim);
+}
+.migrate-box button {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+}
+.migrate-box b {
+  color: var(--text);
+}
+
+/* Mode picker */
+.mode-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+}
+.mode-card.selected {
+  border-color: #7fb95c;
+  background: rgba(127, 185, 92, 0.12);
+}
+.mode-card small {
+  display: block;
+  color: var(--dim);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.tuner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0;
+}
+.tuner-row > span {
+  color: var(--text);
+  font-weight: 600;
+}
+.tuner-options {
+  display: flex;
+  gap: 6px;
+}
+.tuner-options button {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dim);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.tuner-options button.active {
+  border-color: #7fb95c;
+  color: var(--text);
+  background: rgba(127, 185, 92, 0.14);
+}

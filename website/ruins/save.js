@@ -1,20 +1,26 @@
 // Deterministic snapshots: save-anywhere + dawn autosave (mobile session
 // model). Everything needed to resume the exact sim state is in the blob;
 // the seeded RNG state is included so replays stay reproducible.
-import { createGame } from "./game.js";
+//
+// v5 wraps the world: one blob per founded region plus world-map metadata,
+// with only the ACTIVE region hydrated at a time (regions.js owns travel).
+// Meta (god XP / perks) lives beside the save in its own slot and survives
+// even a full restart (meta.js). The inner sim blob keeps the v4 shape.
+import { createGame, spawnSettlers } from "./game.js";
 import { MAP_SIZE } from "./balance.js";
 import * as B2 from "./balance.js";
 import { F_TREE, F_ROCK, F_BUSH } from "./world.js";
 import { indexWaterTiles } from "./villager.js";
 import { footprint } from "./buildings.js";
 import { findCreature } from "./spells.js";
+import { createRegions, applyPendingMigrants, regionSeed } from "./regions.js";
 
 export const SAVE_KEY = "ruins-save-v1";
-// v4: the climb - camp tier + pending upgrade on the camp building,
-// per-villager faith, boards/blocks/meals resources, monster levels.
-// v3 blobs (M3 islands) load with defaults for all of those; v1/v2 are
-// treated as fresh islands.
-export const SAVE_VERSION = 4;
+// v5: the world wrapper - regions + mode + per-region sim blobs (M5).
+// v4 blobs (M4 islands) load as single-region worlds; v1-v3 are treated
+// as fresh islands.
+export const SAVE_VERSION = 5;
+export const SIM_VERSION = 4; // version of the inner per-region sim blob
 
 function rleEncode(arr) {
   const out = [];
@@ -42,9 +48,11 @@ function rleDecode(pairs, target) {
   }
 }
 
-export function serialize(state) {
+// ---- Inner sim blob (the M4 shape, plus moon) ----
+
+export function serializeSim(state) {
   return {
-    v: SAVE_VERSION,
+    v: SIM_VERSION,
     seed: state.seed,
     rng: state.rng.state(),
     clock: { ...state.clock },
@@ -62,6 +70,7 @@ export function serialize(state) {
     plots: [...state.world.plots].map(([i, e]) => [i, e.farm, e.readyTick]),
     corruptionMeta: { ...state.corruption },
     raid: { ...state.raid },
+    moon: { ...state.moon, meteorQueue: [] }, // pending strikes don't survive reloads
     god: {
       influence: state.god.influence,
       held: state.god.held,
@@ -76,17 +85,22 @@ export function serialize(state) {
   };
 }
 
-export function deserialize(data) {
-  if (!data || (data.v !== SAVE_VERSION && data.v !== SAVE_VERSION - 1)) return null;
+export function deserializeSim(data, opts = {}) {
+  // v3 (M3 islands) hydrate through the migration seams below; v1/v2 are
+  // too far gone - fresh islands instead.
+  if (!data || (data.v !== SIM_VERSION && data.v !== SIM_VERSION - 1)) return null;
   try {
-    return hydrate(data);
+    return hydrate(data, opts);
   } catch {
-    return null; // corrupt payload of either version: fresh island instead
+    return null; // corrupt payload: fresh island instead
   }
 }
 
-function hydrate(data) {
-  const state = createGame(data.seed);
+function hydrate(data, opts) {
+  // Arrivals must wait: createGame would otherwise spawn settlers that the
+  // saved villager list below then overwrites - hydrate applies them itself,
+  // after the saved villagers are in place.
+  const state = createGame(data.seed, { ...opts, skipArrivals: true });
   state.rng.restore(data.rng);
   Object.assign(state.clock, data.clock);
   state.lastDawn = data.lastDawn;
@@ -119,6 +133,7 @@ function hydrate(data) {
   state.world.corrupted = corrupted;
   state.corruption = { ...data.corruptionMeta };
   state.raid = { ...data.raid };
+  if (data.moon) state.moon = { ...state.moon, ...data.moon, meteorQueue: [] };
   // God hand (v3; a v2 island simply starts with an empty hand).
   if (data.god) {
     state.god.influence = data.god.influence ?? 0;
@@ -179,16 +194,126 @@ function hydrate(data) {
       if (b.type === "gate") state.gateTiles.add(i);
     }
   }
+  // Settlers that arrived while this region slept appear at the camp NOW -
+  // after the saved villagers are in place, or they would be overwritten.
+  const settlers = applyPendingMigrants(state);
+  if (settlers > 0) spawnSettlers(state, settlers);
   state.events = [];
   return state;
 }
 
+// ---- v5 world wrapper ----
+
+// Map-card stats for the region the live sim belongs to.
+function regionStats(entry, state) {
+  return {
+    ...entry,
+    day: state.clock.day,
+    pop: state.villagers.length,
+    status: state.lost ? "lost" : state.corruption.cleared ? "cleared" : "alive",
+  };
+}
+
+function modeBlob(state) {
+  const { key, ...knobs } = state.mode;
+  return { key, ...knobs };
+}
+
+export function serialize(state) {
+  const regions = state.regions.map((entry) =>
+    entry.id === state.regionId ? regionStats(entry, state) : { ...entry },
+  );
+  return {
+    v: SAVE_VERSION,
+    mode: modeBlob(state),
+    active: state.regionId,
+    worldSeed: state.seed,
+    regions,
+    sims: { [state.regionId]: serializeSim(state) },
+  };
+}
+
+export function deserialize(data) {
+  if (!data) return null;
+  // v4 (M4): a bare sim blob - wrap it as a one-region Greenwood world.
+  if (data.v === SIM_VERSION) {
+    return deserializeSim(data, {
+      regionId: "greenwood",
+      regions: markFounded(createRegions(), "greenwood"),
+    });
+  }
+  if (data.v !== SAVE_VERSION) return null;
+  try {
+    const modeKey = data.mode?.key ?? "traditional";
+    const mode = { ...B2.MODES[modeKey], ...(data.mode ?? {}) };
+    const { key, ...custom } = mode;
+    const regions = data.regions ?? createRegions();
+    const opts = { modeKey, custom, regionId: data.active, regions };
+    const simBlob = data.sims?.[data.active];
+    if (simBlob) return deserializeSim(simBlob, opts);
+    // Founded but never visited: the region generates fresh, from the
+    // world seed and its own stable salt (deterministic every reload).
+    if (regions.find((r) => r.id === data.active)?.founded)
+      return createGame(regionSeed(data.worldSeed ?? 1, data.active), opts);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function markFounded(regions, id) {
+  const entry = regions.find((r) => r.id === id);
+  if (entry) entry.founded = true;
+  return regions;
+}
+
+// The stash-and-swap behind region travel: rewrites the save so the target
+// region is active, keeping every other region's blob untouched. The caller
+// reloads the page; loading hydrates (or generates) the new active region.
+// Live metadata always wins - founding and migration happened in THIS sim.
+export function saveTravel(data, state, targetId) {
+  const blob = data && data.v === SAVE_VERSION ? data : serialize(state);
+  const stale = new Map(blob.regions.map((r) => [r.id, r]));
+  const regions = state.regions.map((entry) => {
+    if (entry.id === state.regionId) return regionStats(entry, state);
+    const old = stale.get(entry.id);
+    return old ? { ...entry, day: old.day, pop: old.pop, status: old.status } : { ...entry };
+  });
+  return {
+    v: SAVE_VERSION,
+    mode: modeBlob(state),
+    active: targetId,
+    worldSeed: blob.worldSeed ?? state.seed,
+    regions,
+    sims: { ...blob.sims, [state.regionId]: serializeSim(state) },
+  };
+}
+
 export function saveToLocal(state) {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(serialize(state)));
+    // Merge into any existing wrapper so other regions' blobs survive.
+    let data = null;
+    try {
+      data = JSON.parse(localStorage.getItem(SAVE_KEY));
+    } catch {
+      data = null;
+    }
+    const merged =
+      data && data.v === SAVE_VERSION ? saveTravel(data, state, state.regionId) : serialize(state);
+    localStorage.setItem(SAVE_KEY, JSON.stringify(merged));
     return true;
   } catch {
     return false;
+  }
+}
+
+export function loadWrapper() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    const data = raw ? JSON.parse(raw) : null;
+    return data && data.v === SAVE_VERSION ? data : null;
+  } catch {
+    return null;
   }
 }
 

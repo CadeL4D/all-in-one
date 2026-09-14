@@ -8,6 +8,7 @@ import { nearestTile, tilePassable, F_TREE, F_BUSH, F_STUMP } from "./world.js";
 import { findPath, adjacentOpen } from "./path.js";
 import * as bd from "./buildings.js";
 import { damageMonster } from "./monsters.js";
+import { perkMult, perkRank } from "./meta.js";
 
 export function createVillager(state, x, y, age = "adult") {
   const id = state.nextId++;
@@ -62,7 +63,8 @@ export function tickVillager(state, v, dt) {
   if (v.age === "child") hungerRate *= B.HUNGER_CHILD_MULT;
   v.hunger = Math.max(0, v.hunger - hungerRate * dt);
   v.thirst = Math.max(0, v.thirst - perTick(B.THIRST_DECAY_PER_DAY) * dt);
-  v.faith = Math.max(0, v.faith - perTick(B.FAITH_DECAY_PER_DAY) * dt);
+  // Devout Voices: faith fades half as fast per rank.
+  v.faith = Math.max(0, v.faith - perTick(B.FAITH_DECAY_PER_DAY) * perkMult(state, "faith", -0.5) * dt);
 
   if (v.task && v.task.kind === "sleep") {
     v.energy = Math.min(B.MAX_NEED, v.energy + perTick(B.SLEEP_RESTORE_PER_DAY) * (v.home ? 1 : 0.6) * dt);
@@ -74,10 +76,12 @@ export function tickVillager(state, v, dt) {
   }
 
   // ---- Health: regen when fed, damage when starving/dehydrated.
+  // Iron Stomachs softens the death spiral without touching the need.
+  const wantMult = perkMult(state, "hunger", -0.3);
   if (v.hunger > 40 && v.thirst > 30 && v.health < B.MAX_NEED)
     v.health = Math.min(B.MAX_NEED, v.health + perTick(B.HEALTH_REGEN_PER_DAY) * dt);
-  if (v.hunger <= 0) v.health -= perTick(B.STARVE_DAMAGE_PER_DAY) * dt;
-  if (v.thirst <= 0) v.health -= perTick(B.DEHYDRATE_DAMAGE_PER_DAY) * dt;
+  if (v.hunger <= 0) v.health -= perTick(B.STARVE_DAMAGE_PER_DAY) * wantMult * dt;
+  if (v.thirst <= 0) v.health -= perTick(B.DEHYDRATE_DAMAGE_PER_DAY) * wantMult * dt;
   if (v.health <= 0) {
     killVillager(state, v, v.thirst <= 0 && v.hunger > 0 ? "thirst" : "starvation");
     return;
@@ -684,7 +688,9 @@ function runTask(state, v, dt) {
       v.task.workLeft -= wdt;
       if (v.task.workLeft <= 0) {
         const plot = state.world.plots.get(v.task.target);
-        if (plot) plot.readyTick = state.clock.tick + B.CROP_GROWTH_TICKS;
+        // Biome soil: muck grows fast, dry dirt slow (BIOMES.growth).
+        const growth = B.BIOMES[state.world.biome]?.growth ?? 1;
+        if (plot) plot.readyTick = state.clock.tick + Math.round(B.CROP_GROWTH_TICKS / growth);
         v.task = null;
       }
       return;
@@ -787,7 +793,7 @@ function finishChop(state, v) {
     state.world.trees.delete(i);
     state.world.regrow.set(i, { stage: "sapling", readyTick: state.clock.tick + B.DAY_TICKS * 2 });
     v.carrying = "wood";
-    v.carryAmount = B.TREE_WOOD;
+    v.carryAmount = B.TREE_WOOD + perkRank(state, "wood"); // Keen Axes
     state.events.push({ type: "chopped", x: i % state.world.size, y: Math.floor(i / state.world.size) });
   }
   v.task = null;
@@ -799,7 +805,7 @@ function finishMine(state, v) {
     state.world.feature[i] = F_NONE;
     state.world.rocks.delete(i); // rocks are finite: no regrow
     v.carrying = "stone";
-    v.carryAmount = B.ROCK_STONE;
+    v.carryAmount = B.ROCK_STONE + perkRank(state, "stone"); // Sharp Picks
   }
   v.task = null;
 }
@@ -810,7 +816,7 @@ function finishPlot(state, v) {
   if (plot && plot.readyTick > 0 && state.clock.tick >= plot.readyTick) {
     plot.readyTick = -1; // farmed out; replant next cycle
     v.carrying = "food";
-    v.carryAmount = B.CROP_FOOD;
+    v.carryAmount = Math.round(B.CROP_FOOD * perkMult(state, "crops", 0.2)); // Fertile Rows
   }
   v.task = null;
 }

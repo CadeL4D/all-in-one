@@ -8,14 +8,39 @@ import { createRenderer, screenToTile } from "./render.js";
 import * as bd from "./buildings.js";
 import { castSpell, grabAt, moveHeld, releaseHeld } from "./spells.js";
 import { createUI } from "./ui.js";
-import { saveToLocal, loadFromLocal, clearSave } from "./save.js";
+import { saveToLocal, loadFromLocal, clearSave, loadWrapper, saveTravel, SAVE_KEY } from "./save.js";
+import { addXp, saveMeta, pickPerk } from "./meta.js";
+import { moonDaylight } from "./moons.js";
+import { foundRegion as foundRegionCmd, migrateTo as migrateToCmd } from "./regions.js";
 import { pwa } from "./pwa.js";
 
 const canvas = document.getElementById("world");
-const state = loadFromLocal() ?? createGame();
+
+// ---- Boot: restore a world, or pick how wild a fresh one should be ----
+// A pending "ruins-new-run" flag (set by the mode dialog) seeds the mode;
+// without a save or a flag, the mode dialog greets the player first and
+// the sim stays paused until they've chosen.
+let pendingRun = null;
+try {
+  pendingRun = JSON.parse(localStorage.getItem("ruins-new-run"));
+} catch {
+  pendingRun = null;
+}
+const restored = loadFromLocal();
+const freshBoot = !restored && !pendingRun;
+const state =
+  restored ??
+  createGame(undefined, pendingRun ? { modeKey: pendingRun.mode, custom: pendingRun.custom } : {});
+if (pendingRun) {
+  try {
+    localStorage.removeItem("ruins-new-run");
+  } catch {
+    /* private mode */
+  }
+}
 state.daylight = daylight(state.clock);
 
-let speed = 2;
+let speed = freshBoot ? 0 : 2;
 const renderer = createRenderer(canvas, state);
 const camera = renderer.view.camera;
 try {
@@ -35,6 +60,9 @@ function persistCamera() {
 
 // ---- Command bridge (ui.js talks to this) ----
 let confirmHandler = null;
+// World swaps (travel, restart, mode start) reload the page; the unload
+// autosave must not clobber the blob they just wrote with the OLD world.
+let worldSwap = false;
 const game = {
   getState: () => state,
   renderer,
@@ -112,12 +140,31 @@ const game = {
   flyTo(x, y) {
     flyTarget = { x, y };
   },
+  getWrapper() {
+    return loadWrapper();
+  },
+  // Region travel: stash the live sim, make the target active, reload.
+  // Loading hydrates (or first-generates) the new region.
+  travel(id) {
+    const next = saveTravel(loadWrapper(), state, id);
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(next));
+    } catch {
+      /* private mode: travel unavailable */
+      return;
+    }
+    saveMeta(state.meta);
+    worldSwap = true;
+    location.reload();
+  },
   saveNow(flash) {
+    saveMeta(state.meta);
     if (saveToLocal(state) && flash) toastNote("Saved");
   },
   restart() {
+    worldSwap = true;
     clearSave();
-    location.reload();
+    location.reload(); // fresh boot reopens the mode picker
   },
 };
 
@@ -141,6 +188,63 @@ function toastNote(text) {
 }
 
 const ui = createUI(game);
+
+// ---- Mode picker (fresh boots only): how wild should the wilds be? ----
+if (freshBoot) {
+  const dlg = document.getElementById("mode-dialog");
+  const cards = document.getElementById("mode-cards");
+  const tuners = document.getElementById("custom-tuners");
+  let selected = "traditional";
+  let custom = { peaceful: false, pace: "normal", raidSize: 1 };
+  for (const [key, mode] of Object.entries(B.MODES)) {
+    const card = document.createElement("button");
+    card.className = `mode-card${key === selected ? " selected" : ""}`;
+    card.dataset.mode = key;
+    card.innerHTML = `<b>${mode.name}</b><small>${mode.blurb}</small>`;
+    card.onclick = () => {
+      selected = key;
+      cards.querySelectorAll(".mode-card").forEach((c) => c.classList.toggle("selected", c.dataset.mode === key));
+      tuners.hidden = key !== "custom";
+    };
+    cards.appendChild(card);
+  }
+  for (const box of tuners.querySelectorAll(".tuner-options")) {
+    box.querySelectorAll("button").forEach((btn) => {
+      btn.onclick = () => {
+        box.querySelectorAll("button").forEach((b2) => b2.classList.toggle("active", b2 === btn));
+        if (box.id === "tuner-peaceful") custom.peaceful = btn.dataset.v === "off";
+        if (box.id === "tuner-pace") custom.pace = btn.dataset.v;
+        if (box.id === "tuner-raids") custom.raidSize = Number(btn.dataset.v);
+      };
+    });
+  }
+  document.getElementById("mode-start").onclick = () => {
+    // Custom folds the tuners into mode knobs the sim reads directly.
+    const overrides =
+      selected === "custom"
+        ? {
+            peaceful: custom.peaceful,
+            corruptionDay: custom.peaceful ? Infinity : custom.pace === "early" ? 1 : 2,
+            raidStartDay: custom.peaceful ? Infinity : custom.pace === "early" ? 2 : custom.pace === "late" ? 4 : 3,
+            arrivalMult: custom.pace === "early" ? 0.8 : custom.pace === "late" ? 1.25 : 1,
+            raidMult: custom.raidSize,
+          }
+        : {};
+    try {
+      localStorage.setItem("ruins-new-run", JSON.stringify({ mode: selected, custom: overrides }));
+    } catch {
+      /* private mode: falls back to traditional on reload */
+    }
+    clearSave();
+    worldSwap = true;
+    location.reload();
+  };
+  document.getElementById("mode-close").onclick = () => {
+    dlg.close();
+    setSpeed(2); // dismissed: settle the default Traditional wilds
+  };
+  dlg.showModal();
+}
 
 // ---- Speed cluster ----
 document.getElementById("pause").onclick = () => setSpeed(speed === 0 ? 2 : 0);
@@ -481,7 +585,7 @@ function frame(now) {
   accumulator -= ticks;
   if (ticks > 0) {
     stepGame(state, ticks);
-    state.daylight = daylight(state.clock);
+    state.daylight = moonDaylight(state, daylight(state.clock));
     ui.frame(state, phaseInfo(state.clock), speed);
   }
 
@@ -511,13 +615,21 @@ function frame(now) {
 
 // ---- Lifecycle: save on hide, catch up on return (doc 05 B3) ----
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) saveToLocal(state);
-  else {
+  if (document.hidden) {
+    if (!worldSwap) {
+      saveMeta(state.meta);
+      saveToLocal(state);
+    }
+  } else {
     last = performance.now();
     accumulator = 0;
   }
 });
-window.addEventListener("pagehide", () => saveToLocal(state));
+window.addEventListener("pagehide", () => {
+  if (worldSwap) return; // the swap wrote its own blob; keep it
+  saveMeta(state.meta);
+  saveToLocal(state);
+});
 
 ui.frame(state, phaseInfo(state.clock), speed);
 ui.slow(state);
@@ -530,7 +642,7 @@ window.__ruins = {
   setSpeed: (s) => setSpeed(s),
   fastForward: (ticks) => {
     stepGame(state, ticks);
-    state.daylight = daylight(state.clock);
+    state.daylight = moonDaylight(state, daylight(state.clock));
     ui.frame(state, phaseInfo(state.clock), speed);
   },
   // M3 god-hand hooks for browser verification.
@@ -541,6 +653,35 @@ window.__ruins = {
   influence: () => (state.god.influence = 9999),
   // M4 the-climb hook.
   upgradeCamp: () => upgradeCampCmd(state),
+  // M5 hooks: moons, boons, regions, modes.
+  forceMoon: (key) => {
+    state.moon.lastSpecial = -99;
+    if (key === "eclipse") {
+      state.moon.eclipse = true;
+      state.moon.day = null;
+    } else {
+      state.moon.day = key;
+      state.moon.eclipse = null;
+    }
+  },
+  moonInfo: () => ({ ...state.moon }),
+  grantXp: (n) => {
+    for (let i = 0; i < n; i++) addXp(state, "slain");
+    saveMeta(state.meta);
+  },
+  pickPerk: (key) => pickPerk(state, key),
+  openPanel: (id) => document.getElementById(id)?.click(),
+  foundRegion: (id) => {
+    const r = foundRegionCmd(state, id);
+    if (r.ok) saveToLocal(state);
+    return r;
+  },
+  migrate: (id, n) => {
+    const r = migrateToCmd(state, id, n);
+    if (r.ok) saveToLocal(state);
+    return r;
+  },
+  travel: (id) => game.travel(id),
 };
 
 pwa();

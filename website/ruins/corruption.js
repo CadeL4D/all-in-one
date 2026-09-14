@@ -6,6 +6,8 @@ import * as B from "./balance.js";
 import { idx, inBounds, F_NONE, F_TREE, F_ROCK, T_WATER } from "./world.js";
 import * as bd from "./buildings.js";
 import { spawnMonsterAt, pickKind } from "./monsters.js";
+import { addXp } from "./meta.js";
+import { diffOf } from "./regions.js";
 
 export function createCorruptionState() {
   return {
@@ -13,14 +15,17 @@ export function createCorruptionState() {
     threat: 0,
     grewToday: 0, // tiles converted since last dawn (0 => boxed in)
     nestCooldownUntil: 0, // destroyed nests rebuild after a pause
+    cleared: false, // every tile reclaimed: free of blight forever (M5)
   };
 }
 
 // How much map the blight currently wants (doc 04 section 2.4): "Desire
 // increases over time as the day counter increases", capped so a long
-// game still has an equilibrium short of "the whole island".
+// game still has an equilibrium short of "the whole island". Harder
+// regions want more (M5 region difficulty).
 export function threatDesire(state) {
-  return Math.min(B.THREAT_DESIRE_CAP, B.THREAT_DESIRE_BASE + B.THREAT_DESIRE_PER_DAY * state.clock.day);
+  const desire = B.THREAT_DESIRE_BASE + B.THREAT_DESIRE_PER_DAY * state.clock.day;
+  return Math.min(B.THREAT_DESIRE_CAP, desire * diffOf(state).desireMult);
 }
 
 // Dev-confirmed placement (doc 04 section 2.2): "requires nearby wood and
@@ -72,9 +77,12 @@ function hasBuildMaterialNear(world, i) {
 }
 
 // Called at the spawn day's dawn. Stamps the corruption blob and a "the
-// wilds are blighted" event the hint system latches onto.
+// wilds are blighted" event the hint system latches onto. Peaceful mode
+// never blights the map at all (doc 01 section 4.1).
 export function ensureCorruptionSpawn(state) {
-  if (state.corruption.spawned) return false;
+  if (state.corruption.spawned || state.corruption.cleared) return false;
+  if (state.mode?.peaceful) return false;
+  if (state.clock.day < (state.mode?.corruptionDay ?? B.CORRUPTION_SPAWN_DAY)) return false;
   const center = findCorruptionSite(state);
   if (center < 0) return false; // dev-faithful: no suitable spot, no corruption
   state.corruption.spawned = true;
@@ -148,6 +156,14 @@ function villagePressure(state) {
   const reclaimed = [];
   for (let i = 0; i < world.corruption.length; i++) {
     if (!world.corruption[i]) continue;
+    // A nest's own ground stays blighted while the nest stands - "cleared"
+    // must mean no spawn points left either. Village buildings don't block
+    // the reclaim (pressure is about the ground, not the deed).
+    const onId = state.buildingAt[i];
+    if (onId !== -1) {
+      const on = state.buildings.find((b) => b.id === onId);
+      if (on && B.BUILDINGS[on.type].corrupted) continue;
+    }
     const x = i % size,
       y = Math.floor(i / size);
     let neighbors = 0;
@@ -191,6 +207,16 @@ function villagePressure(state) {
 export function corruptionDawn(state) {
   const c = state.corruption;
   if (!c.spawned) return;
+  // M5 (doc 01 section 4.2): scrub every tile clean and the region is
+  // "free of corruption for ever" - no respawn, no nests, threat stays 0.
+  if (!c.cleared && state.world.corrupted === 0) {
+    c.cleared = true;
+    c.threat = 0;
+    addXp(state, "cleared");
+    state.events.push({ type: "region-cleared" });
+    return;
+  }
+  if (c.cleared) return;
   const desire = threatDesire(state);
   const shortfall = Math.max(0, desire - state.world.corrupted);
   if (c.grewToday === 0 && state.world.corrupted > 0 && shortfall > 0) {
@@ -204,9 +230,10 @@ export function corruptionDawn(state) {
 }
 
 // Per-sim-tick driver: spread check + nest management on a coarse grid.
+// A cleared region never spreads again (doc: "free of corruption for ever").
 export function tickCorruption(state) {
   const c = state.corruption;
-  if (!c.spawned || state.clock.tick % B.CORRUPTION_SPREAD_TICKS !== 0) return;
+  if (!c.spawned || c.cleared || state.clock.tick % B.CORRUPTION_SPREAD_TICKS !== 0) return;
   if (state.rng.chance(B.CORRUPTION_SPREAD_CHANCE)) {
     const frontier = corruptionFrontier(state);
     if (frontier.length) {
