@@ -46,7 +46,7 @@ extension NoiseColorLabel on NoiseColor {
 abstract final class NoiseEngine {
   static const int sampleRate = 22050;
   static const double durationSeconds = 16;
-  static const double fadeSeconds = 0.4;
+  static const double seamSeconds = 0.4;
 
   static Uint8List generateWav(NoiseColor color, {double volume = 0.82}) {
     final Int16List samples = _generateSamples(color, volume);
@@ -54,8 +54,9 @@ abstract final class NoiseEngine {
   }
 
   static Int16List _generateSamples(NoiseColor color, double volume) {
-    final int sampleCount = (sampleRate * durationSeconds).round();
-    final int fadeSamples = (sampleRate * fadeSeconds).round();
+    final int loopSamples = (sampleRate * durationSeconds).round();
+    final int seamSamples = (sampleRate * seamSeconds).round();
+    final int sampleCount = loopSamples + seamSamples;
     final Float64List raw = Float64List(sampleCount);
     final Random random = Random();
 
@@ -78,8 +79,15 @@ abstract final class NoiseEngine {
         _fillGreen(raw, random);
     }
 
+    // Fold the tail over the head with an equal-power crossfade. At the
+    // wrap, the tail continues naturally into this overlap without silence.
+    for (int i = 0; i < seamSamples; i++) {
+      final double angle = i / (seamSamples - 1) * pi / 2;
+      raw[i] = raw[loopSamples + i] * cos(angle) + raw[i] * sin(angle);
+    }
+
     double maxSample = 0;
-    for (int i = 0; i < sampleCount; i++) {
+    for (int i = 0; i < loopSamples; i++) {
       final double value = raw[i].abs();
       if (value > maxSample) {
         maxSample = value;
@@ -88,16 +96,10 @@ abstract final class NoiseEngine {
 
     final double peak = maxSample == 0 ? 1 : maxSample;
     final double scale = (volume * 0.92) / peak;
-    final Int16List samples = Int16List(sampleCount);
+    final Int16List samples = Int16List(loopSamples);
 
-    for (int i = 0; i < sampleCount; i++) {
-      double value = raw[i] * scale;
-
-      final double fadeIn = fadeSamples == 0 ? 1 : min(1, i / fadeSamples);
-      final double fadeOut = fadeSamples == 0
-          ? 1
-          : min(1, (sampleCount - 1 - i) / fadeSamples);
-      value *= min(fadeIn, fadeOut);
+    for (int i = 0; i < loopSamples; i++) {
+      final double value = raw[i] * scale;
 
       samples[i] = (value.clamp(-1.0, 1.0) * 32767).round();
     }

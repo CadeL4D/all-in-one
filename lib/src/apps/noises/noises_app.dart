@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/local_store.dart';
@@ -61,9 +61,17 @@ class NoisesApp extends StatefulWidget {
 class _NoisesAppState extends State<NoisesApp> {
   static const String _preferencesKey = 'noises_v1';
 
-  final AudioPlayer _noisePlayer = AudioPlayer();
+  AudioPlayer _noisePlayer = AudioPlayer();
+  AudioPlayer _nextNoisePlayer = AudioPlayer();
+  Future<void>? _noiseWork;
+  int _playbackGeneration = 0;
+  double? _fadeProgress;
   final Map<String, AudioPlayer> _naturePlayers = <String, AudioPlayer>{};
   final Random _random = Random();
+  // Noise players and nature layers must not steal focus from one another.
+  final AudioContext _mixContext = AudioContextConfig(
+    focus: AudioContextConfigFocus.mixWithOthers,
+  ).build();
 
   NoiseColor _selected = NoiseColor.white;
   bool _loaded = false;
@@ -87,11 +95,18 @@ class _NoisesAppState extends State<NoisesApp> {
   @override
   void dispose() {
     _noiseVariationTimer?.cancel();
-    _noisePlayer.dispose();
-    for (final AudioPlayer player in _naturePlayers.values) {
-      player.dispose();
-    }
+    _playbackGeneration++;
+    unawaited(_disposeNoisePlayers());
     super.dispose();
+  }
+
+  Future<void> _disposeNoisePlayers() async {
+    await _noiseWork;
+    await Future.wait<void>(<Future<void>>[
+      _noisePlayer.dispose(),
+      _nextNoisePlayer.dispose(),
+      ..._naturePlayers.values.map((AudioPlayer player) => player.dispose()),
+    ]);
   }
 
   Future<void> _loadPreferences() async {
@@ -149,7 +164,7 @@ class _NoisesAppState extends State<NoisesApp> {
   }
 
   Future<void> _selectColor(NoiseColor color) async {
-    if (_selected == color) {
+    if (_starting || _selected == color) {
       return;
     }
 
@@ -158,7 +173,7 @@ class _NoisesAppState extends State<NoisesApp> {
 
     if (_playing) {
       await _stopPlayers();
-      await _startPlayers();
+      if (mounted) await _startPlayers();
     }
   }
 
@@ -176,58 +191,72 @@ class _NoisesAppState extends State<NoisesApp> {
   }
 
   Future<void> _startPlayers() async {
-    setState(() {
-      _starting = true;
-    });
+    setState(() => _starting = true);
+    final int generation = ++_playbackGeneration;
+    _noiseWork = _startNoise(generation);
+    await _noiseWork;
+  }
 
+  Future<void> _startNoise(int generation) async {
     try {
+      final Uint8List wavBytes = await compute(_generateNoise, _selected);
+      if (!mounted || generation != _playbackGeneration) return;
       await _noisePlayer.setReleaseMode(ReleaseMode.loop);
-      final Uint8List wavBytes = NoiseEngine.generateWav(_selected);
+      if (!mounted || generation != _playbackGeneration) return;
       await _noisePlayer.play(
         BytesSource(wavBytes, mimeType: 'audio/wav'),
+        ctx: _mixContext,
         volume: _volume,
-        mode: PlayerMode.lowLatency,
+        mode: PlayerMode.mediaPlayer,
       );
-
+      if (!mounted || generation != _playbackGeneration) return;
       if (_selected == NoiseColor.green) {
         for (final _NatureClip clip in _natureClips) {
+          if (!mounted || generation != _playbackGeneration) return;
           if (_natureEnabled[clip.id] ?? false) {
             await _startNatureClip(clip.id);
           }
         }
       }
+      if (!mounted || generation != _playbackGeneration) return;
+      setState(() {
+        _playing = true;
+        _starting = false;
+      });
+      _scheduleNoiseVariation();
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Noise playback is not available yet.')),
-        );
-      }
+      await _noisePlayer.stop();
+      if (!mounted || generation != _playbackGeneration) return;
+      setState(() {
+        _playing = false;
+        _starting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Noise playback could not start. Try again.'),
+        ),
+      );
     }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _playing = true;
-      _starting = false;
-    });
-    _scheduleNoiseVariation();
   }
 
   Future<void> _stopPlayers() async {
+    ++_playbackGeneration;
     _noiseVariationTimer?.cancel();
     _noiseVariationTimer = null;
-    await Future.wait<void>(<Future<void>>[
-      _noisePlayer.stop(),
-      ..._activeNatureIds.map((String id) => _naturePlayers[id]!.stop()),
-    ]);
-    if (!mounted) {
-      return;
-    }
-
     setState(() {
       _playing = false;
+      _starting = true;
+    });
+    // Let any pending load or fade finish cancelling before stopping players.
+    await _noiseWork;
+    await Future.wait<void>(<Future<void>>[
+      _noisePlayer.stop(),
+      _nextNoisePlayer.stop(),
+      ..._activeNatureIds.map((String id) => _naturePlayers[id]!.stop()),
+    ]);
+    _fadeProgress = null;
+    if (!mounted) return;
+    setState(() {
       _starting = false;
       _activeNatureIds.clear();
     });
@@ -259,6 +288,7 @@ class _NoisesAppState extends State<NoisesApp> {
       await player.setReleaseMode(ReleaseMode.loop);
       await player.play(
         AssetSource(clip.path),
+        ctx: _mixContext,
         volume: _natureVolume,
         mode: PlayerMode.mediaPlayer,
       );
@@ -287,36 +317,73 @@ class _NoisesAppState extends State<NoisesApp> {
 
   void _scheduleNoiseVariation() {
     _noiseVariationTimer?.cancel();
-    final int seconds = 90 + _random.nextInt(61);
-    _noiseVariationTimer = Timer(Duration(seconds: seconds), () async {
-      if (!_playing) {
-        return;
-      }
-
-      try {
-        final Uint8List wavBytes = NoiseEngine.generateWav(_selected);
-        await _noisePlayer.play(
-          BytesSource(wavBytes, mimeType: 'audio/wav'),
-          volume: _volume,
-          mode: PlayerMode.lowLatency,
-        );
-      } catch (_) {
-        // The existing loop keeps playing when variation is unavailable.
-      }
-      if (!_playing) {
-        return;
-      }
-      _scheduleNoiseVariation();
+    final int seconds = 300 + _random.nextInt(301);
+    _noiseVariationTimer = Timer(Duration(seconds: seconds), () {
+      if (!_playing || !mounted) return;
+      _noiseWork = _varyNoise(_playbackGeneration);
     });
+  }
+
+  Future<void> _varyNoise(int generation) async {
+    bool current() => mounted && _playing && generation == _playbackGeneration;
+    try {
+      final Uint8List wavBytes = await compute(_generateNoise, _selected);
+      if (!current()) return;
+      // Prepare a separate player so loading cannot interrupt the live loop.
+      await _nextNoisePlayer.setReleaseMode(ReleaseMode.loop);
+      if (!current()) return;
+      await _nextNoisePlayer.play(
+        BytesSource(wavBytes, mimeType: 'audio/wav'),
+        ctx: _mixContext,
+        volume: 0,
+        mode: PlayerMode.mediaPlayer,
+      );
+      if (!current()) return;
+      for (int step = 0; step <= 160 && current(); step++) {
+        _fadeProgress = step / 160;
+        await _applyNoiseVolume();
+        if (_fadeProgress == 1) break;
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      if (!current()) return;
+      final AudioPlayer previous = _noisePlayer;
+      _noisePlayer = _nextNoisePlayer;
+      _nextNoisePlayer = previous;
+      _fadeProgress = null;
+      await _nextNoisePlayer.stop();
+    } catch (_) {
+      // Keep the original source intact if preparation or the fade fails.
+      if (current()) {
+        _fadeProgress = null;
+        try {
+          await _noisePlayer.setVolume(_volume);
+          await _nextNoisePlayer.stop();
+        } catch (_) {
+          // A failed optional variation must not restart the live source.
+        }
+      }
+    } finally {
+      if (current()) _scheduleNoiseVariation();
+    }
+  }
+
+  Future<void> _applyNoiseVolume() async {
+    final double? progress = _fadeProgress;
+    if (progress == null) {
+      await _noisePlayer.setVolume(_volume);
+      return;
+    }
+    // Independent noise signals need equal-power gains to avoid a quiet dip.
+    await Future.wait<void>(<Future<void>>[
+      _noisePlayer.setVolume(_volume * cos(progress * pi / 2)),
+      _nextNoisePlayer.setVolume(_volume * sin(progress * pi / 2)),
+    ]);
   }
 
   Future<void> _setVolume(double value) async {
     setState(() => _volume = value);
+    if (_playing) await _applyNoiseVolume();
     await _savePreferences();
-
-    if (_playing) {
-      await _noisePlayer.setVolume(_volume);
-    }
   }
 
   Future<void> _setNatureVolume(double value) async {
@@ -735,3 +802,5 @@ Color _onAccent(Color accent) {
       ? Colors.white
       : const Color(0xFF12151A);
 }
+
+Uint8List _generateNoise(NoiseColor color) => NoiseEngine.generateWav(color);
